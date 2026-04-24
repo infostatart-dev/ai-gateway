@@ -88,12 +88,25 @@ pub enum InternalError {
 impl IntoResponse for InternalError {
     fn into_response(self) -> Response {
         error!(error = %self, "internal error");
+        let (status, message_type) = match self {
+            InternalError::ReqwestError(e) => {
+                if e.is_timeout() {
+                    (StatusCode::GATEWAY_TIMEOUT, Some("timeout_error".to_string()))
+                } else if e.is_connect() || e.is_send() {
+                    (StatusCode::BAD_GATEWAY, Some("bad_gateway_error".to_string()))
+                } else {
+                    (StatusCode::INTERNAL_SERVER_ERROR, Some(SERVER_ERROR_TYPE.to_string()))
+                }
+            }
+            _ => (StatusCode::INTERNAL_SERVER_ERROR, Some(SERVER_ERROR_TYPE.to_string())),
+        };
+
         (
-            StatusCode::INTERNAL_SERVER_ERROR,
+            status,
             Json(ErrorResponse {
                 error: ErrorDetails {
                     message: self.to_string(),
-                    r#type: Some(SERVER_ERROR_TYPE.to_string()),
+                    r#type: message_type,
                     param: None,
                     code: None,
                 },
