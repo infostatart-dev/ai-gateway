@@ -354,6 +354,7 @@ impl Dispatcher {
             response_status,
             response_headers,
             api_endpoint.clone(),
+            mapper_ctx.model.clone(),
         )
         .await?;
 
@@ -464,6 +465,7 @@ impl Dispatcher {
         response_status: StatusCode,
         response_headers: &HeaderMap,
         api_endpoint: Option<ApiEndpoint>,
+        model_id: Option<ModelId>,
     ) -> Result<(), ApiError> {
         if response_status.is_server_error() {
             if let Some(api_endpoint) = api_endpoint {
@@ -485,13 +487,14 @@ impl Dispatcher {
                 );
 
                 if let Some(rate_limit_tx) = &self.rate_limit_tx {
-                    if let Err(e) = rate_limit_tx
-                        .send(RateLimitEvent::new(
-                            api_endpoint.clone(),
-                            retry_after,
-                        ))
-                        .await
-                    {
+                    let mut event = RateLimitEvent::new(
+                        api_endpoint.clone(),
+                        retry_after,
+                    );
+                    if let Some(model_id) = model_id {
+                        event = event.with_model_id(model_id);
+                    }
+                    if let Err(e) = rate_limit_tx.send(event).await {
                         tracing::error!(error = %e, "failed to send rate limit event");
                     }
                 }

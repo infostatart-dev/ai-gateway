@@ -316,7 +316,10 @@ impl ProviderMonitorInner<ProviderWeightedKey> {
             tokio::select! {
                 // Handle incoming rate limit events
                 Some(event) = rx.recv() => {
-                    let key = self.create_key_for_endpoint(&event.api_endpoint)?;
+                    let key = match self.create_key_for_endpoint(&event.api_endpoint) {
+                        Ok(key) => key,
+                        Err(_) => continue,
+                    };
                     if let std::collections::hash_map::Entry::Vacant(e) = rate_limited_providers.entry(key.clone()) {
                         debug!(
                             provider = ?event.api_endpoint.provider(),
@@ -461,7 +464,10 @@ impl ProviderMonitorInner<ModelWeightedKey> {
             tokio::select! {
                 // Handle incoming rate limit events
                 Some(event) = rx.recv() => {
-                    let key = self.create_model_weighted_key(&event)?;
+                    let key = match self.create_model_weighted_key(&event) {
+                        Ok(key) => key,
+                        Err(_) => continue,
+                    };
                     if let std::collections::hash_map::Entry::Vacant(e) = rate_limited_providers.entry(key.clone()) {
                         debug!(
                             provider = ?event.api_endpoint.provider(),
@@ -578,7 +584,10 @@ impl ProviderMonitorInner<ModelKey> {
             tokio::select! {
                 // Handle incoming rate limit events
                 Some(event) = rx.recv() => {
-                    let key = self.create_model_latency_key(&event)?;
+                    let key = match self.create_model_latency_key(&event) {
+                        Ok(key) => key,
+                        Err(_) => continue,
+                    };
                     if let std::collections::hash_map::Entry::Vacant(e) = rate_limited_providers.entry(key.clone()) {
                         debug!(
                             provider = ?event.api_endpoint.provider(),
