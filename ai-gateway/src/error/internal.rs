@@ -89,10 +89,10 @@ impl IntoResponse for InternalError {
     fn into_response(self) -> Response {
         error!(error = %self, "internal error");
         let (status, message_type) = match self {
-            InternalError::ReqwestError(e) => {
+            InternalError::ReqwestError(ref e) => {
                 if e.is_timeout() {
                     (StatusCode::GATEWAY_TIMEOUT, Some("timeout_error".to_string()))
-                } else if e.is_connect() || e.is_send() {
+                } else if e.is_connect() || e.is_request() {
                     (StatusCode::BAD_GATEWAY, Some("bad_gateway_error".to_string()))
                 } else {
                     (StatusCode::INTERNAL_SERVER_ERROR, Some(SERVER_ERROR_TYPE.to_string()))
