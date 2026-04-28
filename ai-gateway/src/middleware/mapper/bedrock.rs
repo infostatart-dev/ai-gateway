@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::str::FromStr;
 
 use async_openai::types::{
     CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
@@ -12,6 +12,12 @@ use super::{
 use crate::{
     middleware::mapper::{DEFAULT_MAX_TOKENS, TryConvertError},
     types::{model_id::ModelId, provider::InferenceProvider},
+    endpoints::bedrock::converse::{
+        BedrockConverseRequest, BedrockConverseResponse, BedrockConverseStreamOutput, ContentBlock, ImageBlock, ImageSource,
+        InferenceConfig, Message, SpecificToolChoice, SystemContentBlock, Tool, ToolChoice,
+        ToolConfig, ToolInputSchema, ToolResultBlock, ToolResultContentBlock, ToolSpecification,
+        ToolUseBlock,
+    },
 };
 
 pub struct BedrockConverter {
@@ -28,7 +34,7 @@ impl BedrockConverter {
 impl
     TryConvert<
         async_openai::types::CreateChatCompletionRequest,
-        aws_sdk_bedrockruntime::operation::converse::ConverseInput,
+        BedrockConverseRequest,
     > for BedrockConverter
 {
     type Error = MapperError;
@@ -37,11 +43,10 @@ impl
         &self,
         value: async_openai::types::CreateChatCompletionRequest,
     ) -> Result<
-        aws_sdk_bedrockruntime::operation::converse::ConverseInput,
+        BedrockConverseRequest,
         Self::Error,
     > {
         use async_openai::types as openai;
-        use aws_sdk_bedrockruntime::types as bedrock;
         let source_model = ModelId::from_str(&value.model)?;
 
         let target_model = self
@@ -60,30 +65,19 @@ impl
         let temperature = value.temperature;
         let top_p = value.top_p;
 
-        let metadata = value
-            .user
-            .map(|user| HashMap::from([("user_id".to_string(), user)]));
-
         let tool_choice = match value.tool_choice {
             Some(openai::ChatCompletionToolChoiceOption::Named(tool)) => {
-                let t = bedrock::SpecificToolChoice::builder()
-                    .name(tool.function.name)
-                    .build();
-                if let Ok(t) = t {
-                    Some(bedrock::ToolChoice::Tool(t))
-                } else {
-                    None
-                }
+                Some(ToolChoice::Tool {
+                    tool: SpecificToolChoice {
+                        name: tool.function.name,
+                    },
+                })
             }
             Some(openai::ChatCompletionToolChoiceOption::Auto) => {
-                Some(bedrock::ToolChoice::Auto(
-                    bedrock::AutoToolChoice::builder().build(),
-                ))
+                Some(ToolChoice::Auto { auto: serde_json::json!({}) })
             }
             Some(openai::ChatCompletionToolChoiceOption::Required) => {
-                Some(bedrock::ToolChoice::Any(
-                    bedrock::AnyToolChoice::builder().build(),
-                ))
+                Some(ToolChoice::Any { any: serde_json::json!({}) })
             }
             Some(openai::ChatCompletionToolChoiceOption::None) | None => None,
         };
@@ -94,16 +88,13 @@ impl
                 .filter_map(|tool| {
                     let parameters = tool.function.parameters?;
                     let json_value = serde_json::from_value(parameters).ok()?;
-                    let tool_spec = bedrock::ToolSpecification::builder()
-                        .name(tool.function.name.clone())
-                        .set_description(tool.function.description.clone())
-                        .input_schema(bedrock::ToolInputSchema::Json(
-                            json_value,
-                        ))
-                        .build()
-                        .ok()?;
-
-                    Some(bedrock::Tool::ToolSpec(tool_spec))
+                    Some(Tool::ToolSpec {
+                        tool_spec: ToolSpecification {
+                            name: tool.function.name,
+                            description: tool.function.description,
+                            input_schema: ToolInputSchema::Json { json: json_value },
+                        },
+                    })
                 })
                 .collect();
             Some(mapped_tools)
@@ -112,31 +103,55 @@ impl
         };
 
         let mut mapped_messages = Vec::with_capacity(value.messages.len());
+        let mut system_prompts = Vec::new();
+
         for message in value.messages {
             match message {
-                openai::ChatCompletionRequestMessage::Developer(_)
-                | openai::ChatCompletionRequestMessage::System(_) => {}
+                openai::ChatCompletionRequestMessage::Developer(message) => {
+                    let text = match message.content {
+                        openai::ChatCompletionRequestDeveloperMessageContent::Text(text) => text,
+                        openai::ChatCompletionRequestDeveloperMessageContent::Array(array) => {
+                            array.into_iter().map(|part| part.text).collect::<Vec<_>>().join("\n")
+                        }
+                    };
+                    system_prompts.push(SystemContentBlock { text });
+                }
+                openai::ChatCompletionRequestMessage::System(message) => {
+                    let text = match message.content {
+                        openai::ChatCompletionRequestSystemMessageContent::Text(text) => text,
+                        openai::ChatCompletionRequestSystemMessageContent::Array(array) => {
+                            array.into_iter().map(|part| {
+                                match part {
+                                    openai::ChatCompletionRequestSystemMessageContentPart::Text(text) => text.text,
+                                }
+                            }).collect::<Vec<_>>().join("\n")
+                        }
+                    };
+                    system_prompts.push(SystemContentBlock { text });
+                }
                 openai::ChatCompletionRequestMessage::User(message) => {
-                    let mapped_content: Vec<bedrock::ContentBlock> = match message.content {
+                    let mapped_content: Vec<ContentBlock> = match message.content {
                         openai::ChatCompletionRequestUserMessageContent::Text(content) => {
-                            vec![bedrock::ContentBlock::Text(content)]
+                            vec![ContentBlock::Text { text: content }]
                         }
                         openai::ChatCompletionRequestUserMessageContent::Array(content) => {
                             content.into_iter().filter_map(|part| {
                                 match part {
                                     openai::ChatCompletionRequestUserMessageContentPart::Text(text) => {
-                                        Some(bedrock::ContentBlock::Text(text.text))
+                                        Some(ContentBlock::Text { text: text.text })
                                     }
                                     openai::ChatCompletionRequestUserMessageContentPart::ImageUrl(image) => {
                                         if image.image_url.url.starts_with("http") {
-                                            None
+                                            None // Bedrock doesn't support direct HTTP URLs for images yet
                                         } else {
-                                            let mapped_image = bedrock::ImageBlock::builder().format(
-                                                bedrock::ImageFormat::Png,
-                                            ).source(
-                                                bedrock::ImageSource::Bytes(aws_sdk_bedrockruntime::primitives::Blob::new(image.image_url.url))
-                                            ).build().ok()?;
-                                            Some(bedrock::ContentBlock::Image(mapped_image))
+                                            Some(ContentBlock::Image {
+                                                image: ImageBlock {
+                                                    format: "png".to_string(), // Defaulting, could be inferred
+                                                    source: ImageSource {
+                                                        bytes: image.image_url.url,
+                                                    },
+                                                },
+                                            })
                                         }
                                     }
                                     openai::ChatCompletionRequestUserMessageContentPart::InputAudio(_audio) => {
@@ -146,89 +161,74 @@ impl
                             }).collect()
                         }
                     };
-                    let mapped_message = bedrock::Message::builder()
-                        .role(bedrock::ConversationRole::User)
-                        .set_content(Some(mapped_content))
-                        .build();
-
-                    if let Ok(mapped_message) = mapped_message {
-                        mapped_messages.push(mapped_message);
-                    }
+                    mapped_messages.push(Message {
+                        role: "user".to_string(),
+                        content: mapped_content,
+                    });
                 }
                 openai::ChatCompletionRequestMessage::Assistant(message) => {
                     let mapped_content = match message.content {
                         Some(openai::ChatCompletionRequestAssistantMessageContent::Text(content)) => {
-                            vec![bedrock::ContentBlock::Text(content)]
+                            vec![ContentBlock::Text { text: content }]
                         }
                         Some(openai::ChatCompletionRequestAssistantMessageContent::Array(content)) => {
                             content.into_iter().map(|part| {
                                 match part {
                                     openai::ChatCompletionRequestAssistantMessageContentPart::Text(text) => {
-                                        bedrock::ContentBlock::Text(text.text)
+                                        ContentBlock::Text { text: text.text }
                                     }
                                     openai::ChatCompletionRequestAssistantMessageContentPart::Refusal(text) => {
-                                        bedrock::ContentBlock::Text(text.refusal.clone())
+                                        ContentBlock::Text { text: text.refusal }
                                     }
                                 }
                             }).collect()
                         }
                         None => continue,
                     };
-                    let mapped_message = bedrock::Message::builder()
-                        .role(bedrock::ConversationRole::Assistant)
-                        .set_content(Some(mapped_content))
-                        .build();
-                    if let Ok(mapped_message) = mapped_message {
-                        mapped_messages.push(mapped_message);
-                    }
+                    mapped_messages.push(Message {
+                        role: "assistant".to_string(),
+                        content: mapped_content,
+                    });
                 }
                 openai::ChatCompletionRequestMessage::Tool(message) => {
                     let mapped_content = match message.content {
                         openai::ChatCompletionRequestToolMessageContent::Text(text) => {
-                            let x = bedrock::ToolResultBlock::builder().tool_use_id(message.tool_call_id).content(
-                                    bedrock::ToolResultContentBlock::Text(text)
-                                ).build();
-                            if let Ok(tool_result_block) = x {
-                                vec![bedrock::ContentBlock::ToolResult(tool_result_block)]
-                            } else {
-                                vec![]
-                            }
+                            vec![ContentBlock::ToolResult {
+                                tool_result: ToolResultBlock {
+                                    tool_use_id: message.tool_call_id.clone(),
+                                    content: vec![ToolResultContentBlock::Text { text }],
+                                    status: None,
+                                },
+                            }]
                         }
                         openai::ChatCompletionRequestToolMessageContent::Array(content) => {
-                            content.into_iter().filter_map(|part| {
+                            content.into_iter().map(|part| {
                                 match part {
                                     openai::ChatCompletionRequestToolMessageContentPart::Text(text) => {
-                                        let tool_result_block = bedrock::ToolResultBlock::builder()
-                                                .tool_use_id(message.tool_call_id.clone())
-                                                .content(
-                                                    bedrock::ToolResultContentBlock::Text(text.text)
-                                                )
-                                                .build().ok()?;
-                                        Some(bedrock::ContentBlock::ToolResult(tool_result_block))
+                                        ContentBlock::ToolResult {
+                                            tool_result: ToolResultBlock {
+                                                tool_use_id: message.tool_call_id.clone(),
+                                                content: vec![ToolResultContentBlock::Text { text: text.text }],
+                                                status: None,
+                                            },
+                                        }
                                     }
                                 }
                             }).collect()
                         }
                     };
-
-                    let mapped_message = bedrock::Message::builder()
-                        .role(bedrock::ConversationRole::Assistant)
-                        .set_content(Some(mapped_content))
-                        .build();
-                    if let Ok(mapped_message) = mapped_message {
-                        mapped_messages.push(mapped_message);
-                    }
+                    mapped_messages.push(Message {
+                        role: "user".to_string(), // Tool results are submitted as user messages in Bedrock
+                        content: mapped_content,
+                    });
                 }
                 openai::ChatCompletionRequestMessage::Function(message) => {
                     let tools_ref = tools.as_ref();
                     let Some(tool) = tools_ref.and_then(|tools| {
                         tools.iter().find_map(|tool| {
-                            if let bedrock::Tool::ToolSpec(spec) = tool {
-                                if spec.name == message.name {
-                                    Some(tool.clone())
-                                } else {
-                                    None
-                                }
+                            let Tool::ToolSpec { tool_spec } = tool;
+                            if tool_spec.name == message.name {
+                                Some(tool.clone())
                             } else {
                                 None
                             }
@@ -237,77 +237,55 @@ impl
                         continue;
                     };
 
-                    let tool_spec = tool.as_tool_spec().map_err(|_| {
-                        MapperError::ToolMappingInvalid(message.name.clone())
-                    })?;
-
-                    let input = tool_spec
-                        .input_schema
-                        .as_ref()
-                        .and_then(|schema| schema.as_json().ok())
-                        .cloned();
-
-                    let tool_use = bedrock::ToolUseBlock::builder()
-                        .name(message.name.clone())
-                        .tool_use_id(message.name.clone())
-                        .set_input(input)
-                        .build();
-                    let mapped_content = if let Ok(tool_use) = tool_use {
-                        vec![bedrock::ContentBlock::ToolUse(tool_use)]
-                    } else {
-                        vec![]
+                    let Tool::ToolSpec { tool_spec } = tool;
+                    let input = match tool_spec.input_schema {
+                        ToolInputSchema::Json { json } => json,
                     };
 
-                    let mapped_message = bedrock::Message::builder()
-                        .role(bedrock::ConversationRole::Assistant)
-                        .set_content(Some(mapped_content))
-                        .build();
-                    if let Ok(mapped_message) = mapped_message {
-                        mapped_messages.push(mapped_message);
-                    }
+                    let mapped_content = vec![ContentBlock::ToolUse {
+                        tool_use: ToolUseBlock {
+                            tool_use_id: message.name.clone(), // Using name as ID fallback
+                            name: message.name.clone(),
+                            input,
+                        },
+                    }];
+
+                    mapped_messages.push(Message {
+                        role: "assistant".to_string(),
+                        content: mapped_content,
+                    });
                 }
             }
         }
 
-        let mut builder =
-            aws_sdk_bedrockruntime::operation::converse::ConverseInput::builder()
-                .model_id(target_model.to_string())
-                .set_messages(Some(mapped_messages))
-                .set_request_metadata(metadata);
+        let tool_config = tools.map(|tools| ToolConfig {
+            tools,
+            tool_choice,
+        });
 
-        if let Some(tools) = tools {
-            let tool_config = bedrock::ToolConfiguration::builder()
-                .set_tool_choice(tool_choice)
-                .set_tools(Some(tools))
-                .build();
-            if let Ok(tool_config) = tool_config {
-                builder = builder.tool_config(tool_config);
-            }
-        }
         #[allow(clippy::cast_possible_wrap)]
-        let inference_config = Some(
-            bedrock::InferenceConfiguration::builder()
-                .top_p(top_p.unwrap_or_default())
-                .temperature(temperature.unwrap_or_default())
-                .max_tokens(
-                    i32::try_from(max_tokens)
-                        .unwrap_or(DEFAULT_MAX_TOKENS as i32),
-                )
-                .set_stop_sequences(stop_sequences)
-                .build(),
-        );
-        let converse_input = builder
-            .set_inference_config(inference_config)
-            .build()
-            .map_err(|e| MapperError::FailedToMapBedrockMessage(e.into()))?;
+        let inference_config = Some(InferenceConfig {
+            top_p,
+            temperature,
+            max_tokens: Some(i32::try_from(max_tokens).unwrap_or(DEFAULT_MAX_TOKENS as i32)),
+            stop_sequences,
+        });
 
-        Ok(converse_input)
+        let request = BedrockConverseRequest {
+            model_id: Some(target_model.to_string()),
+            messages: mapped_messages,
+            system: if system_prompts.is_empty() { None } else { Some(system_prompts) },
+            inference_config,
+            tool_config,
+        };
+
+        Ok(request)
     }
 }
 
 impl
     TryConvert<
-        aws_sdk_bedrockruntime::operation::converse::ConverseOutput,
+        BedrockConverseResponse,
         CreateChatCompletionResponse,
     > for BedrockConverter
 {
@@ -316,99 +294,64 @@ impl
     #[allow(clippy::too_many_lines, clippy::cast_possible_wrap)]
     fn try_convert(
         &self,
-        value: aws_sdk_bedrockruntime::operation::converse::ConverseOutput,
+        value: BedrockConverseResponse,
     ) -> std::result::Result<CreateChatCompletionResponse, Self::Error> {
         use async_openai::types as openai;
-        use aws_sdk_bedrockruntime::types as bedrock;
-        let model = value
-            .trace
-            .and_then(|t| t.prompt_router)
-            .and_then(|r| r.invoked_model_id)
-            .unwrap_or_default();
 
+        // Parse fields dynamically from the raw JSON payload
+        let payload = &value.payload;
         let created = 0;
-        let usage = if let Some(usage) = value.usage {
-            usage
-        } else {
-            bedrock::TokenUsage::builder()
-                .input_tokens(DEFAULT_MAX_TOKENS as i32)
-                .output_tokens(DEFAULT_MAX_TOKENS as i32)
-                .total_tokens(DEFAULT_MAX_TOKENS as i32)
-                .build()
-                .map_err(|e| MapperError::FailedToMapBedrockMessage(e.into()))?
-        };
+        let model = payload.pointer("/trace/promptRouter/invokedModelId")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
 
-        let usage = openai::CompletionUsage {
-            prompt_tokens: usage.input_tokens.try_into().unwrap_or(0),
-            completion_tokens: usage.output_tokens.try_into().unwrap_or(0),
-            total_tokens: usage.total_tokens.try_into().unwrap_or(0),
-            prompt_tokens_details: Some(openai::PromptTokensDetails {
-                audio_tokens: None,
-                cached_tokens: usage
-                    .cache_read_input_tokens
-                    .and_then(|i| i.try_into().ok()),
-            }),
+        let default_usage = openai::CompletionUsage {
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            total_tokens: 0,
+            prompt_tokens_details: None,
             completion_tokens_details: None,
         };
 
-        let mut tool_calls: Vec<openai::ChatCompletionMessageToolCall> =
-            Vec::new();
-        let mut content = None;
-        let contents = if let Some(output) = value.output {
-            if let Ok(message) = output.as_message() {
-                message.content.clone()
-            } else {
-                Vec::new()
+        let usage = payload.get("usage").map_or(default_usage, |usage| {
+            let input_tokens = u32::try_from(usage.get("inputTokens").and_then(serde_json::Value::as_u64).unwrap_or(0)).unwrap_or(0);
+            let output_tokens = u32::try_from(usage.get("outputTokens").and_then(serde_json::Value::as_u64).unwrap_or(0)).unwrap_or(0);
+            let total_tokens = u32::try_from(usage.get("totalTokens").and_then(serde_json::Value::as_u64).unwrap_or(0)).unwrap_or(0);
+            
+            openai::CompletionUsage {
+                prompt_tokens: input_tokens,
+                completion_tokens: output_tokens,
+                total_tokens,
+                prompt_tokens_details: None,
+                completion_tokens_details: None,
             }
-        } else {
-            Vec::new()
-        };
-        for bedrock_content in contents {
-            match bedrock_content {
-                bedrock::ContentBlock::ToolUse(tool_use_block) => {
+        });
+
+        let mut tool_calls = Vec::new();
+        let mut content = None;
+        
+        if let Some(contents) = payload.pointer("/output/message/content").and_then(serde_json::Value::as_array) {
+            for block in contents {
+                if let Some(text) = block.get("text").and_then(serde_json::Value::as_str) {
+                    content = Some(text.to_string());
+                } else if let Some(tool_use) = block.get("toolUse") {
+                    let id = tool_use.get("toolUseId").and_then(serde_json::Value::as_str).unwrap_or_default().to_string();
+                    let name = tool_use.get("name").and_then(serde_json::Value::as_str).unwrap_or_default().to_string();
+                    let arguments = tool_use.get("input").map(std::string::ToString::to_string).unwrap_or_default();
+                    
                     tool_calls.push(openai::ChatCompletionMessageToolCall {
-                        id: tool_use_block.tool_use_id.clone(),
-                        r#type: openai::ChatCompletionToolType::Function,
-                        function: openai::FunctionCall {
-                            name: tool_use_block.name.clone(),
-                            arguments: tool_use_block
-                                .input
-                                .as_string()
-                                .unwrap_or_default()
-                                .to_string(),
-                        },
-                    });
+                            id,
+                            r#type: openai::ChatCompletionToolType::Function,
+                            function: openai::FunctionCall {
+                                name,
+                                arguments,
+                            },
+                        });
                 }
-                bedrock::ContentBlock::ToolResult(tool_result_block) => {
-                    tool_calls.push(openai::ChatCompletionMessageToolCall {
-                        id: tool_result_block.tool_use_id.clone(),
-                        r#type: openai::ChatCompletionToolType::Function,
-                        function: openai::FunctionCall {
-                            name: tool_result_block.tool_use_id.clone(),
-                            arguments: serde_json::to_string(&content)?,
-                        },
-                    });
-                }
-                bedrock::ContentBlock::Text(text) => {
-                    content = Some(text.clone());
-                }
-                bedrock::ContentBlock::ReasoningContent(reasoning) => {
-                    if let Ok(reasoning_text) = reasoning.as_reasoning_text() {
-                        content = Some(reasoning_text.text.clone());
-                    }
-                }
-                bedrock::ContentBlock::GuardContent(guard) => {
-                    if let Ok(guard_content) = guard.as_text() {
-                        content = Some(guard_content.text.clone());
-                    }
-                }
-                bedrock::ContentBlock::Image(_)
-                | bedrock::ContentBlock::Document(_)
-                | bedrock::ContentBlock::CachePoint(_)
-                | bedrock::ContentBlock::Video(_)
-                | _ => {}
             }
         }
+
         let tool_calls = if tool_calls.is_empty() {
             None
         } else {
@@ -442,13 +385,14 @@ impl
             service_tier: None,
             system_fingerprint: None,
         };
+        
         Ok(response)
     }
 }
 
 impl
     TryConvertStreamData<
-        aws_sdk_bedrockruntime::types::ConverseStreamOutput,
+        BedrockConverseStreamOutput,
         CreateChatCompletionStreamResponse,
     > for BedrockConverter
 {
@@ -457,46 +401,81 @@ impl
     #[allow(clippy::too_many_lines)]
     fn try_convert_chunk(
         &self,
-        value: aws_sdk_bedrockruntime::types::ConverseStreamOutput,
+        value: BedrockConverseStreamOutput,
     ) -> Result<
         std::option::Option<CreateChatCompletionStreamResponse>,
         Self::Error,
     > {
         use async_openai::types as openai;
-        use aws_sdk_bedrockruntime::types as bedrock;
-        const CHAT_COMPLETION_CHUNK_OBJECT: &str = "chat.completion.chunk";
-        // TODO: These placeholder values for id, model, and created should be
-        // replaced by actual values from the MessageStart event,
-        // propagated by the stream handling logic.
-        const PLACEHOLDER_STREAM_ID: &str = "bedrock-stream-id";
-        const PLACEHOLDER_MODEL_NAME: &str = "bedrock-model";
-        const DEFAULT_CREATED_TIMESTAMP: u32 = 0;
-
-        #[allow(deprecated)]
+        
+        let payload = &value.payload;
         let mut choices = Vec::new();
-        let mut completion_usage: openai::CompletionUsage =
-            openai::CompletionUsage {
-                prompt_tokens: 0,
-                completion_tokens: 0,
-                total_tokens: 0,
-                prompt_tokens_details: None,
-                completion_tokens_details: None,
+        
+        // This parses the JSON chunks as they arrive from the raw Bedrock stream.
+        // It provides a reasonable industrial mapping without relying on the AWS SDK's generated types.
+
+        if let Some(message_start) = payload.get("messageStart") {
+            let role = match message_start.get("role").and_then(|r| r.as_str()) {
+                Some("assistant") => openai::Role::Assistant,
+                Some("user") => openai::Role::User,
+                _ => openai::Role::System,
             };
-        match value {
-            bedrock::ConverseStreamOutput::MessageStart(message) => {
-                let choice = openai::ChatChoiceStream {
+            
+            choices.push(openai::ChatChoiceStream {
+                index: 0,
+                delta: openai::ChatCompletionStreamResponseDelta {
+                    role: Some(role),
+                    content: None,
+                    tool_calls: None,
+                    refusal: None,
+                    #[allow(deprecated)]
+                    function_call: None,
+                },
+                finish_reason: None,
+                logprobs: None,
+            });
+        }
+        
+        if let Some(tool_use) = payload.pointer("/contentBlockStart/start/toolUse") {
+            let id = tool_use.get("toolUseId").and_then(serde_json::Value::as_str).unwrap_or_default().to_string();
+            let name = tool_use.get("name").and_then(serde_json::Value::as_str).unwrap_or_default().to_string();
+            let index = u32::try_from(payload.pointer("/contentBlockStart/contentBlockIndex").and_then(serde_json::Value::as_u64).unwrap_or(0)).unwrap_or(0);
+                
+                let tool_call_chunk = openai::ChatCompletionMessageToolCallChunk {
+                    index,
+                    id: Some(id),
+                    r#type: Some(openai::ChatCompletionToolType::Function),
+                    function: Some(openai::FunctionCallStream {
+                        name: Some(name),
+                        arguments: Some(String::new()),
+                    }),
+                };
+                
+                choices.push(openai::ChatChoiceStream {
                     index: 0,
                     delta: openai::ChatCompletionStreamResponseDelta {
-                        role: Some(match message.role {
-                            bedrock::ConversationRole::Assistant => {
-                                openai::Role::Assistant
-                            }
-                            bedrock::ConversationRole::User => {
-                                openai::Role::User
-                            }
-                            _ => openai::Role::System,
-                        }),
+                        role: None,
                         content: None,
+                        tool_calls: Some(vec![tool_call_chunk]),
+                        refusal: None,
+                        #[allow(deprecated)]
+                        function_call: None,
+                    },
+                    finish_reason: None,
+                    logprobs: None,
+                });
+        }
+        
+        if let Some(content_block_delta) = payload.get("contentBlockDelta") {
+            let index = u32::try_from(content_block_delta.get("contentBlockIndex").and_then(serde_json::Value::as_u64).unwrap_or(0)).unwrap_or(0);
+            
+            if let Some(text) = content_block_delta.pointer("/delta/text") {
+                let text_val = text.as_str().unwrap_or_default().to_string();
+                choices.push(openai::ChatChoiceStream {
+                    index,
+                    delta: openai::ChatCompletionStreamResponseDelta {
+                        role: None,
+                        content: Some(text_val),
                         tool_calls: None,
                         refusal: None,
                         #[allow(deprecated)]
@@ -504,138 +483,64 @@ impl
                     },
                     finish_reason: None,
                     logprobs: None,
+                });
+            } else if let Some(tool_use) = content_block_delta.pointer("/delta/toolUse") {
+                let input = tool_use.get("input").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                let tool_call_chunk = openai::ChatCompletionMessageToolCallChunk {
+                    index,
+                    id: None,
+                    r#type: Some(openai::ChatCompletionToolType::Function),
+                    function: Some(openai::FunctionCallStream {
+                        name: None,
+                        arguments: Some(input),
+                    }),
                 };
-
-                choices.push(choice);
+                
+                choices.push(openai::ChatChoiceStream {
+                    index: 0,
+                    delta: openai::ChatCompletionStreamResponseDelta {
+                        role: None,
+                        content: None,
+                        tool_calls: Some(vec![tool_call_chunk]),
+                        refusal: None,
+                        #[allow(deprecated)]
+                        function_call: None,
+                    },
+                    finish_reason: None,
+                    logprobs: None,
+                });
             }
-            bedrock::ConverseStreamOutput::ContentBlockStart(
-                content_block_start,
-            ) => {
-                if let Some(bedrock::ContentBlockStart::ToolUse(tool_use)) =
-                    content_block_start.start
-                {
-                    let tool_call_chunk =
-                        openai::ChatCompletionMessageToolCallChunk {
-                            index: content_block_start
-                                .content_block_index
-                                .try_into()
-                                .unwrap_or(0),
-                            id: Some(tool_use.tool_use_id),
-                            r#type: Some(
-                                openai::ChatCompletionToolType::Function,
-                            ),
-                            function: Some(openai::FunctionCallStream {
-                                name: Some(tool_use.name),
-                                arguments: Some(String::new()),
-                            }),
-                        };
-                    let choice = openai::ChatChoiceStream {
-                        index: 0,
-                        delta: openai::ChatCompletionStreamResponseDelta {
-                            role: None,
-                            content: None,
-                            tool_calls: Some(vec![tool_call_chunk]),
-                            refusal: None,
-                            #[allow(deprecated)]
-                            function_call: None,
-                        },
-                        finish_reason: None,
-                        logprobs: None,
-                    };
+        }
 
-                    choices.push(choice);
-                }
-            }
-            bedrock::ConverseStreamOutput::ContentBlockDelta(
-                content_block_delta_event,
-            ) => {
-                match content_block_delta_event.delta {
-                    Some(bedrock::ContentBlockDelta::Text(text)) => {
-                        let choice = openai::ChatChoiceStream {
-                            index: u32::try_from(
-                                content_block_delta_event.content_block_index,
-                            )
-                            .unwrap_or(0),
-                            delta: openai::ChatCompletionStreamResponseDelta {
-                                role: None,
-                                content: Some(text),
-                                tool_calls: None,
-                                refusal: None,
-                                #[allow(deprecated)]
-                                function_call: None,
-                            },
-                            finish_reason: None,
-                            logprobs: None,
-                        };
-                        choices.push(choice);
-                    }
-                    Some(bedrock::ContentBlockDelta::ToolUse(tool_use)) => {
-                        let tool_call_chunk =
-                            openai::ChatCompletionMessageToolCallChunk {
-                                index: u32::try_from(
-                                    content_block_delta_event
-                                        .content_block_index,
-                                )
-                                .unwrap_or(0),
-                                id: None, /* ID would have been sent with ContentBlockStart for this tool */
-                                r#type: Some(
-                                    openai::ChatCompletionToolType::Function,
-                                ), // Assuming function
-                                function: Some(openai::FunctionCallStream {
-                                    name: None, /* Name would have been sent
-                                                 * with ContentBlockStart */
-                                    arguments: Some(tool_use.input),
-                                }),
-                            };
-                        let choice = openai::ChatChoiceStream {
-                            index: 0,
-                            delta: openai::ChatCompletionStreamResponseDelta {
-                                role: None,
-                                content: None,
-                                tool_calls: Some(vec![tool_call_chunk]),
-                                refusal: None,
-                                #[allow(deprecated)]
-                                function_call: None,
-                            },
-                            finish_reason: None,
-                            logprobs: None,
-                        };
+        let mut usage = None;
+        if let Some(u) = payload.pointer("/metadata/usage") {
+            let input_tokens = u32::try_from(u.get("inputTokens").and_then(serde_json::Value::as_u64).unwrap_or(0)).unwrap_or(0);
+            let output_tokens = u32::try_from(u.get("outputTokens").and_then(serde_json::Value::as_u64).unwrap_or(0)).unwrap_or(0);
+            let total_tokens = u32::try_from(u.get("totalTokens").and_then(serde_json::Value::as_u64).unwrap_or(0)).unwrap_or(0);
+            
+            usage = Some(openai::CompletionUsage {
+                prompt_tokens: input_tokens,
+                completion_tokens: output_tokens,
+                total_tokens,
+                prompt_tokens_details: None,
+                completion_tokens_details: None,
+            });
+        }
 
-                        choices.push(choice);
-                    }
-                    _ => {}
-                }
-            }
-
-            bedrock::ConverseStreamOutput::Metadata(metadata) => {
-                if let Some(usage) = metadata.usage {
-                    completion_usage.prompt_tokens =
-                        u32::try_from(usage.input_tokens).unwrap_or(0);
-                    completion_usage.completion_tokens =
-                        u32::try_from(usage.output_tokens).unwrap_or(0);
-                    completion_usage.total_tokens =
-                        u32::try_from(usage.total_tokens).unwrap_or(0);
-                }
-            }
-            bedrock::ConverseStreamOutput::ContentBlockStop(_)
-            | bedrock::ConverseStreamOutput::MessageStop(_)
-            | _ => {}
+        if choices.is_empty() && usage.is_none() {
+            // Ignore events like MessageStop that don't add useful data for the OpenAI response format directly
+            return Ok(None);
         }
 
         Ok(Some(CreateChatCompletionStreamResponse {
-            id: PLACEHOLDER_STREAM_ID.to_string(), /* TODO: Use actual
-                                                    * stream
-                                                    * ID */
+            id: String::from(Uuid::new_v4()),
             choices,
-            created: DEFAULT_CREATED_TIMESTAMP, /* TODO: Use actual
-                                                 * created
-                                                 * timestamp */
-            model: PLACEHOLDER_MODEL_NAME.to_string(), /* TODO: Use actual
-                                                        * model name */
-            object: CHAT_COMPLETION_CHUNK_OBJECT.to_string(),
+            created: 0,
+            model: "bedrock-stream".to_string(),
+            object: "chat.completion.chunk".to_string(),
             system_fingerprint: None,
             service_tier: None,
-            usage: Some(completion_usage),
+            usage,
         }))
     }
 }

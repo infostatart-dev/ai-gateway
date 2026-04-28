@@ -58,12 +58,10 @@ const SERVICE_NAME: &str = "ai-gateway";
 pub type AppResponseBody = tower_http::body::UnsyncBoxBody<
     bytes::Bytes,
     Box<
-        (
-            dyn std::error::Error
-                + std::marker::Send
-                + std::marker::Sync
-                + 'static
-        ),
+        dyn std::error::Error
+            + std::marker::Send
+            + std::marker::Sync
+            + 'static
     >,
 >;
 pub type AppResponse = http::Response<AppResponseBody>;
