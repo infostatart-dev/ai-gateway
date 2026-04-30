@@ -138,7 +138,7 @@ async fn test(
         "stream": is_stream
     });
 
-    let openai_request: async_openai::types::CreateChatCompletionRequest =
+    let openai_request: async_openai::types::chat::CreateChatCompletionRequest =
         serde_json::from_value(openai_request_body).unwrap();
 
     let bytes = serde_json::to_vec(&openai_request).unwrap();

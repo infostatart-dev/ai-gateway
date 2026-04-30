@@ -1,11 +1,11 @@
 use super::base::ModelIdWithVersion;
-use super::bedrock::BedrockModelId;
+use crate::error::mapper::MapperError;
+
 use super::id::ModelId;
-use super::ollama::OllamaModelId;
 use super::version::Version;
-use super::*;
+use crate::types::model_id::parsing::parse_date;
 use crate::types::provider::InferenceProvider;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use std::str::FromStr;
 
 #[test]

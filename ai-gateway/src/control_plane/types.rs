@@ -160,8 +160,10 @@ mod tests {
 
         let binding_dir =
             std::env::var("BINDING_DIR").unwrap_or("./bindings".to_string());
-        MessageTypeTX::export_all_to(binding_dir.clone()).unwrap();
-        MessageTypeRX::export_all_to(binding_dir.clone()).unwrap();
+        let ts_rs_config = ts_rs::Config::default()
+            .with_out_dir(&binding_dir);
+        MessageTypeTX::export_all(&ts_rs_config).unwrap();
+        MessageTypeRX::export_all(&ts_rs_config).unwrap();
 
         let manifest_dir =
             env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");

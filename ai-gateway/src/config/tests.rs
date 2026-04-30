@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::config::{
-        Config, MiddlewareConfig, ROUTER_ID_REGEX,
+        Config, ROUTER_ID_REGEX,
         deployment_target::DeploymentTarget,
     };
     use regex::Regex;
