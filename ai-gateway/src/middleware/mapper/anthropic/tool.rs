@@ -1,7 +1,9 @@
-use async_openai::types::chat as openai;
 use anthropic_ai_sdk::types::message as anthropic;
+use async_openai::types::chat as openai;
 
-pub fn map_tools(tools: &Option<Vec<openai::ChatCompletionTools>>) -> Option<Vec<anthropic::Tool>> {
+pub fn map_tools(
+    tools: &Option<Vec<openai::ChatCompletionTools>>,
+) -> Option<Vec<anthropic::Tool>> {
     tools.as_ref().map(|tools| {
         tools
             .iter()
@@ -24,22 +26,24 @@ pub fn map_tools(tools: &Option<Vec<openai::ChatCompletionTools>>) -> Option<Vec
     })
 }
 
-pub fn map_tool_choice(choice: &Option<openai::ChatCompletionToolChoiceOption>) -> Option<anthropic::ToolChoice> {
+pub fn map_tool_choice(
+    choice: &Option<openai::ChatCompletionToolChoiceOption>,
+) -> Option<anthropic::ToolChoice> {
     match choice {
         Some(openai::ChatCompletionToolChoiceOption::Function(tool)) => {
             Some(anthropic::ToolChoice::Tool {
                 name: tool.function.name.clone(),
             })
         }
-        Some(openai::ChatCompletionToolChoiceOption::Mode(openai::ToolChoiceOptions::Auto)) => {
-            Some(anthropic::ToolChoice::Auto)
-        }
-        Some(openai::ChatCompletionToolChoiceOption::Mode(openai::ToolChoiceOptions::Required)) => {
-            Some(anthropic::ToolChoice::Any)
-        }
-        Some(openai::ChatCompletionToolChoiceOption::Mode(openai::ToolChoiceOptions::None)) => {
-            Some(anthropic::ToolChoice::None)
-        }
+        Some(openai::ChatCompletionToolChoiceOption::Mode(
+            openai::ToolChoiceOptions::Auto,
+        )) => Some(anthropic::ToolChoice::Auto),
+        Some(openai::ChatCompletionToolChoiceOption::Mode(
+            openai::ToolChoiceOptions::Required,
+        )) => Some(anthropic::ToolChoice::Any),
+        Some(openai::ChatCompletionToolChoiceOption::Mode(
+            openai::ToolChoiceOptions::None,
+        )) => Some(anthropic::ToolChoice::None),
         _ => None,
     }
 }

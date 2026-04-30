@@ -1,8 +1,8 @@
-mod types;
-mod version;
 mod merge;
 pub mod request;
+mod types;
 pub mod variables;
+mod version;
 
 pub use request::build_prompt_request;
 
@@ -22,13 +22,20 @@ pub struct PromptLayer {
 
 impl PromptLayer {
     pub fn new(app_state: &AppState) -> Result<Self, InitError> {
-        Ok(Self { app_state: app_state.clone() })
+        Ok(Self {
+            app_state: app_state.clone(),
+        })
     }
 }
 
 impl<S> Layer<S> for PromptLayer {
     type Service = PromptService<S>;
-    fn layer(&self, inner: S) -> Self::Service { PromptService { inner, app_state: self.app_state.clone() } }
+    fn layer(&self, inner: S) -> Self::Service {
+        PromptService {
+            inner,
+            app_state: self.app_state.clone(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -39,14 +46,22 @@ pub struct PromptService<S> {
 
 impl<S> Service<Request> for PromptService<S>
 where
-    S: Service<Request, Response = Response, Error = ApiError> + Clone + Send + 'static,
+    S: Service<Request, Response = Response, Error = ApiError>
+        + Clone
+        + Send
+        + 'static,
     S::Future: Send + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> { self.inner.poll_ready(cx) }
+    fn poll_ready(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
 
     fn call(&mut self, req: Request) -> Self::Future {
         let mut this = self.clone();

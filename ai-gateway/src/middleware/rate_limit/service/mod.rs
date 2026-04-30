@@ -1,27 +1,48 @@
+use crate::middleware::rate_limit::extractor::RateLimitKeyExtractor;
+use crate::middleware::rate_limit::redis_service::{
+    RedisRateLimitLayer, RedisRateLimitService,
+};
 use governor::middleware::StateInformationMiddleware;
 use tower_governor::GovernorLayer;
-use crate::middleware::rate_limit::extractor::RateLimitKeyExtractor;
-use crate::middleware::rate_limit::redis_service::{RedisRateLimitLayer, RedisRateLimitService};
 
+pub mod future;
 pub mod layer_impl;
 pub mod service_impl;
-pub mod future;
-pub mod utils;
 #[cfg(all(test, feature = "testing"))]
 pub mod tests;
+pub mod utils;
 
-pub type OptionalGovernorLayer = Option<GovernorLayer<RateLimitKeyExtractor, StateInformationMiddleware, crate::types::body::Body>>;
-pub type GovernorService<S> = tower_governor::governor::Governor<RateLimitKeyExtractor, StateInformationMiddleware, S, crate::types::body::Body>;
+pub type OptionalGovernorLayer = Option<
+    GovernorLayer<
+        RateLimitKeyExtractor,
+        StateInformationMiddleware,
+        crate::types::body::Body,
+    >,
+>;
+pub type GovernorService<S> = tower_governor::governor::Governor<
+    RateLimitKeyExtractor,
+    StateInformationMiddleware,
+    S,
+    crate::types::body::Body,
+>;
 
 #[derive(Clone)]
 pub enum InnerLayer {
     None,
-    InMemory(GovernorLayer<RateLimitKeyExtractor, StateInformationMiddleware, crate::types::body::Body>),
+    InMemory(
+        GovernorLayer<
+            RateLimitKeyExtractor,
+            StateInformationMiddleware,
+            crate::types::body::Body,
+        >,
+    ),
     Redis(RedisRateLimitLayer),
 }
 
 #[derive(Clone)]
-pub struct Layer { pub inner: InnerLayer }
+pub struct Layer {
+    pub inner: InnerLayer,
+}
 
 #[derive(Debug, Clone)]
 pub enum Service<S> {

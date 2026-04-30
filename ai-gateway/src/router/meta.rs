@@ -21,7 +21,7 @@ use crate::{
         invalid_req::InvalidRequestError,
     },
     middleware::{
-        cache::{optional::Layer as CacheLayer},
+        cache::optional::Layer as CacheLayer,
         rate_limit::service::{
             Layer as RateLimitLayer, Service as RateLimitService,
         },
@@ -37,8 +37,11 @@ use crate::{
 
 pub(crate) const MIDDLEWARE_BUFFER_SIZE: usize = 256;
 
-pub type UnifiedApiService =
-    RateLimitService<crate::middleware::cache::optional::Service<ErrorHandler<unified_api::Service>>>;
+pub type UnifiedApiService = RateLimitService<
+    crate::middleware::cache::optional::Service<
+        ErrorHandler<unified_api::Service>,
+    >,
+>;
 
 #[derive(Debug)]
 pub struct MetaRouter {

@@ -1,19 +1,25 @@
+use crate::{app_state::AppState, error::runtime::RuntimeError};
 use futures::future::{self, BoxFuture};
 use meltdown::Token;
 use tokio::time;
-use tracing::{Instrument, error, debug};
-use crate::{app_state::AppState, error::runtime::RuntimeError};
+use tracing::{Instrument, debug, error};
 
 #[derive(Debug, Clone)]
-pub struct HealthMonitor { app_state: AppState }
+pub struct HealthMonitor {
+    app_state: AppState,
+}
 
 impl HealthMonitor {
     #[must_use]
-    pub fn new(app_state: AppState) -> Self { Self { app_state } }
+    pub fn new(app_state: AppState) -> Self {
+        Self { app_state }
+    }
 
     pub async fn run_forever(self) -> Result<(), RuntimeError> {
         tracing::info!("starting health and uptime monitors");
-        let mut interval = time::interval(self.app_state.config().discover.monitor.health_interval());
+        let mut interval = time::interval(
+            self.app_state.config().discover.monitor.health_interval(),
+        );
         loop {
             interval.tick().await;
             let mut monitors = self.app_state.0.health_monitors.write().await;
@@ -28,7 +34,10 @@ impl HealthMonitor {
                     result
                 }.instrument(tracing::info_span!("health_monitor", router_id = ?router_id_for_span)));
             }
-            if let Err(e) = future::try_join_all(check_futures).await { error!(error = ?e, "Provider health monitor encountered an error"); return Err(e); }
+            if let Err(e) = future::try_join_all(check_futures).await {
+                error!(error = ?e, "Provider health monitor encountered an error");
+                return Err(e);
+            }
         }
     }
 }

@@ -1,11 +1,6 @@
-use std::time::{Duration, Instant};
-use futures::{StreamExt, stream::FuturesUnordered};
-use tokio::sync::mpsc::Receiver;
-use tower::discover::Change;
-use tracing::{debug, error, info};
-use rustc_hash::FxHashMap as HashMap;
-use rust_decimal::prelude::ToPrimitive;
-use weighted_balance::weight::Weight;
+use super::{
+    DEFAULT_WAIT_SECONDS, ProviderMonitorInner, RATE_LIMIT_BUFFER_SECONDS,
+};
 use crate::{
     config::balance::BalanceConfigInner,
     discover::provider::weighted_key::WeightedKey as ProviderWeightedKey,
@@ -14,10 +9,20 @@ use crate::{
     error::{internal::InternalError, runtime::RuntimeError},
     types::rate_limit::{ProviderRestore, RateLimitEvent},
 };
-use super::{ProviderMonitorInner, DEFAULT_WAIT_SECONDS, RATE_LIMIT_BUFFER_SECONDS};
+use futures::{StreamExt, stream::FuturesUnordered};
+use rust_decimal::prelude::ToPrimitive;
+use rustc_hash::FxHashMap as HashMap;
+use std::time::{Duration, Instant};
+use tokio::sync::mpsc::Receiver;
+use tower::discover::Change;
+use tracing::{debug, error, info};
+use weighted_balance::weight::Weight;
 
 impl ProviderMonitorInner<ProviderWeightedKey> {
-    fn create_key_for_endpoint(&self, api_endpoint: &ApiEndpoint) -> Result<ProviderWeightedKey, InternalError> {
+    fn create_key_for_endpoint(
+        &self,
+        api_endpoint: &ApiEndpoint,
+    ) -> Result<ProviderWeightedKey, InternalError> {
         let provider = api_endpoint.provider();
         let endpoint_type = api_endpoint.endpoint_type();
         let balance_config = self.router_config.load_balance.0.get(&endpoint_type).ok_or_else(|| { error!(router_id = ?self.router_id, endpoint_type = ?endpoint_type, "No balance config found for endpoint type"); InternalError::Internal })?;
@@ -26,8 +31,17 @@ impl ProviderMonitorInner<ProviderWeightedKey> {
             BalanceConfigInner::ProviderWeighted { providers } => {
                 for target in providers {
                     if target.provider == provider {
-                        let weight = Weight::from(target.weight.to_f64().ok_or(InternalError::Internal)?);
-                        return Ok(ProviderWeightedKey::new(provider, endpoint_type, weight));
+                        let weight = Weight::from(
+                            target
+                                .weight
+                                .to_f64()
+                                .ok_or(InternalError::Internal)?,
+                        );
+                        return Ok(ProviderWeightedKey::new(
+                            provider,
+                            endpoint_type,
+                            weight,
+                        ));
                     }
                 }
                 error!(router_id = ?self.router_id, endpoint_type = ?endpoint_type, api_endpoint = ?api_endpoint, "No target found for API endpoint in balance config");
@@ -37,10 +51,16 @@ impl ProviderMonitorInner<ProviderWeightedKey> {
         }
     }
 
-    pub async fn monitor(self, mut rx: Receiver<RateLimitEvent>) -> Result<(), RuntimeError> {
+    pub async fn monitor(
+        self,
+        mut rx: Receiver<RateLimitEvent>,
+    ) -> Result<(), RuntimeError> {
         debug!(router_id = ?self.router_id, "starting rate limit monitor for weighted strategy LB");
-        let mut rate_limited_providers: HashMap<ProviderWeightedKey, Instant> = HashMap::default();
-        let mut pending_restores: FuturesUnordered<ProviderRestore<ProviderWeightedKey>> = FuturesUnordered::new();
+        let mut rate_limited_providers: HashMap<ProviderWeightedKey, Instant> =
+            HashMap::default();
+        let mut pending_restores: FuturesUnordered<
+            ProviderRestore<ProviderWeightedKey>,
+        > = FuturesUnordered::new();
 
         loop {
             tokio::select! {

@@ -62,7 +62,9 @@ pub(crate) fn limiter_config(
         ))
 }
 
-pub fn rate_limit_error_handler(e: tower_governor::GovernorError) -> axum_core::response::Response {
+pub fn rate_limit_error_handler(
+    e: tower_governor::GovernorError,
+) -> axum_core::response::Response {
     match e {
         tower_governor::GovernorError::TooManyRequests { .. } => {
             tracing::debug!("rate limite exceeded");
@@ -88,8 +90,7 @@ pub fn rate_limit_error_handler(e: tower_governor::GovernorError) -> axum_core::
             );
             let body = ErrorResponse {
                 error: ErrorDetails {
-                    message: "Internal error, server misconfigured"
-                        .to_string(),
+                    message: "Internal error, server misconfigured".to_string(),
                     r#type: Some(SERVER_ERROR_TYPE.to_string()),
                     param: None,
                     code: None,

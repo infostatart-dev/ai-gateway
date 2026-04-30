@@ -1,6 +1,9 @@
-use std::{task::{Context, Poll}, convert::Infallible};
-use futures::future::BoxFuture;
 use crate::app::App;
+use futures::future::BoxFuture;
+use std::{
+    convert::Infallible,
+    task::{Context, Poll},
+};
 
 impl tower::Service<crate::types::request::Request> for App {
     type Response = super::AppResponse;
@@ -9,7 +12,10 @@ impl tower::Service<crate::types::request::Request> for App {
 
     #[inline]
     #[tracing::instrument(skip_all)]
-    fn poll_ready(&mut self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        ctx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         self.service_stack.poll_ready(ctx)
     }
 

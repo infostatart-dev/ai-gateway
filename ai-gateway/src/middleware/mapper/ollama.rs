@@ -10,7 +10,7 @@ use crate::{
     endpoints::ollama::chat_completions::CreateChatCompletionRequestOllama,
     error::mapper::MapperError,
     middleware::mapper::{
-        model::ModelMapper, openai_error_from_value, TryConvertError,
+        TryConvertError, model::ModelMapper, openai_error_from_value,
     },
     types::{model_id::ModelId, provider::InferenceProvider},
 };

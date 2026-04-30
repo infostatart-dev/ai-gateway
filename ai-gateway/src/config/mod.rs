@@ -18,11 +18,13 @@ pub mod router;
 pub mod server;
 pub mod validation;
 
-mod types;
 mod read;
-mod validate;
 mod test_default;
 #[cfg(test)]
 mod tests;
+mod types;
+mod validate;
 
-pub use types::{Config, MiddlewareConfig, Error, ROUTER_ID_REGEX, DEFAULT_CONFIG_PATH};
+pub use types::{
+    Config, DEFAULT_CONFIG_PATH, Error, MiddlewareConfig, ROUTER_ID_REGEX,
+};

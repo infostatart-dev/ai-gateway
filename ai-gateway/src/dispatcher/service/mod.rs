@@ -1,32 +1,35 @@
-use std::task::{Context, Poll};
-use tokio::sync::mpsc::Sender;
-use tower::Service;
-use futures::future::BoxFuture;
 use crate::{
     app_state::AppState,
     dispatcher::client::Client,
     error::api::ApiError,
-    types::{
-        provider::InferenceProvider,
-        rate_limit::RateLimitEvent,
-        request::Request,
-        body::Body,
+    middleware::{
+        add_extension::AddExtensions, mapper::Service as MapperService,
     },
-    middleware::{add_extension::AddExtensions, mapper::Service as MapperService},
+    types::{
+        body::Body, provider::InferenceProvider, rate_limit::RateLimitEvent,
+        request::Request,
+    },
     utils::handle_error::ErrorHandler,
 };
+use futures::future::BoxFuture;
+use std::task::{Context, Poll};
+use tokio::sync::mpsc::Sender;
+use tower::Service;
 
-pub mod factory;
 pub mod dispatch;
-pub mod dispatch_sync;
 pub mod dispatch_stream;
-pub mod retry;
+pub mod dispatch_sync;
+pub mod factory;
 pub mod logging;
+pub mod retry;
 pub mod utils;
 
-pub type DispatcherFuture = BoxFuture<'static, Result<http::Response<Body>, ApiError>>;
-pub type DispatcherService = AddExtensions<ErrorHandler<MapperService<Dispatcher>>>;
-pub type DispatcherServiceWithoutMapper = AddExtensions<ErrorHandler<Dispatcher>>;
+pub type DispatcherFuture =
+    BoxFuture<'static, Result<http::Response<Body>, ApiError>>;
+pub type DispatcherService =
+    AddExtensions<ErrorHandler<MapperService<Dispatcher>>>;
+pub type DispatcherServiceWithoutMapper =
+    AddExtensions<ErrorHandler<Dispatcher>>;
 
 #[derive(Debug, Clone)]
 pub struct Dispatcher {
@@ -41,7 +44,10 @@ impl Service<Request> for Dispatcher {
     type Error = ApiError;
     type Future = DispatcherFuture;
 
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        _cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 

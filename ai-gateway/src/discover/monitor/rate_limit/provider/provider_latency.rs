@@ -1,9 +1,6 @@
-use std::time::Duration;
-use futures::{StreamExt, stream::FuturesUnordered};
-use tokio::sync::mpsc::Receiver;
-use tower::discover::Change;
-use tracing::{debug, error, info, warn};
-use rustc_hash::FxHashSet as HashSet;
+use super::{
+    DEFAULT_WAIT_SECONDS, ProviderMonitorInner, RATE_LIMIT_BUFFER_SECONDS,
+};
 use crate::{
     discover::provider::key::Key as ProviderKey,
     dispatcher::Dispatcher,
@@ -11,17 +8,30 @@ use crate::{
     error::runtime::RuntimeError,
     types::rate_limit::{ProviderRestore, RateLimitEvent},
 };
-use super::{ProviderMonitorInner, DEFAULT_WAIT_SECONDS, RATE_LIMIT_BUFFER_SECONDS};
+use futures::{StreamExt, stream::FuturesUnordered};
+use rustc_hash::FxHashSet as HashSet;
+use std::time::Duration;
+use tokio::sync::mpsc::Receiver;
+use tower::discover::Change;
+use tracing::{debug, error, info, warn};
 
 impl ProviderMonitorInner<ProviderKey> {
-    pub(crate) fn create_key_for_endpoint(api_endpoint: &ApiEndpoint) -> ProviderKey {
+    pub(crate) fn create_key_for_endpoint(
+        api_endpoint: &ApiEndpoint,
+    ) -> ProviderKey {
         ProviderKey::new(api_endpoint.provider(), api_endpoint.endpoint_type())
     }
 
-    pub async fn monitor(self, mut rx: Receiver<RateLimitEvent>) -> Result<(), RuntimeError> {
+    pub async fn monitor(
+        self,
+        mut rx: Receiver<RateLimitEvent>,
+    ) -> Result<(), RuntimeError> {
         info!(router_id = ?self.router_id, "starting rate limit monitor for latency strategy LB");
-        let mut rate_limited_providers: HashSet<ProviderKey> = HashSet::default();
-        let mut pending_restores: FuturesUnordered<ProviderRestore<ProviderKey>> = FuturesUnordered::new();
+        let mut rate_limited_providers: HashSet<ProviderKey> =
+            HashSet::default();
+        let mut pending_restores: FuturesUnordered<
+            ProviderRestore<ProviderKey>,
+        > = FuturesUnordered::new();
 
         loop {
             tokio::select! {

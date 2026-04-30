@@ -1,9 +1,9 @@
-use super::*;
-use super::id::ModelId;
-use super::version::Version;
 use super::base::ModelIdWithVersion;
 use super::bedrock::BedrockModelId;
+use super::id::ModelId;
 use super::ollama::OllamaModelId;
+use super::version::Version;
+use super::*;
 use crate::types::provider::InferenceProvider;
 use chrono::{DateTime, Utc};
 use std::str::FromStr;
@@ -22,8 +22,7 @@ fn groq_model_id_format_with_slash() {
     assert_eq!(
         id,
         ModelIdWithVersion {
-            model: "meta-llama/llama-4-maverick-17b-128e-instruct"
-                .to_string(),
+            model: "meta-llama/llama-4-maverick-17b-128e-instruct".to_string(),
             version: Version::ImplicitLatest,
         }
     );
@@ -54,11 +53,9 @@ fn groq_model_id_format_without_slash() {
 #[test]
 fn test_openai_o1_snapshot_model() {
     let model_id_str = "o1-2024-12-17";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::OpenAI,
-        model_id_str,
-    )
-    .unwrap();
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::OpenAI, model_id_str)
+            .unwrap();
     let ModelId::ModelIdWithVersion {
         provider,
         id: model_with_version,
@@ -71,8 +68,7 @@ fn test_openai_o1_snapshot_model() {
     let Version::Date { date, .. } = &model_with_version.version else {
         panic!("Expected date version");
     };
-    let expected_dt: DateTime<Utc> =
-        "2024-12-17T00:00:00Z".parse().unwrap();
+    let expected_dt: DateTime<Utc> = "2024-12-17T00:00:00Z".parse().unwrap();
     assert_eq!(*date, expected_dt);
 
     assert_eq!(result.to_string(), model_id_str);
@@ -81,11 +77,9 @@ fn test_openai_o1_snapshot_model() {
 #[test]
 fn test_openai_o1_preview_snapshot_model() {
     let model_id_str = "o1-preview-2024-09-12";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::OpenAI,
-        model_id_str,
-    )
-    .unwrap();
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::OpenAI, model_id_str)
+            .unwrap();
     let ModelId::ModelIdWithVersion {
         provider,
         id: model_with_version,
@@ -100,8 +94,7 @@ fn test_openai_o1_preview_snapshot_model() {
     else {
         panic!("Expected date versioned preview");
     };
-    let expected_dt: DateTime<Utc> =
-        "2024-09-12T00:00:00Z".parse().unwrap();
+    let expected_dt: DateTime<Utc> = "2024-09-12T00:00:00Z".parse().unwrap();
     assert_eq!(*date, expected_dt);
 
     assert_eq!(result.to_string(), model_id_str);
@@ -110,11 +103,9 @@ fn test_openai_o1_preview_snapshot_model() {
 #[test]
 fn test_openai_gpt4_snapshot_model() {
     let model_id_str = "gpt-4-2024-08-15";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::OpenAI,
-        model_id_str,
-    )
-    .unwrap();
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::OpenAI, model_id_str)
+            .unwrap();
     let ModelId::ModelIdWithVersion {
         provider,
         id: model_with_version,
@@ -127,8 +118,7 @@ fn test_openai_gpt4_snapshot_model() {
     let Version::Date { date, .. } = &model_with_version.version else {
         panic!("Expected date version");
     };
-    let expected_dt: DateTime<Utc> =
-        "2024-08-15T00:00:00Z".parse().unwrap();
+    let expected_dt: DateTime<Utc> = "2024-08-15T00:00:00Z".parse().unwrap();
     assert_eq!(*date, expected_dt);
 
     assert_eq!(result.to_string(), model_id_str);
@@ -137,11 +127,9 @@ fn test_openai_gpt4_snapshot_model() {
 #[test]
 fn test_openai_gpt35_turbo_snapshot_model() {
     let model_id_str = "gpt-3.5-turbo-2024-01-25";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::OpenAI,
-        model_id_str,
-    )
-    .unwrap();
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::OpenAI, model_id_str)
+            .unwrap();
     let ModelId::ModelIdWithVersion {
         provider,
         id: model_with_version,
@@ -154,8 +142,7 @@ fn test_openai_gpt35_turbo_snapshot_model() {
     let Version::Date { date, .. } = &model_with_version.version else {
         panic!("Expected date version");
     };
-    let expected_dt: DateTime<Utc> =
-        "2024-01-25T00:00:00Z".parse().unwrap();
+    let expected_dt: DateTime<Utc> = "2024-01-25T00:00:00Z".parse().unwrap();
     assert_eq!(*date, expected_dt);
 
     assert_eq!(result.to_string(), model_id_str);
@@ -164,11 +151,9 @@ fn test_openai_gpt35_turbo_snapshot_model() {
 #[test]
 fn test_openai_o1_alias_model() {
     let model_id_str = "o1";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::OpenAI,
-        model_id_str,
-    )
-    .unwrap();
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::OpenAI, model_id_str)
+            .unwrap();
     let ModelId::ModelIdWithVersion {
         provider,
         id: model_with_version,
@@ -189,11 +174,9 @@ fn test_openai_o1_alias_model() {
 #[test]
 fn test_openai_o1_preview_alias_model() {
     let model_id_str = "o1-preview";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::OpenAI,
-        model_id_str,
-    )
-    .unwrap();
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::OpenAI, model_id_str)
+            .unwrap();
     let ModelId::ModelIdWithVersion {
         provider,
         id: model_with_version,
@@ -211,11 +194,9 @@ fn test_openai_o1_preview_alias_model() {
 #[test]
 fn test_openai_gpt4_alias_model() {
     let model_id_str = "gpt-4";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::OpenAI,
-        model_id_str,
-    )
-    .unwrap();
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::OpenAI, model_id_str)
+            .unwrap();
     let ModelId::ModelIdWithVersion {
         provider,
         id: model_with_version,
@@ -236,11 +217,9 @@ fn test_openai_gpt4_alias_model() {
 #[test]
 fn test_openai_gpt35_turbo_alias_model() {
     let model_id_str = "gpt-3.5-turbo";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::OpenAI,
-        model_id_str,
-    )
-    .unwrap();
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::OpenAI, model_id_str)
+            .unwrap();
     let ModelId::ModelIdWithVersion {
         provider,
         id: model_with_version,
@@ -278,8 +257,7 @@ fn test_anthropic_claude_opus_4_dated_model() {
     let Version::Date { date, .. } = model_with_version.version else {
         panic!("Expected date version");
     };
-    let expected_dt: DateTime<Utc> =
-        "2025-05-14T00:00:00Z".parse().unwrap();
+    let expected_dt: DateTime<Utc> = "2025-05-14T00:00:00Z".parse().unwrap();
     assert_eq!(date, expected_dt);
 
     assert_eq!(result.to_string(), model_id_str);
@@ -305,8 +283,7 @@ fn test_anthropic_claude_sonnet_4_dated_model() {
     let Version::Date { date, .. } = &model_with_version.version else {
         panic!("Expected date version");
     };
-    let expected_dt: DateTime<Utc> =
-        "2025-05-14T00:00:00Z".parse().unwrap();
+    let expected_dt: DateTime<Utc> = "2025-05-14T00:00:00Z".parse().unwrap();
     assert_eq!(*date, expected_dt);
 
     assert_eq!(result.to_string(), model_id_str);
@@ -332,8 +309,7 @@ fn test_anthropic_claude_3_7_sonnet_dated_model() {
     let Version::Date { date, .. } = &model_with_version.version else {
         panic!("Expected date version");
     };
-    let expected_dt: DateTime<Utc> =
-        "2025-02-19T00:00:00Z".parse().unwrap();
+    let expected_dt: DateTime<Utc> = "2025-02-19T00:00:00Z".parse().unwrap();
     assert_eq!(*date, expected_dt);
 
     assert_eq!(result.to_string(), model_id_str);
@@ -359,8 +335,7 @@ fn test_anthropic_claude_3_haiku_dated_model() {
     let Version::Date { date, .. } = &model_with_version.version else {
         panic!("Expected date version");
     };
-    let expected_dt: DateTime<Utc> =
-        "2024-03-07T00:00:00Z".parse().unwrap();
+    let expected_dt: DateTime<Utc> = "2024-03-07T00:00:00Z".parse().unwrap();
     assert_eq!(*date, expected_dt);
 
     assert_eq!(result.to_string(), model_id_str);
@@ -674,10 +649,8 @@ fn test_bedrock_anthropic_claude_sonnet_4_model_proper_format() {
 #[test]
 fn test_ollama_gemma3_basic_model() {
     let model_id_str = "gemma3";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::Ollama,
-        model_id_str,
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::Ollama, model_id_str);
     assert!(result.is_ok());
     if let Ok(ModelId::Ollama(ollama_model)) = &result {
         assert_eq!(ollama_model.model, "gemma3");
@@ -692,10 +665,8 @@ fn test_ollama_gemma3_basic_model() {
 #[test]
 fn test_ollama_llama32_basic_model() {
     let model_id_str = "llama3.2";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::Ollama,
-        model_id_str,
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::Ollama, model_id_str);
     assert!(result.is_ok());
     if let Ok(ModelId::Ollama(ollama_model)) = &result {
         assert_eq!(ollama_model.model, "llama3.2");
@@ -709,10 +680,8 @@ fn test_ollama_llama32_basic_model() {
 #[test]
 fn test_ollama_phi4_mini_basic_model() {
     let model_id_str = "phi4-mini";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::Ollama,
-        model_id_str,
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::Ollama, model_id_str);
     assert!(result.is_ok());
     if let Ok(ModelId::Ollama(ollama_model)) = &result {
         assert_eq!(ollama_model.model, "phi4-mini");
@@ -726,10 +695,8 @@ fn test_ollama_phi4_mini_basic_model() {
 #[test]
 fn test_ollama_llama32_vision_basic_model() {
     let model_id_str = "llama3.2-vision";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::Ollama,
-        model_id_str,
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::Ollama, model_id_str);
     assert!(result.is_ok());
     if let Ok(ModelId::Ollama(ollama_model)) = &result {
         assert_eq!(ollama_model.model, "llama3.2-vision");
@@ -743,10 +710,8 @@ fn test_ollama_llama32_vision_basic_model() {
 #[test]
 fn test_ollama_deepseek_r1_basic_model() {
     let model_id_str = "deepseek-r1";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::Ollama,
-        model_id_str,
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::Ollama, model_id_str);
     assert!(result.is_ok());
     if let Ok(ModelId::Ollama(ollama_model)) = &result {
         assert_eq!(ollama_model.model, "deepseek-r1");
@@ -760,10 +725,8 @@ fn test_ollama_deepseek_r1_basic_model() {
 #[test]
 fn test_ollama_gemma3_1b_tagged_model() {
     let model_id_str = "gemma3:1b";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::Ollama,
-        model_id_str,
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::Ollama, model_id_str);
     assert!(result.is_ok());
     if let Ok(ModelId::Ollama(ollama_model)) = &result {
         assert_eq!(ollama_model.model, "gemma3");
@@ -778,10 +741,8 @@ fn test_ollama_gemma3_1b_tagged_model() {
 #[test]
 fn test_ollama_gemma3_12b_tagged_model() {
     let model_id_str = "gemma3:12b";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::Ollama,
-        model_id_str,
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::Ollama, model_id_str);
     assert!(result.is_ok());
     if let Ok(ModelId::Ollama(ollama_model)) = &result {
         assert_eq!(ollama_model.model, "gemma3");
@@ -795,10 +756,8 @@ fn test_ollama_gemma3_12b_tagged_model() {
 #[test]
 fn test_ollama_deepseek_r1_671b_tagged_model() {
     let model_id_str = "deepseek-r1:671b";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::Ollama,
-        model_id_str,
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::Ollama, model_id_str);
     assert!(result.is_ok());
     if let Ok(ModelId::Ollama(ollama_model)) = &result {
         assert_eq!(ollama_model.model, "deepseek-r1");
@@ -812,10 +771,8 @@ fn test_ollama_deepseek_r1_671b_tagged_model() {
 #[test]
 fn test_ollama_llama4_scout_tagged_model() {
     let model_id_str = "llama4:scout";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::Ollama,
-        model_id_str,
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::Ollama, model_id_str);
     assert!(result.is_ok());
     if let Ok(ModelId::Ollama(ollama_model)) = &result {
         assert_eq!(ollama_model.model, "llama4");
@@ -829,10 +786,8 @@ fn test_ollama_llama4_scout_tagged_model() {
 #[test]
 fn test_ollama_llama4_maverick_tagged_model() {
     let model_id_str = "llama4:maverick";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::Ollama,
-        model_id_str,
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::Ollama, model_id_str);
     assert!(result.is_ok());
     if let Ok(ModelId::Ollama(ollama_model)) = &result {
         assert_eq!(ollama_model.model, "llama4");
@@ -846,10 +801,8 @@ fn test_ollama_llama4_maverick_tagged_model() {
 #[test]
 fn test_ollama_llama_2_uncensored_freeform() {
     let model_id_str = "Llama 2 Uncensored";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::Ollama,
-        model_id_str,
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::Ollama, model_id_str);
     assert!(result.is_ok());
     if let Ok(ModelId::Ollama(ollama_model)) = &result {
         assert_eq!(ollama_model.model, "Llama 2 Uncensored");
@@ -956,8 +909,7 @@ fn test_invalid_bedrock_malformed_format() {
 
 #[test]
 fn test_edge_case_empty_string() {
-    let result =
-        ModelId::from_str_and_provider(InferenceProvider::OpenAI, "");
+    let result = ModelId::from_str_and_provider(InferenceProvider::OpenAI, "");
     assert!(result.is_err());
     if let Err(MapperError::InvalidModelName(msg)) = result {
         assert_eq!(msg, "Model name cannot be empty");
@@ -969,10 +921,8 @@ fn test_edge_case_empty_string() {
 #[test]
 fn test_edge_case_single_char() {
     let model_id_str = "a";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::OpenAI,
-        model_id_str,
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::OpenAI, model_id_str);
     assert!(result.is_ok());
     if let Ok(ModelId::ModelIdWithVersion {
         provider,
@@ -1018,10 +968,8 @@ fn test_edge_case_at_symbol() {
 
 #[test]
 fn test_edge_case_trailing_dot() {
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::OpenAI,
-        "provider.",
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::OpenAI, "provider.");
     assert!(result.is_err());
     if let Err(MapperError::InvalidModelName(msg)) = result {
         assert_eq!(msg, "Model name cannot end with dot");
@@ -1032,8 +980,7 @@ fn test_edge_case_trailing_dot() {
 
 #[test]
 fn test_edge_case_at_only() {
-    let result =
-        ModelId::from_str_and_provider(InferenceProvider::OpenAI, "@");
+    let result = ModelId::from_str_and_provider(InferenceProvider::OpenAI, "@");
     assert!(result.is_err());
     if let Err(MapperError::InvalidModelName(msg)) = result {
         assert_eq!(msg, "Model name cannot end with @ symbol");
@@ -1044,8 +991,7 @@ fn test_edge_case_at_only() {
 
 #[test]
 fn test_edge_case_dash_only() {
-    let result =
-        ModelId::from_str_and_provider(InferenceProvider::OpenAI, "-");
+    let result = ModelId::from_str_and_provider(InferenceProvider::OpenAI, "-");
     assert!(result.is_err());
     if let Err(MapperError::InvalidModelName(msg)) = result {
         assert_eq!(msg, "Model name cannot end with dash");
@@ -1232,10 +1178,7 @@ fn test_from_str_invalid_no_slash() {
     let result = ModelId::from_str("gpt-4");
     assert!(result.is_err());
     if let Err(MapperError::InvalidModelName(msg)) = result {
-        assert_eq!(
-            msg,
-            "Model string format error: gpt-4"
-        );
+        assert_eq!(msg, "Model string format error: gpt-4");
     } else {
         panic!("Expected InvalidModelName error");
     }
@@ -1631,10 +1574,8 @@ fn test_parse_date_mmdd_format() {
 fn test_model_with_mmdd_date_version() {
     // Test a model with MMDD date version
     let model_id_str = "gpt-4-0125";
-    let result = ModelId::from_str_and_provider(
-        InferenceProvider::OpenAI,
-        model_id_str,
-    );
+    let result =
+        ModelId::from_str_and_provider(InferenceProvider::OpenAI, model_id_str);
 
     assert!(result.is_ok());
     let ModelId::ModelIdWithVersion {

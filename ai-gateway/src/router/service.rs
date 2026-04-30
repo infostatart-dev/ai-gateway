@@ -20,9 +20,7 @@ use crate::{
         api::ApiError, init::InitError, internal::InternalError,
         invalid_req::InvalidRequestError,
     },
-    middleware::{
-        prompts::PromptLayer, rate_limit, request_context,
-    },
+    middleware::{prompts::PromptLayer, rate_limit, request_context},
     router::{meta::MIDDLEWARE_BUFFER_SIZE, strategy::RoutingStrategyService},
     types::router::RouterId,
     utils::handle_error::ErrorHandlerLayer,
@@ -58,10 +56,11 @@ impl Router {
         )
         .await?;
         let prompt_layer = PromptLayer::new(&app_state)?;
-        let cache_layer = crate::middleware::cache::optional::Layer::for_router(
-            &app_state,
-            &router_config,
-        )?;
+        let cache_layer =
+            crate::middleware::cache::optional::Layer::for_router(
+                &app_state,
+                &router_config,
+            )?;
         let request_context_layer =
             request_context::Layer::for_router(router_config.clone());
         for (endpoint_type, balance_config) in

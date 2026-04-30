@@ -1,9 +1,14 @@
-use std::collections::{HashMap, HashSet};
-use regex::Regex;
-use crate::error::{api::ApiError, invalid_req::InvalidRequestError};
 use super::validate::validate_variable_type;
+use crate::error::{api::ApiError, invalid_req::InvalidRequestError};
+use regex::Regex;
+use std::collections::{HashMap, HashSet};
 
-pub fn replace_variables(text: &str, inputs: &HashMap<String, serde_json::Value>, regex: &Regex, validated: &mut HashSet<String>) -> Result<String, ApiError> {
+pub fn replace_variables(
+    text: &str,
+    inputs: &HashMap<String, serde_json::Value>,
+    regex: &Regex,
+    validated: &mut HashSet<String>,
+) -> Result<String, ApiError> {
     let mut result = text.to_string();
     for cap in regex.captures_iter(text) {
         let full_match = &cap[0];
@@ -21,7 +26,11 @@ pub fn replace_variables(text: &str, inputs: &HashMap<String, serde_json::Value>
             };
             result = result.replace(full_match, &str_val);
         } else {
-            return Err(ApiError::InvalidRequest(InvalidRequestError::InvalidPromptInputs(format!("Variable '{var_name}' not found in inputs"))));
+            return Err(ApiError::InvalidRequest(
+                InvalidRequestError::InvalidPromptInputs(format!(
+                    "Variable '{var_name}' not found in inputs"
+                )),
+            ));
         }
     }
     Ok(result)

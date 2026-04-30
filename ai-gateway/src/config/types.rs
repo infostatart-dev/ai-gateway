@@ -1,7 +1,7 @@
+use config::ConfigError;
+use displaydoc::Display;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use displaydoc::Display;
-use config::ConfigError;
 
 pub const ROUTER_ID_REGEX: &str = r"^[A-Za-z0-9_-]{1,12}$";
 pub const DEFAULT_CONFIG_PATH: &str = "/etc/ai-gateway/config.yaml";
@@ -13,7 +13,9 @@ pub enum Error {
     /// deserialization error for input config: {0}
     InputConfigDeserialization(#[from] serde_path_to_error::Error<ConfigError>),
     /// deserialization error for merged config: {0}
-    MergedConfigDeserialization(#[from] serde_path_to_error::Error<serde_json::Error>),
+    MergedConfigDeserialization(
+        #[from] serde_path_to_error::Error<serde_json::Error>,
+    ),
     /// URL parsing error: {0}
     UrlParse(#[from] url::ParseError),
     /// reserved router ID used: {0}
@@ -50,7 +52,8 @@ pub struct Config {
     pub database: crate::config::database::DatabaseConfig,
     pub dispatcher: crate::config::dispatcher::DispatcherConfig,
     pub discover: crate::config::discover::DiscoverConfig,
-    pub response_headers: crate::config::response_headers::ResponseHeadersConfig,
+    pub response_headers:
+        crate::config::response_headers::ResponseHeadersConfig,
     pub deployment_target: crate::config::deployment_target::DeploymentTarget,
     pub control_plane: crate::config::control_plane::ControlPlaneConfig,
     pub default_model_mapping: crate::config::model_mapping::ModelMappingConfig,

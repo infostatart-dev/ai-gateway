@@ -68,16 +68,25 @@ observability: true
 
 #[test]
 fn test_helper_methods() {
-    let auth_config = HeliconeConfig { features: HeliconeFeatures::Auth, ..Default::default() };
+    let auth_config = HeliconeConfig {
+        features: HeliconeFeatures::Auth,
+        ..Default::default()
+    };
     assert!(auth_config.is_auth_enabled());
     assert!(!auth_config.is_auth_disabled());
     assert!(!auth_config.is_observability_enabled());
 
-    let all_config = HeliconeConfig { features: HeliconeFeatures::All, ..Default::default() };
+    let all_config = HeliconeConfig {
+        features: HeliconeFeatures::All,
+        ..Default::default()
+    };
     assert!(all_config.is_auth_enabled());
     assert!(all_config.is_observability_enabled());
 
-    let none_config = HeliconeConfig { features: HeliconeFeatures::None, ..Default::default() };
+    let none_config = HeliconeConfig {
+        features: HeliconeFeatures::None,
+        ..Default::default()
+    };
     assert!(!none_config.is_auth_enabled());
     assert!(none_config.is_auth_disabled());
 }

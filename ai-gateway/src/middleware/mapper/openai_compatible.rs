@@ -7,7 +7,9 @@ use super::{TryConvertStreamData, model::ModelMapper};
 use crate::{
     endpoints::openai::OpenAICompatibleChatCompletionRequest,
     error::mapper::MapperError,
-    middleware::mapper::{TryConvert, TryConvertError, openai_error_from_value},
+    middleware::mapper::{
+        TryConvert, TryConvertError, openai_error_from_value,
+    },
     types::{model_id::ModelId, provider::InferenceProvider},
 };
 
@@ -76,19 +78,14 @@ impl
     fn try_convert_chunk(
         &self,
         value: chat::CreateChatCompletionStreamResponse,
-    ) -> Result<
-        Option<chat::CreateChatCompletionStreamResponse>,
-        Self::Error,
-    > {
+    ) -> Result<Option<chat::CreateChatCompletionStreamResponse>, Self::Error>
+    {
         Ok(Some(value))
     }
 }
 
-impl
-    TryConvertError<
-        serde_json::Value,
-        async_openai::error::WrappedError,
-    > for OpenAICompatibleConverter
+impl TryConvertError<serde_json::Value, async_openai::error::WrappedError>
+    for OpenAICompatibleConverter
 {
     type Error = MapperError;
 

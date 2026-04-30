@@ -1,28 +1,45 @@
+use crate::endpoints::bedrock::converse::{
+    ContentBlock, ImageBlock, ImageSource, Message, SystemContentBlock,
+};
 use async_openai::types::chat as openai;
-use crate::endpoints::bedrock::converse::{Message, ContentBlock, SystemContentBlock, ImageBlock, ImageSource};
 
-pub fn map_messages(messages: Vec<openai::ChatCompletionRequestMessage>) -> (Vec<Message>, Vec<SystemContentBlock>) {
+pub fn map_messages(
+    messages: Vec<openai::ChatCompletionRequestMessage>,
+) -> (Vec<Message>, Vec<SystemContentBlock>) {
     let mut mapped_messages = Vec::with_capacity(messages.len());
     let mut system_prompts = Vec::new();
 
     for message in messages {
         match message {
             openai::ChatCompletionRequestMessage::Developer(msg) => {
-                system_prompts.push(SystemContentBlock { text: map_developer_content(msg.content) });
+                system_prompts.push(SystemContentBlock {
+                    text: map_developer_content(msg.content),
+                });
             }
             openai::ChatCompletionRequestMessage::System(msg) => {
-                system_prompts.push(SystemContentBlock { text: map_system_content(msg.content) });
+                system_prompts.push(SystemContentBlock {
+                    text: map_system_content(msg.content),
+                });
             }
             openai::ChatCompletionRequestMessage::User(msg) => {
-                mapped_messages.push(Message { role: "user".to_string(), content: map_user_content(msg.content) });
+                mapped_messages.push(Message {
+                    role: "user".to_string(),
+                    content: map_user_content(msg.content),
+                });
             }
             openai::ChatCompletionRequestMessage::Assistant(msg) => {
                 if let Some(content) = map_assistant_content(msg.content) {
-                    mapped_messages.push(Message { role: "assistant".to_string(), content });
+                    mapped_messages.push(Message {
+                        role: "assistant".to_string(),
+                        content,
+                    });
                 }
             }
             openai::ChatCompletionRequestMessage::Tool(msg) => {
-                mapped_messages.push(Message { role: "user".to_string(), content: map_tool_content(msg) });
+                mapped_messages.push(Message {
+                    role: "user".to_string(),
+                    content: map_tool_content(msg),
+                });
             }
             openai::ChatCompletionRequestMessage::Function(_msg) => {
                 // Function messages are handled differently or ignored in this mapping
@@ -33,7 +50,9 @@ pub fn map_messages(messages: Vec<openai::ChatCompletionRequestMessage>) -> (Vec
     (mapped_messages, system_prompts)
 }
 
-fn map_developer_content(content: openai::ChatCompletionRequestDeveloperMessageContent) -> String {
+fn map_developer_content(
+    content: openai::ChatCompletionRequestDeveloperMessageContent,
+) -> String {
     match content {
         openai::ChatCompletionRequestDeveloperMessageContent::Text(text) => text,
         openai::ChatCompletionRequestDeveloperMessageContent::Array(array) => {
@@ -46,7 +65,9 @@ fn map_developer_content(content: openai::ChatCompletionRequestDeveloperMessageC
     }
 }
 
-fn map_system_content(content: openai::ChatCompletionRequestSystemMessageContent) -> String {
+fn map_system_content(
+    content: openai::ChatCompletionRequestSystemMessageContent,
+) -> String {
     match content {
         openai::ChatCompletionRequestSystemMessageContent::Text(text) => text,
         openai::ChatCompletionRequestSystemMessageContent::Array(array) => {
@@ -59,7 +80,9 @@ fn map_system_content(content: openai::ChatCompletionRequestSystemMessageContent
     }
 }
 
-fn map_user_content(content: openai::ChatCompletionRequestUserMessageContent) -> Vec<ContentBlock> {
+fn map_user_content(
+    content: openai::ChatCompletionRequestUserMessageContent,
+) -> Vec<ContentBlock> {
     match content {
         openai::ChatCompletionRequestUserMessageContent::Text(text) => vec![ContentBlock::Text { text }],
         openai::ChatCompletionRequestUserMessageContent::Array(array) => {
@@ -85,7 +108,9 @@ fn map_user_content(content: openai::ChatCompletionRequestUserMessageContent) ->
     }
 }
 
-fn map_assistant_content(content: Option<openai::ChatCompletionRequestAssistantMessageContent>) -> Option<Vec<ContentBlock>> {
+fn map_assistant_content(
+    content: Option<openai::ChatCompletionRequestAssistantMessageContent>,
+) -> Option<Vec<ContentBlock>> {
     content.map(|c| match c {
         openai::ChatCompletionRequestAssistantMessageContent::Text(text) => vec![ContentBlock::Text { text }],
         openai::ChatCompletionRequestAssistantMessageContent::Array(array) => {
@@ -97,7 +122,9 @@ fn map_assistant_content(content: Option<openai::ChatCompletionRequestAssistantM
     })
 }
 
-fn map_tool_content(msg: openai::ChatCompletionRequestToolMessage) -> Vec<ContentBlock> {
+fn map_tool_content(
+    msg: openai::ChatCompletionRequestToolMessage,
+) -> Vec<ContentBlock> {
     match msg.content {
         openai::ChatCompletionRequestToolMessageContent::Text(text) => vec![ContentBlock::ToolResult {
             tool_result: crate::endpoints::bedrock::converse::ToolResultBlock {

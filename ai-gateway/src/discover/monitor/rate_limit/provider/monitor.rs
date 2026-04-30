@@ -1,12 +1,9 @@
+use super::{ProviderRateLimitMonitor, RATE_LIMIT_MONITOR_INTERVAL};
+use crate::{app_state::AppState, error::runtime::RuntimeError};
 use futures::future::BoxFuture;
 use meltdown::Token;
 use tokio::{task::JoinSet, time};
 use tracing::{debug, error, info};
-use crate::{
-    app_state::AppState,
-    error::runtime::RuntimeError,
-};
-use super::{ProviderRateLimitMonitor, RATE_LIMIT_MONITOR_INTERVAL};
 
 #[derive(Debug)]
 pub struct RateLimitMonitor {
@@ -17,7 +14,10 @@ pub struct RateLimitMonitor {
 impl RateLimitMonitor {
     #[must_use]
     pub fn new(app_state: AppState) -> Self {
-        Self { app_state, tasks: JoinSet::new() }
+        Self {
+            app_state,
+            tasks: JoinSet::new(),
+        }
     }
 
     pub async fn run_forever(mut self) -> Result<(), RuntimeError> {

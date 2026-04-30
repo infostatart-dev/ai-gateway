@@ -1,27 +1,37 @@
-use std::time::{Duration, Instant};
-use futures::{StreamExt, stream::FuturesUnordered};
-use tokio::sync::mpsc::Receiver;
-use tower::discover::Change;
-use tracing::{debug, error, info};
-use rustc_hash::FxHashMap as HashMap;
+use super::{
+    DEFAULT_WAIT_SECONDS, ProviderMonitorInner, RATE_LIMIT_BUFFER_SECONDS,
+};
 use crate::{
     discover::model::key::Key as ModelKey,
     dispatcher::Dispatcher,
     error::{internal::InternalError, runtime::RuntimeError},
     types::rate_limit::{ProviderRestore, RateLimitEvent},
 };
-use super::{ProviderMonitorInner, DEFAULT_WAIT_SECONDS, RATE_LIMIT_BUFFER_SECONDS};
+use futures::{StreamExt, stream::FuturesUnordered};
+use rustc_hash::FxHashMap as HashMap;
+use std::time::{Duration, Instant};
+use tokio::sync::mpsc::Receiver;
+use tower::discover::Change;
+use tracing::{debug, error, info};
 
 impl ProviderMonitorInner<ModelKey> {
-    fn create_model_latency_key(&self, event: &RateLimitEvent) -> Result<ModelKey, InternalError> {
+    fn create_model_latency_key(
+        &self,
+        event: &RateLimitEvent,
+    ) -> Result<ModelKey, InternalError> {
         let model_id = event.model_id.clone().ok_or_else(|| { error!(router_id = ?self.router_id, api_endpoint = ?event.api_endpoint, "No model id found in rate limit event"); InternalError::Internal })?;
         Ok(ModelKey::new(model_id, event.api_endpoint.endpoint_type()))
     }
 
-    pub async fn monitor(self, mut rx: Receiver<RateLimitEvent>) -> Result<(), RuntimeError> {
+    pub async fn monitor(
+        self,
+        mut rx: Receiver<RateLimitEvent>,
+    ) -> Result<(), RuntimeError> {
         debug!(router_id = ?self.router_id, "starting rate limit monitor for weighted strategy LB");
-        let mut rate_limited_providers: HashMap<ModelKey, Instant> = HashMap::default();
-        let mut pending_restores: FuturesUnordered<ProviderRestore<ModelKey>> = FuturesUnordered::new();
+        let mut rate_limited_providers: HashMap<ModelKey, Instant> =
+            HashMap::default();
+        let mut pending_restores: FuturesUnordered<ProviderRestore<ModelKey>> =
+            FuturesUnordered::new();
 
         loop {
             tokio::select! {

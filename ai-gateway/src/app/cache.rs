@@ -1,11 +1,11 @@
-use moka::future::Cache;
-use http_cache::MokaManager;
 use crate::{
-    config::{Config, cache::CacheStore},
     cache::{CacheClient, RedisCacheManager},
-    metrics::Metrics,
+    config::{Config, cache::CacheStore},
     error::init::InitError,
+    metrics::Metrics,
 };
+use http_cache::MokaManager;
+use moka::future::Cache;
 
 pub fn setup_cache(config: &Config, metrics: Metrics) -> Option<CacheClient> {
     match &config.cache_store {
@@ -22,7 +22,11 @@ pub fn setup_cache(config: &Config, metrics: Metrics) -> Option<CacheClient> {
                     Some(CacheClient::Redis(redis_manager))
                 }
                 Err(e) => {
-                    tracing::error!("Failed to connect to Redis cache at {}: {}", host_url, e);
+                    tracing::error!(
+                        "Failed to connect to Redis cache at {}: {}",
+                        host_url,
+                        e
+                    );
                     None
                 }
             }
@@ -46,6 +50,8 @@ fn setup_moka_cache(capacity: usize, metrics: Metrics) -> MokaManager {
     MokaManager::new(cache)
 }
 
-fn setup_redis_cache(host_url: url::Url) -> Result<RedisCacheManager, InitError> {
+fn setup_redis_cache(
+    host_url: url::Url,
+) -> Result<RedisCacheManager, InitError> {
     RedisCacheManager::new(host_url)
 }

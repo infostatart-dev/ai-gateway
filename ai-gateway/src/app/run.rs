@@ -1,16 +1,12 @@
-use std::net::SocketAddr;
-use futures::future::BoxFuture;
-use tracing::info;
-use axum_server::{accept::NoDelayAcceptor, tls_rustls::RustlsConfig};
-use meltdown::Token;
 use crate::{
-    app::App,
-    app::factory::AppFactory,
-    config::server::TlsConfig,
-    error::runtime::RuntimeError,
-    error::init::InitError,
-    cli,
+    app::App, app::factory::AppFactory, cli, config::server::TlsConfig,
+    error::init::InitError, error::runtime::RuntimeError,
 };
+use axum_server::{accept::NoDelayAcceptor, tls_rustls::RustlsConfig};
+use futures::future::BoxFuture;
+use meltdown::Token;
+use std::net::SocketAddr;
+use tracing::info;
 
 impl meltdown::Service for App {
     type Future = BoxFuture<'static, Result<(), RuntimeError>>;
@@ -19,22 +15,26 @@ impl meltdown::Service for App {
         Box::pin(async move {
             let app_state = self.state.clone();
             let config = app_state.config();
-            let addr = SocketAddr::from((config.server.address, config.server.port));
+            let addr =
+                SocketAddr::from((config.server.address, config.server.port));
             info!(address = %addr, tls = %config.server.tls, "server starting");
 
             let handle = axum_server::Handle::new();
             let app_factory = AppFactory::new_hyper_app(self);
-            
+
             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-            let autodefault_id = crate::types::router::RouterId::Named(compact_str::CompactString::new("autodefault"));
+            let autodefault_id = crate::types::router::RouterId::Named(
+                compact_str::CompactString::new("autodefault"),
+            );
             let has_autodefault = config.routers.contains_key(&autodefault_id);
             cli::helpers::show_welcome_banner(&addr, has_autodefault);
 
             match &config.server.tls {
                 TlsConfig::Enabled { cert, key } => {
-                    let tls_config = RustlsConfig::from_pem_file(cert.clone(), key.clone())
-                        .await
-                        .map_err(InitError::Tls)?;
+                    let tls_config =
+                        RustlsConfig::from_pem_file(cert.clone(), key.clone())
+                            .await
+                            .map_err(InitError::Tls)?;
 
                     tokio::select! {
                         biased;

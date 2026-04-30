@@ -3,9 +3,7 @@ use serde::{Deserialize, Serialize};
 pub(crate) const MAX_BUCKET_SIZE: u8 = 10;
 pub(crate) const DEFAULT_BUCKETS: u8 = 1;
 
-#[derive(
-    Debug, Clone, Deserialize, Serialize, Eq, PartialEq, Hash,
-)]
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq, Hash)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct CacheConfig {
     /// Cache-control header: <https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control>

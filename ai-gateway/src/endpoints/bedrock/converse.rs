@@ -15,7 +15,7 @@ pub struct Converse;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BedrockConverseRequest {
-    #[serde(skip_serializing)] 
+    #[serde(skip_serializing)]
     pub model_id: Option<String>,
     pub messages: Vec<Message>,
     #[serde(skip_serializing_if = "Option::is_none")]

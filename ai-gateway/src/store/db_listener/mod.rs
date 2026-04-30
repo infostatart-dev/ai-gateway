@@ -1,20 +1,18 @@
+use crate::{
+    app_state::AppState, router::service::Router, store::router::RouterStore,
+    types::router::RouterId,
+};
 use chrono::{DateTime, Utc};
 use rustc_hash::FxHashMap as HashMap;
 use sqlx::postgres::PgListener;
 use tokio::{sync::mpsc::Sender, time::Duration};
 use tower::discover::Change;
-use crate::{
-    app_state::AppState,
-    router::service::Router,
-    store::router::RouterStore,
-    types::router::RouterId,
-};
 
-pub mod types;
-pub mod poll;
 pub mod notification;
+pub mod poll;
 pub mod router;
 pub mod service;
+pub mod types;
 
 #[derive(Debug)]
 pub struct DatabaseListener {

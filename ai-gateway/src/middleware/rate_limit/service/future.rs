@@ -1,6 +1,10 @@
-use std::{future::Future, pin::Pin, task::{Context, Poll}};
-use http::Response;
 use super::utils::increment_retry_after_header;
+use http::Response;
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 pin_project_lite::pin_project! {
     #[derive(Debug)]
@@ -25,8 +29,12 @@ where
         match self.project() {
             EnumProj::InMemory { future } => {
                 let result = std::task::ready!(future.poll(cx));
-                if let Ok(mut res) = result { increment_retry_after_header(&mut res); Poll::Ready(Ok(res)) }
-                else { Poll::Ready(result) }
+                if let Ok(mut res) = result {
+                    increment_retry_after_header(&mut res);
+                    Poll::Ready(Ok(res))
+                } else {
+                    Poll::Ready(result)
+                }
             }
             EnumProj::Redis { future } => future.poll(cx),
             EnumProj::Disabled { future } => future.poll(cx),

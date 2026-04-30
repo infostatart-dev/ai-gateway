@@ -91,14 +91,26 @@ impl IntoResponse for InternalError {
         let (status, message_type) = match self {
             InternalError::ReqwestError(ref e) => {
                 if e.is_timeout() {
-                    (StatusCode::GATEWAY_TIMEOUT, Some("timeout_error".to_string()))
+                    (
+                        StatusCode::GATEWAY_TIMEOUT,
+                        Some("timeout_error".to_string()),
+                    )
                 } else if e.is_connect() || e.is_request() {
-                    (StatusCode::BAD_GATEWAY, Some("bad_gateway_error".to_string()))
+                    (
+                        StatusCode::BAD_GATEWAY,
+                        Some("bad_gateway_error".to_string()),
+                    )
                 } else {
-                    (StatusCode::INTERNAL_SERVER_ERROR, Some(SERVER_ERROR_TYPE.to_string()))
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Some(SERVER_ERROR_TYPE.to_string()),
+                    )
                 }
             }
-            _ => (StatusCode::INTERNAL_SERVER_ERROR, Some(SERVER_ERROR_TYPE.to_string())),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Some(SERVER_ERROR_TYPE.to_string()),
+            ),
         };
 
         (
