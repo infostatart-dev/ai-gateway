@@ -54,7 +54,7 @@ impl Endpoint for OpenAICompatibleChatCompletions {
     type ResponseBody = async_openai::types::chat::CreateChatCompletionResponse;
     type StreamResponseBody =
         async_openai::types::chat::CreateChatCompletionStreamResponse;
-    type ErrorResponseBody = async_openai::error::WrappedError;
+    type ErrorResponseBody = serde_json::Value;
 }
 
 #[derive(

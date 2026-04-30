@@ -247,6 +247,43 @@ pub(crate) fn openai_error_from_status(
     }
 }
 
+pub(crate) fn openai_error_from_value(
+    status_code: StatusCode,
+    value: serde_json::Value,
+) -> WrappedError {
+    if let Ok(error) = serde_json::from_value::<WrappedError>(value.clone()) {
+        return error;
+    }
+
+    openai_error_from_status(status_code, provider_error_message(&value))
+}
+
+fn provider_error_message(value: &serde_json::Value) -> Option<String> {
+    if let serde_json::Value::String(message) = value {
+        return non_empty_message(message);
+    }
+
+    [
+        "/error/message",
+        "/error",
+        "/message",
+        "/detail",
+        "/error_description",
+        "/title",
+    ]
+    .into_iter()
+    .find_map(|path| value.pointer(path)?.as_str().and_then(non_empty_message))
+}
+
+fn non_empty_message(message: &str) -> Option<String> {
+    let message = message.trim();
+    if message.is_empty() {
+        None
+    } else {
+        Some(message.to_string())
+    }
+}
+
 pub(super) fn mime_from_data_uri(uri: &str) -> Option<infer::Type> {
     // Split on the first comma.  If no comma => not a data-URI.
     let (_first, b64) = uri.split_once(',')?;

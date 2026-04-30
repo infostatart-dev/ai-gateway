@@ -13,5 +13,5 @@ impl crate::endpoints::Endpoint for GenerateContents {
     type RequestBody = OpenAICompatibleChatCompletionRequest;
     type ResponseBody = CreateChatCompletionResponse;
     type StreamResponseBody = CreateChatCompletionStreamResponse;
-    type ErrorResponseBody = async_openai::error::WrappedError;
+    type ErrorResponseBody = serde_json::Value;
 }

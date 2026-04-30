@@ -7,7 +7,7 @@ use super::{TryConvertStreamData, model::ModelMapper};
 use crate::{
     endpoints::openai::OpenAICompatibleChatCompletionRequest,
     error::mapper::MapperError,
-    middleware::mapper::{TryConvert, TryConvertError},
+    middleware::mapper::{TryConvert, TryConvertError, openai_error_from_value},
     types::{model_id::ModelId, provider::InferenceProvider},
 };
 
@@ -60,8 +60,7 @@ impl
     fn try_convert(
         &self,
         value: chat::CreateChatCompletionResponse,
-    ) -> Result<chat::CreateChatCompletionResponse, Self::Error>
-    {
+    ) -> Result<chat::CreateChatCompletionResponse, Self::Error> {
         Ok(value)
     }
 }
@@ -87,7 +86,7 @@ impl
 
 impl
     TryConvertError<
-        async_openai::error::WrappedError,
+        serde_json::Value,
         async_openai::error::WrappedError,
     > for OpenAICompatibleConverter
 {
@@ -95,9 +94,9 @@ impl
 
     fn try_convert_error(
         &self,
-        _resp_parts: &Parts,
-        value: async_openai::error::WrappedError,
+        resp_parts: &Parts,
+        value: serde_json::Value,
     ) -> Result<async_openai::error::WrappedError, Self::Error> {
-        Ok(value)
+        Ok(openai_error_from_value(resp_parts.status, value))
     }
 }

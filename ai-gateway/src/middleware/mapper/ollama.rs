@@ -9,7 +9,9 @@ use super::{TryConvert, TryConvertStreamData};
 use crate::{
     endpoints::ollama::chat_completions::CreateChatCompletionRequestOllama,
     error::mapper::MapperError,
-    middleware::mapper::{TryConvertError, model::ModelMapper},
+    middleware::mapper::{
+        model::ModelMapper, openai_error_from_value, TryConvertError,
+    },
     types::{model_id::ModelId, provider::InferenceProvider},
 };
 
@@ -78,19 +80,16 @@ impl
     }
 }
 
-impl
-    TryConvertError<
-        async_openai::error::WrappedError,
-        async_openai::error::WrappedError,
-    > for OllamaConverter
+impl TryConvertError<serde_json::Value, async_openai::error::WrappedError>
+    for OllamaConverter
 {
     type Error = MapperError;
 
     fn try_convert_error(
         &self,
-        _resp_parts: &Parts,
-        value: async_openai::error::WrappedError,
+        resp_parts: &Parts,
+        value: serde_json::Value,
     ) -> Result<async_openai::error::WrappedError, Self::Error> {
-        Ok(value)
+        Ok(openai_error_from_value(resp_parts.status, value))
     }
 }

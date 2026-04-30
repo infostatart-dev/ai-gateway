@@ -19,7 +19,6 @@ use crate::error::api::ApiError;
 #[derive(Debug)]
 pub struct BodyReader {
     rx: UnboundedReceiver<Bytes>,
-    tfft_tx: Option<oneshot::Sender<()>>,
     is_end_stream: bool,
     size_hint: SizeHint,
     append_newlines: bool,
@@ -29,13 +28,11 @@ impl BodyReader {
     #[must_use]
     pub fn new(
         rx: UnboundedReceiver<Bytes>,
-        tfft_tx: oneshot::Sender<()>,
         size_hint: SizeHint,
         append_newlines: bool,
     ) -> Self {
         Self {
             rx,
-            tfft_tx: Some(tfft_tx),
             is_end_stream: false,
             size_hint,
             append_newlines,
@@ -52,18 +49,20 @@ impl BodyReader {
         // stack by limiting concurrency and request/response body size.
         let (tx, rx) = mpsc::unbounded_channel();
         let (tfft_tx, tfft_rx) = oneshot::channel();
+        let mut tfft_tx = Some(tfft_tx);
         let s = stream.map(move |b| {
             if let Ok(b) = &b {
-                if let Err(e) = tx.send(b.clone()) {
-                    tracing::error!(error = %e, "BodyReader dropped before stream ended");
+                if let Some(tfft_tx) = tfft_tx.take() {
+                    let _ = tfft_tx.send(());
                 }
+                let _ = tx.send(b.clone());
             }
             b
         });
         let client_response = axum_core::body::Body::from_stream(s);
         let size_hint = client_response.size_hint();
         let response_body_for_logger =
-            BodyReader::new(rx, tfft_tx, size_hint, append_newlines);
+            BodyReader::new(rx, size_hint, append_newlines);
         (client_response, response_body_for_logger, tfft_rx)
     }
 }
@@ -78,12 +77,6 @@ impl hyper::body::Body for BodyReader {
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         match Pin::new(&mut self.rx).poll_recv(cx) {
             Poll::Ready(Some(bytes)) => {
-                if let Some(tfft_tx) = self.tfft_tx.take() {
-                    if let Err(()) = tfft_tx.send(()) {
-                        tracing::error!("Failed to send TFFT signal");
-                    }
-                }
-
                 if self.append_newlines {
                     let mut new_bytes = BytesMut::new();
                     new_bytes.put("data: ".as_bytes());
