@@ -16,9 +16,11 @@ pub enum Error {
     MergedConfigDeserialization(#[from] serde_path_to_error::Error<serde_json::Error>),
     /// URL parsing error: {0}
     UrlParse(#[from] url::ParseError),
+    /// reserved router ID used: {0}
+    ReservedRouterId(String),
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct MiddlewareConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -29,7 +31,17 @@ pub struct MiddlewareConfig {
     pub retries: Option<crate::config::retry::RetryConfig>,
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+impl Default for MiddlewareConfig {
+    fn default() -> Self {
+        Self {
+            cache: Some(crate::config::cache::CacheConfig::default()),
+            rate_limit: None,
+            retries: None,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Config {
     pub telemetry: telemetry::Config,
@@ -51,4 +63,28 @@ pub struct Config {
     pub global: MiddlewareConfig,
     pub unified_api: MiddlewareConfig,
     pub routers: crate::config::router::RouterConfigs,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            telemetry: Default::default(),
+            server: Default::default(),
+            minio: Default::default(),
+            database: Default::default(),
+            dispatcher: Default::default(),
+            discover: Default::default(),
+            response_headers: Default::default(),
+            deployment_target: Default::default(),
+            control_plane: Default::default(),
+            default_model_mapping: Default::default(),
+            helicone: Default::default(),
+            providers: Default::default(),
+            cache_store: Some(crate::config::cache::CacheStore::default()),
+            rate_limit_store: None,
+            global: MiddlewareConfig::default(),
+            unified_api: MiddlewareConfig::default(),
+            routers: Default::default(),
+        }
+    }
 }

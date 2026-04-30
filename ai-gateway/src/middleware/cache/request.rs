@@ -25,7 +25,7 @@ where S: tower::Service<Request, Response = Response, Error = Infallible> + Send
 
     let (parts, body) = req.into_parts();
     let body_bytes = body.collect().await.map_err(InternalError::CollectBodyError)?.to_bytes();
-    let buckets = ctx.buckets.unwrap_or(DEFAULT_BUCKETS);
+    let buckets = ctx.buckets.unwrap_or(DEFAULT_BUCKETS).max(1);
     let now = std::time::SystemTime::now();
 
     let mut futures = FuturesUnordered::new();

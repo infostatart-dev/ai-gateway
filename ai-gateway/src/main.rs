@@ -79,6 +79,9 @@ fn load_and_validate_config() -> Result<Config, RuntimeError> {
     Ok(config)
 }
 
+use compact_str::CompactString;
+use ai_gateway::types::router::RouterId;
+
 fn init_telemetry(
     config: &Config,
 ) -> Result<
@@ -100,7 +103,12 @@ fn init_telemetry(
     #[cfg(debug_assertions)]
     tracing::warn!("running in debug mode");
 
-    Ok((logger_provider, tracer_provider, metrics_provider))
+        let autodefault_id = RouterId::Named(CompactString::new("autodefault"));
+        if config.routers.contains_key(&autodefault_id) {
+            tracing::info!("Router 'autodefault' is configured, will be available at /router/autodefault");
+        }
+
+        Ok((logger_provider, tracer_provider, metrics_provider))
 }
 
 async fn run_app(config: Config) -> Result<(), RuntimeError> {

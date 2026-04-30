@@ -15,23 +15,26 @@ use futures::future::BoxFuture;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
-#[derive(Clone, Default)]
-pub struct PromptLayer;
+#[derive(Clone)]
+pub struct PromptLayer {
+    app_state: AppState,
+}
 
 impl PromptLayer {
-    pub fn new(_app_state: &AppState) -> Result<Self, InitError> {
-        Ok(Self)
+    pub fn new(app_state: &AppState) -> Result<Self, InitError> {
+        Ok(Self { app_state: app_state.clone() })
     }
 }
 
 impl<S> Layer<S> for PromptLayer {
     type Service = PromptService<S>;
-    fn layer(&self, inner: S) -> Self::Service { PromptService { inner } }
+    fn layer(&self, inner: S) -> Self::Service { PromptService { inner, app_state: self.app_state.clone() } }
 }
 
 #[derive(Clone)]
 pub struct PromptService<S> {
     inner: S,
+    app_state: AppState,
 }
 
 impl<S> Service<Request> for PromptService<S>
@@ -46,11 +49,12 @@ where
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> { self.inner.poll_ready(cx) }
 
     fn call(&mut self, req: Request) -> Self::Future {
-        let mut inner = self.inner.clone();
-        let app_state = req.extensions().get::<AppState>().cloned().expect("AppState not found in request extensions");
+        let mut this = self.clone();
+        std::mem::swap(self, &mut this);
+        let app_state = this.app_state.clone();
         Box::pin(async move {
             let req = request::build_prompt_request(app_state, req).await?;
-            inner.call(req).await
+            this.inner.call(req).await
         })
     }
 }

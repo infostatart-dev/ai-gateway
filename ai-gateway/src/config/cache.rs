@@ -4,7 +4,7 @@ pub(crate) const MAX_BUCKET_SIZE: u8 = 10;
 pub(crate) const DEFAULT_BUCKETS: u8 = 1;
 
 #[derive(
-    Debug, Default, Clone, Deserialize, Serialize, Eq, PartialEq, Hash,
+    Debug, Clone, Deserialize, Serialize, Eq, PartialEq, Hash,
 )]
 #[serde(default, rename_all = "kebab-case")]
 pub struct CacheConfig {
@@ -15,6 +15,16 @@ pub struct CacheConfig {
     pub buckets: u8,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub seed: Option<String>,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            directive: None,
+            buckets: default_buckets(),
+            seed: None,
+        }
+    }
 }
 
 #[cfg(feature = "testing")]

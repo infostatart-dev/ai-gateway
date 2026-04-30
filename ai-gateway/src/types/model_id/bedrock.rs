@@ -42,7 +42,7 @@ impl Display for BedrockModelId {
             Version::ImplicitLatest => String::new(),
             v => format!("{v}-"),
         };
-        write!(f, "{}{}.{}{}{}", geo_str, self.provider, self.model, version_str, self.bedrock_internal_version)
+        write!(f, "{}{}.{}{}-{}", geo_str, self.provider, self.model, version_str, self.bedrock_internal_version)
     }
 }
 

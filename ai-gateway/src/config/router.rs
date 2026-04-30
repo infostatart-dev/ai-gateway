@@ -35,7 +35,7 @@ impl std::ops::Deref for RouterConfigs {
     }
 }
 
-#[derive(Debug, Default, Clone, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct RouterConfig {
     pub load_balance: BalanceConfig,
@@ -49,6 +49,19 @@ pub struct RouterConfig {
     pub rate_limit: Option<RateLimitConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub providers: Option<HashMap<InferenceProvider, RouterProviderConfig>>,
+}
+
+impl Default for RouterConfig {
+    fn default() -> Self {
+        Self {
+            load_balance: Default::default(),
+            model_mappings: None,
+            cache: Some(CacheConfig::default()),
+            retries: None,
+            rate_limit: None,
+            providers: None,
+        }
+    }
 }
 
 impl RouterConfig {
