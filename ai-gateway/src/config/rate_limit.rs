@@ -56,62 +56,65 @@ pub(crate) fn limiter_config(
         .burst_size(gcra.capacity.get())
         .use_headers()
         .key_extractor(RateLimitKeyExtractor)
-        .error_handler(|mut e| match &e {
-            tower_governor::GovernorError::TooManyRequests { .. } => {
-                tracing::debug!("rate limite exceeded");
-                let governor_response: http::Response<String> = e.as_response();
-                let (parts, _) = governor_response.into_parts();
-                let body = ErrorResponse {
-                    error: ErrorDetails {
-                        message: "Too many requests".to_string(),
-                        r#type: Some("rate_limit_exceeded".to_string()),
-                        param: None,
-                        code: None,
-                    },
-                };
-                let json = Json(body);
-                let openai_response = json.into_response();
-                let (_, body) = openai_response.into_parts();
-                http::Response::from_parts(parts, body)
-            }
-            tower_governor::GovernorError::UnableToExtractKey => {
-                tracing::warn!(
-                    "unable to extract key, rate limiting enabled without \
-                     enabling authentication!!!"
-                );
-                let body = ErrorResponse {
-                    error: ErrorDetails {
-                        message: "Internal error, server misconfigured"
-                            .to_string(),
-                        r#type: Some(SERVER_ERROR_TYPE.to_string()),
-                        param: None,
-                        code: None,
-                    },
-                };
-                let json = Json(body);
-                (StatusCode::INTERNAL_SERVER_ERROR, json).into_response()
-            }
-            tower_governor::GovernorError::Other { code, msg, .. } => {
-                tracing::error!(
-                    msg = msg.as_deref().unwrap_or("Unknown error"),
-                    "Other error"
-                );
-                let body = ErrorResponse {
-                    error: ErrorDetails {
-                        message: "Internal error".to_string(),
-                        r#type: Some(SERVER_ERROR_TYPE.to_string()),
-                        param: None,
-                        code: None,
-                    },
-                };
-                let json = Json(body);
-                (*code, json).into_response()
-            }
-        })
         .finish()
         .ok_or(InitError::InvalidRateLimitConfig(
             "either burst size or period interval are zero",
         ))
+}
+
+pub fn rate_limit_error_handler(e: tower_governor::GovernorError) -> axum_core::response::Response {
+    match e {
+        tower_governor::GovernorError::TooManyRequests { .. } => {
+            tracing::debug!("rate limite exceeded");
+            let governor_response = e.into_response();
+            let (parts, _) = governor_response.into_parts();
+            let body = ErrorResponse {
+                error: ErrorDetails {
+                    message: "Too many requests".to_string(),
+                    r#type: Some("rate_limit_exceeded".to_string()),
+                    param: None,
+                    code: None,
+                },
+            };
+            let json = Json(body);
+            let openai_response = json.into_response();
+            let (_, body) = openai_response.into_parts();
+            http::Response::from_parts(parts, body)
+        }
+        tower_governor::GovernorError::UnableToExtractKey => {
+            tracing::warn!(
+                "unable to extract key, rate limiting enabled without \
+                 enabling authentication!!!"
+            );
+            let body = ErrorResponse {
+                error: ErrorDetails {
+                    message: "Internal error, server misconfigured"
+                        .to_string(),
+                    r#type: Some(SERVER_ERROR_TYPE.to_string()),
+                    param: None,
+                    code: None,
+                },
+            };
+            let json = Json(body);
+            (StatusCode::INTERNAL_SERVER_ERROR, json).into_response()
+        }
+        tower_governor::GovernorError::Other { code, msg, .. } => {
+            tracing::error!(
+                msg = msg.as_deref().unwrap_or("Unknown error"),
+                "Other error"
+            );
+            let body = ErrorResponse {
+                error: ErrorDetails {
+                    message: "Internal error".to_string(),
+                    r#type: Some(SERVER_ERROR_TYPE.to_string()),
+                    param: None,
+                    code: None,
+                },
+            };
+            let json = Json(body);
+            (code, json).into_response()
+        }
+    }
 }
 
 #[derive(

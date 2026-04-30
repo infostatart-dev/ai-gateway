@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use async_openai::types::chat;
 use http::response::Parts;
 
 use super::{TryConvertStreamData, model::ModelMapper};
@@ -27,14 +28,14 @@ impl OpenAICompatibleConverter {
 
 impl
     TryConvert<
-        async_openai::types::CreateChatCompletionRequest,
+        chat::CreateChatCompletionRequest,
         OpenAICompatibleChatCompletionRequest,
     > for OpenAICompatibleConverter
 {
     type Error = MapperError;
     fn try_convert(
         &self,
-        mut value: async_openai::types::CreateChatCompletionRequest,
+        mut value: chat::CreateChatCompletionRequest,
     ) -> Result<OpenAICompatibleChatCompletionRequest, Self::Error> {
         let source_model = ModelId::from_str(&value.model)?;
         let target_model =
@@ -51,15 +52,15 @@ impl
 
 impl
     TryConvert<
-        async_openai::types::CreateChatCompletionResponse,
-        async_openai::types::CreateChatCompletionResponse,
+        chat::CreateChatCompletionResponse,
+        chat::CreateChatCompletionResponse,
     > for OpenAICompatibleConverter
 {
     type Error = MapperError;
     fn try_convert(
         &self,
-        value: async_openai::types::CreateChatCompletionResponse,
-    ) -> Result<async_openai::types::CreateChatCompletionResponse, Self::Error>
+        value: chat::CreateChatCompletionResponse,
+    ) -> Result<chat::CreateChatCompletionResponse, Self::Error>
     {
         Ok(value)
     }
@@ -67,17 +68,17 @@ impl
 
 impl
     TryConvertStreamData<
-        async_openai::types::CreateChatCompletionStreamResponse,
-        async_openai::types::CreateChatCompletionStreamResponse,
+        chat::CreateChatCompletionStreamResponse,
+        chat::CreateChatCompletionStreamResponse,
     > for OpenAICompatibleConverter
 {
     type Error = MapperError;
 
     fn try_convert_chunk(
         &self,
-        value: async_openai::types::CreateChatCompletionStreamResponse,
+        value: chat::CreateChatCompletionStreamResponse,
     ) -> Result<
-        Option<async_openai::types::CreateChatCompletionStreamResponse>,
+        Option<chat::CreateChatCompletionStreamResponse>,
         Self::Error,
     > {
         Ok(Some(value))

@@ -1,4 +1,4 @@
-use async_openai::types::{
+use async_openai::types::chat::{
     ChatCompletionRequestDeveloperMessageContent, ChatCompletionRequestMessage,
     ChatCompletionRequestSystemMessageContent,
     ChatCompletionRequestSystemMessageContentPart, CreateChatCompletionRequest,
@@ -47,7 +47,11 @@ pub(crate) fn system_prompt(
                     ) => {
                         let content = content
                             .iter()
-                            .map(|part| part.text.as_str())
+                            .map(|part| {
+                                match part {
+                                    async_openai::types::chat::ChatCompletionRequestDeveloperMessageContentPart::Text(text_part) => text_part.text.as_str(),
+                                }
+                            })
                             .collect::<Vec<&str>>()
                             .join("\n");
                         Some(content)

@@ -191,7 +191,7 @@ impl Future for ResponseFuture {
                         .take()
                         .expect("future polled after completion");
                     let deserialized_body = serde_json::from_slice::<
-                        async_openai::types::CreateChatCompletionRequest,
+                        async_openai::types::chat::CreateChatCompletionRequest,
                     >(&body)
                     .map_err(InvalidRequestError::InvalidRequestBody)?;
                     let source_model =

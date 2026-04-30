@@ -39,7 +39,7 @@ pub enum InitError {
     /// Failed to create redis client: {0}
     CreateRedisClient(#[from] redis::RedisError),
     /// Failed to build otel metrics layer: {0}
-    InitOtelMetricsLayer(#[from] tower_otel_http_metrics::Error),
+    InitOtelMetricsLayer(#[from] opentelemetry_instrumentation_tower::Error),
     /// Failed to initialize system metrics
     InitSystemMetrics,
     /// Invalid rate limit config: {0}

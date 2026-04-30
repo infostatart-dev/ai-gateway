@@ -51,9 +51,9 @@ pub struct OpenAICompatibleChatCompletions;
 impl Endpoint for OpenAICompatibleChatCompletions {
     const PATH: &'static str = "v1/chat/completions";
     type RequestBody = OpenAICompatibleChatCompletionRequest;
-    type ResponseBody = async_openai::types::CreateChatCompletionResponse;
+    type ResponseBody = async_openai::types::chat::CreateChatCompletionResponse;
     type StreamResponseBody =
-        async_openai::types::CreateChatCompletionStreamResponse;
+        async_openai::types::chat::CreateChatCompletionStreamResponse;
     type ErrorResponseBody = async_openai::error::WrappedError;
 }
 
@@ -64,7 +64,7 @@ pub struct OpenAICompatibleChatCompletionRequest {
     #[serde(skip)]
     pub(crate) provider: crate::types::provider::InferenceProvider,
     #[serde(flatten)]
-    pub(crate) inner: async_openai::types::CreateChatCompletionRequest,
+    pub(crate) inner: async_openai::types::chat::CreateChatCompletionRequest,
 }
 
 impl super::AiRequest for OpenAICompatibleChatCompletionRequest {

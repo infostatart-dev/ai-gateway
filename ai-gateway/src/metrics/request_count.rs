@@ -5,7 +5,7 @@ use std::{
 };
 
 use futures::ready;
-use tower_otel_http_metrics::ResponseAttributeExtractor;
+use opentelemetry_instrumentation_tower::ResponseAttributeExtractor;
 
 use crate::{
     app_state::AppState, metrics::attribute_extractor::AttributeExtractor,

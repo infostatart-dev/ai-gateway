@@ -1,0 +1,16 @@
+use regex::Regex;
+use crate::error::{api::ApiError, internal::InternalError};
+
+pub mod process;
+pub mod schema;
+pub mod message;
+pub mod replace;
+pub mod validate;
+pub mod utils;
+
+pub use process::process_prompt_variables;
+
+pub fn get_variable_regex() -> Result<Regex, ApiError> {
+    Regex::new(r"\{\{\s*hc\s*:\s*([a-zA-Z_-][a-zA-Z0-9_-]*)\s*:\s*([a-zA-Z_-][a-zA-Z0-9_-]*)\s*\}\}")
+        .map_err(|_| ApiError::Internal(InternalError::Internal))
+}

@@ -65,7 +65,7 @@ impl<B> MakeSpan<B> for SpanFactory {
         if self.propagate_traces {
             let parent_cx = extract_context_from_request(request);
 
-            span.set_parent(parent_cx);
+            let _ = span.set_parent(parent_cx);
         }
 
         span.record(

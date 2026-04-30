@@ -1,5 +1,5 @@
 pub mod anthropic;
-mod bedrock;
+pub mod bedrock;
 pub mod model;
 pub mod ollama;
 pub mod openai;

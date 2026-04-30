@@ -23,7 +23,7 @@ impl Layer {
         app_state: &AppState,
         router_config: &RouterConfig,
     ) -> Result<Self, InitError> {
-        let layer = CacheLayer::for_router(app_state.clone(), router_config);
+        let layer = CacheLayer::for_router(app_state, router_config);
         Ok(Self { inner: layer })
     }
 

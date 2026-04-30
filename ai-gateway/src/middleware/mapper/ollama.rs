@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use async_openai::types::{
+use async_openai::types::chat::{
     CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
 };
 use http::response::Parts;
@@ -26,14 +26,14 @@ impl OllamaConverter {
 
 impl
     TryConvert<
-        async_openai::types::CreateChatCompletionRequest,
+        async_openai::types::chat::CreateChatCompletionRequest,
         CreateChatCompletionRequestOllama,
     > for OllamaConverter
 {
     type Error = MapperError;
     fn try_convert(
         &self,
-        mut value: async_openai::types::CreateChatCompletionRequest,
+        mut value: async_openai::types::chat::CreateChatCompletionRequest,
     ) -> Result<CreateChatCompletionRequestOllama, Self::Error> {
         let source_model = ModelId::from_str(&value.model)?;
         let target_model = self
@@ -49,8 +49,8 @@ impl
 
 impl
     TryConvert<
-        async_openai::types::CreateChatCompletionResponse,
-        async_openai::types::CreateChatCompletionResponse,
+        async_openai::types::chat::CreateChatCompletionResponse,
+        async_openai::types::chat::CreateChatCompletionResponse,
     > for OllamaConverter
 {
     type Error = MapperError;

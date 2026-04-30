@@ -9,7 +9,7 @@ use tower::MakeService as _;
 
 use super::mock::{Mock, MockArgs};
 use crate::{
-    app::{App, AppFactory, AppResponse},
+    app::{App, AppResponse, factory::AppFactory},
     config::Config,
     control_plane::{
         self,

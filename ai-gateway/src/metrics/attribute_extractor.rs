@@ -1,6 +1,6 @@
 use http::uri::PathAndQuery;
 use opentelemetry::KeyValue;
-use tower_otel_http_metrics::ResponseAttributeExtractor;
+use opentelemetry_instrumentation_tower::ResponseAttributeExtractor;
 
 use crate::types::{
     extensions::MapperContext, provider::InferenceProvider, router::RouterId,
