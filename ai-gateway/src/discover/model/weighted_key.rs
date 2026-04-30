@@ -79,6 +79,13 @@ impl DispatcherDiscovery<WeightedKey> {
                             .to_string(),
                     ));
                 }
+                BalanceConfigInner::ProviderFailover { .. } => {
+                    return Err(InitError::InvalidBalancer(
+                        "Provider failover balancer not supported for model \
+                         weighted discovery"
+                            .to_string(),
+                    ));
+                }
             };
             for target_model_id in weighted_balance_targets {
                 let provider = target_model_id

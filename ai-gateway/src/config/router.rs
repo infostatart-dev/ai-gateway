@@ -87,6 +87,7 @@ impl RouterConfig {
                     }
                 }
                 BalanceConfigInner::BalancedLatency { .. }
+                | BalanceConfigInner::ProviderFailover { .. }
                 | BalanceConfigInner::ModelLatency { .. } => {}
             }
         }

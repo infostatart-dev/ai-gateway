@@ -96,13 +96,12 @@ fn build_autodefault_router(
     Some(RouterConfig {
         load_balance: BalanceConfig(HashMap::from([(
             EndpointType::Chat,
-            BalanceConfigInner::BalancedLatency { providers },
+            BalanceConfigInner::ProviderFailover { providers },
         )])),
         ..Default::default()
     })
 }
 
 fn is_available_for_autodefault(provider: &InferenceProvider) -> bool {
-    matches!(provider, InferenceProvider::Ollama)
-        || ProviderKey::from_env(provider).is_some()
+    ProviderKey::from_env(provider).is_some()
 }

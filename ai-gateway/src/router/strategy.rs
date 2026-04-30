@@ -17,7 +17,7 @@ use crate::{
         model, provider,
     },
     error::{api::ApiError, init::InitError, internal::InternalError},
-    router::latency::LatencyRouter,
+    router::{failover::ProviderFailoverRouter, latency::LatencyRouter},
     types::{request::Request, response::Response, router::RouterId},
 };
 
@@ -38,6 +38,14 @@ pub enum RoutingStrategyService {
             Request,
         >,
     ),
+    /// Strategy:
+    /// 1. receive request
+    /// 2. rank configured providers by cooldown state, failures, and observed
+    ///    latency.
+    /// 3. send the request to the best candidate.
+    /// 4. if the provider is unavailable, rate limited, or returns a provider
+    ///    error, retry the same request against the next candidate.
+    ProviderFailover(ProviderFailoverRouter),
     /// Strategy:
     /// 1. receive request
     /// 2. according to configured weighted distribution, randomly sample a
@@ -89,6 +97,16 @@ impl RoutingStrategyService {
             BalanceConfigInner::BalancedLatency { .. } => {
                 Self::provider_latency(app_state, router_id, router_config)
                     .await
+            }
+            BalanceConfigInner::ProviderFailover { providers } => {
+                ProviderFailoverRouter::new(
+                    app_state,
+                    router_id,
+                    router_config,
+                    providers,
+                )
+                .await
+                .map(Self::ProviderFailover)
             }
             BalanceConfigInner::ModelWeighted { .. } => {
                 Self::model_weighted(app_state, router_id, router_config).await
@@ -241,6 +259,9 @@ impl tower::Service<Request> for RoutingStrategyService {
             RoutingStrategyService::ProviderLatencyPeakEwmaP2C(inner) => {
                 inner.poll_ready(cx)
             }
+            RoutingStrategyService::ProviderFailover(inner) => {
+                return inner.poll_ready(cx);
+            }
             RoutingStrategyService::WeightedProvider(inner) => {
                 inner.poll_ready(cx)
             }
@@ -259,6 +280,11 @@ impl tower::Service<Request> for RoutingStrategyService {
         match self {
             RoutingStrategyService::ProviderLatencyPeakEwmaP2C(inner) => {
                 ResponseFuture::PeakEwma {
+                    future: inner.call(req),
+                }
+            }
+            RoutingStrategyService::ProviderFailover(inner) => {
+                ResponseFuture::ProviderFailover {
                     future: inner.call(req),
                 }
             }
@@ -300,6 +326,10 @@ pin_project! {
                 >
             >::Future,
         },
+        ProviderFailover {
+            #[pin]
+            future: <ProviderFailoverRouter as tower::Service<Request>>::Future,
+        },
         ModelWeighted {
             #[pin]
             future: <
@@ -336,6 +366,9 @@ impl Future for ResponseFuture {
                     .map_err(InternalError::LoadBalancerError)
                     .map_err(Into::into)
             )),
+            EnumProj::ProviderFailover { future } => {
+                Poll::Ready(ready!(future.poll(cx)))
+            }
             EnumProj::ModelLatency { future } => {
                 Poll::Ready(ready!(future.poll(cx)))
             }

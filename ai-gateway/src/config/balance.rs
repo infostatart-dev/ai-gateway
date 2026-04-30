@@ -145,6 +145,10 @@ pub enum BalanceConfigInner {
     /// latency, but not always.
     #[serde(alias = "latency")]
     BalancedLatency { providers: NESet<InferenceProvider> },
+    /// Routes to the lowest-latency available provider and retries the same
+    /// request against other providers when the selected provider is unavailable.
+    #[serde(alias = "failover")]
+    ProviderFailover { providers: NESet<InferenceProvider> },
     /// Distributes and load balances requests among a set of (providers,model).
     ModelWeighted { models: NESet<WeightedModel> },
     /// Distributes and load balances requests among a set of (providers,model).
@@ -159,6 +163,9 @@ impl BalanceConfigInner {
                 providers.iter().map(|t| t.provider.clone()).collect()
             }
             Self::BalancedLatency { providers } => {
+                providers.iter().cloned().collect()
+            }
+            Self::ProviderFailover { providers } => {
                 providers.iter().cloned().collect()
             }
             Self::ModelWeighted { models } => models

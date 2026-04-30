@@ -72,6 +72,13 @@ impl DispatcherDiscovery<WeightedKey> {
                             .to_string(),
                     ));
                 }
+                BalanceConfigInner::ProviderFailover { .. } => {
+                    return Err(InitError::InvalidBalancer(
+                        "Provider failover balancer not supported for \
+                         weighted discovery"
+                            .to_string(),
+                    ));
+                }
                 BalanceConfigInner::ModelLatency { .. } => {
                     return Err(InitError::InvalidBalancer(
                         "Model latency balancer not supported for provider \
