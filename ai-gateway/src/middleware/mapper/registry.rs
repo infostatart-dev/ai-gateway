@@ -172,10 +172,9 @@ impl EndpointConverterRegistryInner {
         );
         let converter = TypedEndpointConverter::<
             endpoints::openai::ChatCompletions,
-            endpoints::openai::OpenAICompatibleChatCompletions,
-            OpenAICompatibleConverter,
-        >::new(OpenAICompatibleConverter::new(
-            InferenceProvider::Named("groq".into()),
+            super::groq::GroqChatCompletions,
+            super::groq::GroqConverter,
+        >::new(super::groq::GroqConverter::new(
             model_mapper.clone(),
         ));
         registry.register_converter(key, converter);
