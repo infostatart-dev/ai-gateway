@@ -1,8 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::config::{
-        Config, ROUTER_ID_REGEX,
-        deployment_target::DeploymentTarget,
+        Config, ROUTER_ID_REGEX, deployment_target::DeploymentTarget,
     };
     use regex::Regex;
     use std::time::Duration;

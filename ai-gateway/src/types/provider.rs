@@ -77,6 +77,7 @@ pub enum InferenceProvider {
     Ollama,
     #[serde(rename = "gemini")]
     GoogleGemini,
+    OpenRouter,
     #[serde(untagged)]
     Named(CompactString),
 }
@@ -110,6 +111,11 @@ impl InferenceProvider {
                     .map(ApiEndpoint::Google)
                     .collect()
             }
+            InferenceProvider::OpenRouter => {
+                crate::endpoints::openrouter::OpenRouter::iter()
+                    .map(ApiEndpoint::OpenRouter)
+                    .collect()
+            }
             InferenceProvider::Named(_) => {
                 crate::endpoints::openai::OpenAI::iter()
                     .map(|endpoint| ApiEndpoint::OpenAICompatible {
@@ -133,6 +139,7 @@ impl InferenceProvider {
             "AWS Bedrock" => Ok(InferenceProvider::Bedrock),
             "Ollama" => Ok(InferenceProvider::Ollama),
             "Google AI (Gemini)" => Ok(InferenceProvider::GoogleGemini),
+            "OpenRouter" | "openrouter" => Ok(InferenceProvider::OpenRouter),
             "Groq" => Ok(InferenceProvider::Named("groq".into())),
             "Mistral AI" => Ok(InferenceProvider::Named("mistral".into())),
             "Hyperbolic" => Ok(InferenceProvider::Named("hyperbolic".into())),
@@ -155,6 +162,7 @@ impl FromStr for InferenceProvider {
             "bedrock" => Ok(InferenceProvider::Bedrock),
             "ollama" => Ok(InferenceProvider::Ollama),
             "gemini" => Ok(InferenceProvider::GoogleGemini),
+            "openrouter" => Ok(InferenceProvider::OpenRouter),
             s => Ok(InferenceProvider::Named(s.into())),
         }
     }
@@ -169,6 +177,7 @@ impl AsRef<str> for InferenceProvider {
             InferenceProvider::Bedrock => "bedrock",
             InferenceProvider::Ollama => "ollama",
             InferenceProvider::GoogleGemini => "gemini",
+            InferenceProvider::OpenRouter => "openrouter",
         }
     }
 }

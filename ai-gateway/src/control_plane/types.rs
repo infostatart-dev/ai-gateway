@@ -160,8 +160,7 @@ mod tests {
 
         let binding_dir =
             std::env::var("BINDING_DIR").unwrap_or("./bindings".to_string());
-        let ts_rs_config = ts_rs::Config::default()
-            .with_out_dir(&binding_dir);
+        let ts_rs_config = ts_rs::Config::default().with_out_dir(&binding_dir);
         MessageTypeTX::export_all(&ts_rs_config).unwrap();
         MessageTypeRX::export_all(&ts_rs_config).unwrap();
 

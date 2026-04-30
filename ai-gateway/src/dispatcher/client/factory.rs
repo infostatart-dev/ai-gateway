@@ -46,6 +46,7 @@ impl Client {
         match provider {
             InferenceProvider::OpenAI
             | InferenceProvider::GoogleGemini
+            | InferenceProvider::OpenRouter
             | InferenceProvider::Named(_) => {
                 Ok(Self::OpenAICompatible(OpenAICompatibleClient::new(
                     app_state, base, provider, api_key,

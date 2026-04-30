@@ -6,11 +6,12 @@ use super::{
     EndpointConverter, TypedEndpointConverter, anthropic::AnthropicConverter,
     model::ModelMapper, openai::OpenAIConverter,
     openai_compatible::OpenAICompatibleConverter,
+    openrouter::OpenRouterConverter,
 };
 use crate::{
     endpoints::{
         self, ApiEndpoint, anthropic::Anthropic, bedrock::Bedrock,
-        google::Google, ollama::Ollama, openai::OpenAI,
+        google::Google, ollama::Ollama, openai::OpenAI, openrouter::OpenRouter,
     },
     middleware::mapper::{bedrock::BedrockConverter, ollama::OllamaConverter},
     types::provider::InferenceProvider,
@@ -144,6 +145,18 @@ impl EndpointConverterRegistryInner {
                 BedrockConverter,
             >::new(BedrockConverter::new(model_mapper.clone()));
 
+        registry.register_converter(key, converter);
+
+        let key = RegistryKey::new(
+            ApiEndpoint::OpenAI(OpenAI::chat_completions()),
+            ApiEndpoint::OpenRouter(OpenRouter::chat_completions()),
+        );
+        let converter =
+            TypedEndpointConverter::<
+                endpoints::openai::ChatCompletions,
+                endpoints::openrouter::chat_completions::ChatCompletions,
+                OpenRouterConverter,
+            >::new(OpenRouterConverter::new(model_mapper.clone()));
         registry.register_converter(key, converter);
 
         let key = RegistryKey::new(

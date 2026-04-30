@@ -9,6 +9,7 @@ description = "A high-performance LLM proxy router."
 homepage = "https://docs.helicone.ai/ai-gateway"
 
 [dependencies]
+openrouter-rs = "0.9.0"
 anthropic-ai-sdk = { workspace = true }
 sha2 = { workspace = true }
 async-openai = { workspace = true }

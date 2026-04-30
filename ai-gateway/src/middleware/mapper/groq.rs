@@ -1,13 +1,18 @@
-use std::str::FromStr;
-use async_openai::types::chat::{CreateChatCompletionResponse, CreateChatCompletionStreamResponse};
+use async_openai::types::chat::{
+    CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
+};
 use http::response::Parts;
 use serde_json::Value;
+use std::str::FromStr;
 
 use crate::{
     endpoints::Endpoint,
     endpoints::openai::OpenAICompatibleChatCompletionRequest,
     error::mapper::MapperError,
-    middleware::mapper::{TryConvert, TryConvertStreamData, TryConvertError, model::ModelMapper, openai_error_from_value},
+    middleware::mapper::{
+        TryConvert, TryConvertError, TryConvertStreamData, model::ModelMapper,
+        openai_error_from_value,
+    },
     types::{model_id::ModelId, provider::InferenceProvider},
 };
 
@@ -33,16 +38,22 @@ impl GroqConverter {
     }
 }
 
-impl TryConvert<async_openai::types::chat::CreateChatCompletionRequest, OpenAICompatibleChatCompletionRequest> for GroqConverter {
+impl
+    TryConvert<
+        async_openai::types::chat::CreateChatCompletionRequest,
+        OpenAICompatibleChatCompletionRequest,
+    > for GroqConverter
+{
     type Error = MapperError;
     fn try_convert(
         &self,
         mut value: async_openai::types::chat::CreateChatCompletionRequest,
     ) -> Result<OpenAICompatibleChatCompletionRequest, Self::Error> {
         let source_model = ModelId::from_str(&value.model)?;
-        let target_model = self
-            .model_mapper
-            .map_model(&source_model, &InferenceProvider::Named("groq".into()))?;
+        let target_model = self.model_mapper.map_model(
+            &source_model,
+            &InferenceProvider::Named("groq".into()),
+        )?;
         tracing::trace!(source_model = ?source_model, target_model = ?target_model, "mapped model");
 
         value.model = target_model.to_string();
@@ -56,11 +67,17 @@ impl TryConvert<async_openai::types::chat::CreateChatCompletionRequest, OpenAICo
 
 impl TryConvert<Value, CreateChatCompletionResponse> for GroqConverter {
     type Error = MapperError;
-    fn try_convert(&self, mut value: Value) -> Result<CreateChatCompletionResponse, Self::Error> {
+    fn try_convert(
+        &self,
+        mut value: Value,
+    ) -> Result<CreateChatCompletionResponse, Self::Error> {
         if let Some(obj) = value.as_object_mut() {
             if let Some(tier) = obj.get("service_tier") {
                 if tier == "on_demand" {
-                    obj.insert("service_tier".to_string(), serde_json::json!("default"));
+                    obj.insert(
+                        "service_tier".to_string(),
+                        serde_json::json!("default"),
+                    );
                 }
             }
         }
@@ -68,24 +85,39 @@ impl TryConvert<Value, CreateChatCompletionResponse> for GroqConverter {
     }
 }
 
-impl TryConvertStreamData<Value, CreateChatCompletionStreamResponse> for GroqConverter {
+impl TryConvertStreamData<Value, CreateChatCompletionStreamResponse>
+    for GroqConverter
+{
     type Error = MapperError;
-    fn try_convert_chunk(&self, mut value: Value) -> Result<Option<CreateChatCompletionStreamResponse>, Self::Error> {
+    fn try_convert_chunk(
+        &self,
+        mut value: Value,
+    ) -> Result<Option<CreateChatCompletionStreamResponse>, Self::Error> {
         if let Some(obj) = value.as_object_mut() {
             if let Some(tier) = obj.get("service_tier") {
                 if tier == "on_demand" {
-                    obj.insert("service_tier".to_string(), serde_json::json!("default"));
+                    obj.insert(
+                        "service_tier".to_string(),
+                        serde_json::json!("default"),
+                    );
                 }
             }
         }
-        let chunk: CreateChatCompletionStreamResponse = serde_json::from_value(value).map_err(MapperError::SerdeError)?;
+        let chunk: CreateChatCompletionStreamResponse =
+            serde_json::from_value(value).map_err(MapperError::SerdeError)?;
         Ok(Some(chunk))
     }
 }
 
-impl TryConvertError<Value, async_openai::error::WrappedError> for GroqConverter {
+impl TryConvertError<Value, async_openai::error::WrappedError>
+    for GroqConverter
+{
     type Error = MapperError;
-    fn try_convert_error(&self, resp_parts: &Parts, value: Value) -> Result<async_openai::error::WrappedError, Self::Error> {
+    fn try_convert_error(
+        &self,
+        resp_parts: &Parts,
+        value: Value,
+    ) -> Result<async_openai::error::WrappedError, Self::Error> {
         Ok(openai_error_from_value(resp_parts.status, value))
     }
 }

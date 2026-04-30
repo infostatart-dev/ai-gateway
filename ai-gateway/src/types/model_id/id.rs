@@ -31,6 +31,7 @@ impl ModelId {
             InferenceProvider::OpenAI
             | InferenceProvider::Anthropic
             | InferenceProvider::GoogleGemini
+            | InferenceProvider::OpenRouter
             | InferenceProvider::Named(_) => Ok(ModelId::ModelIdWithVersion {
                 provider: request_style,
                 id: ModelIdWithVersion::from_str(s)?,

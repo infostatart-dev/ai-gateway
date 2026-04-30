@@ -32,6 +32,8 @@ pub enum MapperError {
     ImageMappingInvalid(String),
     /// Failed to map Bedrock message: {0}
     FailedToMapBedrockMessage(BoxError),
+    /// OpenRouter unsupported format: {0}
+    UnsupportedFormat(String),
 }
 
 /// Error types that can occur when mapping requests between providers.
@@ -61,6 +63,8 @@ pub enum MapperErrorMetric {
     ImageMappingInvalid,
     /// Failed to map Bedrock message
     FailedToMapBedrockMessage,
+    /// OpenRouter unsupported format
+    UnsupportedFormat,
 }
 
 impl From<&MapperError> for MapperErrorMetric {
@@ -80,6 +84,7 @@ impl From<&MapperError> for MapperErrorMetric {
             MapperError::FailedToMapBedrockMessage(_) => {
                 Self::FailedToMapBedrockMessage
             }
+            MapperError::UnsupportedFormat(_) => Self::UnsupportedFormat,
         }
     }
 }

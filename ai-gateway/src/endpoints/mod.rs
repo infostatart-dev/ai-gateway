@@ -4,13 +4,14 @@ pub mod google;
 pub mod mappings;
 pub mod ollama;
 pub mod openai;
+pub mod openrouter;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     endpoints::{
         anthropic::Anthropic, bedrock::Bedrock, google::Google, ollama::Ollama,
-        openai::OpenAI,
+        openai::OpenAI, openrouter::OpenRouter,
     },
     error::{
         internal::InternalError, invalid_req::InvalidRequestError,
@@ -71,6 +72,7 @@ pub enum ApiEndpoint {
     Google(Google),
     Ollama(Ollama),
     Bedrock(Bedrock),
+    OpenRouter(OpenRouter),
     OpenAICompatible {
         provider: InferenceProvider,
         openai_endpoint: OpenAI,
@@ -104,6 +106,9 @@ impl ApiEndpoint {
             (Self::OpenAI(source), InferenceProvider::Bedrock) => {
                 Ok(Self::Bedrock(Bedrock::from(source)))
             }
+            (Self::OpenAI(source), InferenceProvider::OpenRouter) => {
+                Ok(Self::OpenRouter(OpenRouter::from(source)))
+            }
             (Self::OpenAI(source), InferenceProvider::Named(name)) => {
                 Ok(Self::OpenAICompatible {
                     provider: InferenceProvider::Named(name.clone()),
@@ -124,6 +129,7 @@ impl ApiEndpoint {
             Self::Google(_) => InferenceProvider::GoogleGemini,
             Self::Ollama(_) => InferenceProvider::Ollama,
             Self::Bedrock(_) => InferenceProvider::Bedrock,
+            Self::OpenRouter(_) => InferenceProvider::OpenRouter,
             Self::OpenAICompatible { provider, .. } => provider.clone(),
         }
     }
@@ -141,6 +147,7 @@ impl ApiEndpoint {
             Self::Anthropic(anthropic) => Ok(anthropic.path().to_string()),
             Self::Google(google) => Ok(google.path().to_string()),
             Self::Ollama(ollama) => Ok(ollama.path().to_string()),
+            Self::OpenRouter(openrouter) => Ok(openrouter.path().to_string()),
             Self::Bedrock(bedrock) => {
                 if let Some(model_id) = model_id {
                     Ok(bedrock.path(model_id, is_stream))
@@ -162,6 +169,7 @@ impl ApiEndpoint {
             Self::Anthropic(anthropic) => anthropic.endpoint_type(),
             Self::Google(google) => google.endpoint_type(),
             Self::Ollama(ollama) => ollama.endpoint_type(),
+            Self::OpenRouter(openrouter) => openrouter.endpoint_type(),
             Self::Bedrock(bedrock) => bedrock.endpoint_type(),
         }
     }
