@@ -1,6 +1,5 @@
-use compact_str::CompactString;
 use json_patch::merge;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use url::Url;
 
@@ -8,12 +7,12 @@ use crate::{
     config::{
         Config, DEFAULT_CONFIG_PATH, Error,
         balance::{BalanceConfig, BalanceConfigInner},
+        providers::ProvidersConfig,
         router::RouterConfig,
     },
     endpoints::EndpointType,
     types::{
         provider::{InferenceProvider, ProviderKey},
-        router::RouterId,
         secret::Secret,
     },
 };
@@ -51,52 +50,24 @@ impl Config {
                 .map_err(Error::from)
                 .map_err(Box::new)?;
 
-        let autodefault_id = RouterId::Named(CompactString::new("autodefault"));
-        if config.routers.contains_key(&autodefault_id) {
+        let autodefault_id = Self::autodefault_router_id();
+        if config.deployment_target.is_sidecar()
+            && config.routers.contains_key(&autodefault_id)
+        {
             return Err(Box::new(Error::ReservedRouterId(
                 "autodefault".into(),
             )));
         }
 
-        let mut available_providers = vec![];
-        for provider in [
-            InferenceProvider::OpenAI,
-            InferenceProvider::Anthropic,
-            InferenceProvider::GoogleGemini,
-            InferenceProvider::Named(CompactString::new("xai")),
-            InferenceProvider::Named(CompactString::new("groq")),
-            InferenceProvider::Bedrock,
-        ] {
-            if ProviderKey::from_env(&provider).is_some() {
-                available_providers.push(provider);
-            }
+        if config.deployment_target.is_sidecar()
+            && let Some(autodefault_router) =
+                build_autodefault_router(&config.providers)
+        {
+            config
+                .routers
+                .as_mut()
+                .insert(autodefault_id, autodefault_router);
         }
-
-        if available_providers.is_empty() {
-            available_providers.push(InferenceProvider::OpenAI);
-        }
-
-        let mut nes_providers = nonempty_collections::NESet::new(
-            available_providers.pop().unwrap(),
-        );
-        for p in available_providers {
-            nes_providers.insert(p);
-        }
-
-        let autodefault_router = RouterConfig {
-            load_balance: BalanceConfig(HashMap::from([(
-                EndpointType::Chat,
-                BalanceConfigInner::BalancedLatency {
-                    providers: nes_providers,
-                },
-            )])),
-            ..Default::default()
-        };
-
-        config
-            .routers
-            .as_mut()
-            .insert(autodefault_id, autodefault_router);
 
         if let Ok(k) = std::env::var("HELICONE_CONTROL_PLANE_API_KEY") {
             config.helicone.api_key = Secret::from(k);
@@ -110,4 +81,28 @@ impl Config {
         }
         Ok(config)
     }
+}
+
+fn build_autodefault_router(
+    providers_config: &ProvidersConfig,
+) -> Option<RouterConfig> {
+    let providers: HashSet<_> = providers_config
+        .keys()
+        .filter(|provider| is_available_for_autodefault(provider))
+        .cloned()
+        .collect();
+    let providers = nonempty_collections::NESet::try_from_set(providers)?;
+
+    Some(RouterConfig {
+        load_balance: BalanceConfig(HashMap::from([(
+            EndpointType::Chat,
+            BalanceConfigInner::BalancedLatency { providers },
+        )])),
+        ..Default::default()
+    })
+}
+
+fn is_available_for_autodefault(provider: &InferenceProvider) -> bool {
+    matches!(provider, InferenceProvider::Ollama)
+        || ProviderKey::from_env(provider).is_some()
 }

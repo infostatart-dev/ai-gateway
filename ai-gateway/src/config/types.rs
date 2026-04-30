@@ -1,3 +1,4 @@
+use compact_str::CompactString;
 use config::ConfigError;
 use displaydoc::Display;
 use serde::{Deserialize, Serialize};
@@ -89,5 +90,18 @@ impl Default for Config {
             unified_api: MiddlewareConfig::default(),
             routers: Default::default(),
         }
+    }
+}
+
+impl Config {
+    #[must_use]
+    pub fn autodefault_router_id() -> crate::types::router::RouterId {
+        crate::types::router::RouterId::Named(CompactString::new("autodefault"))
+    }
+
+    #[must_use]
+    pub fn has_autodefault_router(&self) -> bool {
+        self.deployment_target.is_sidecar()
+            && self.routers.contains_key(&Self::autodefault_router_id())
     }
 }

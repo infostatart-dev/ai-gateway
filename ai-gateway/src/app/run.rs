@@ -23,11 +23,10 @@ impl meltdown::Service for App {
             let app_factory = AppFactory::new_hyper_app(self);
 
             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-            let autodefault_id = crate::types::router::RouterId::Named(
-                compact_str::CompactString::new("autodefault"),
+            cli::helpers::show_welcome_banner(
+                &addr,
+                config.has_autodefault_router(),
             );
-            let has_autodefault = config.routers.contains_key(&autodefault_id);
-            cli::helpers::show_welcome_banner(&addr, has_autodefault);
 
             match &config.server.tls {
                 TlsConfig::Enabled { cert, key } => {
