@@ -99,7 +99,7 @@ fn build_autodefault_router(
     Some(RouterConfig {
         load_balance: BalanceConfig(HashMap::from([(
             EndpointType::Chat,
-            BalanceConfigInner::ProviderFailover { providers },
+            BalanceConfigInner::CapabilityAware { providers },
         )])),
         ..Default::default()
     })

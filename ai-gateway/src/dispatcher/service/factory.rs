@@ -84,6 +84,22 @@ impl Dispatcher {
             .await
     }
 
+    pub async fn new_with_model_id_without_rate_limit_events(
+        app_state: AppState,
+        router_id: &RouterId,
+        router_config: &Arc<RouterConfig>,
+        provider: InferenceProvider,
+        model_id: ModelId,
+    ) -> Result<DispatcherService, InitError> {
+        let model_mapper = ModelMapper::new_with_model_id(
+            app_state.clone(),
+            router_config.clone(),
+            model_id,
+        );
+        Self::new_inner(app_state, router_id, provider, model_mapper, None)
+            .await
+    }
+
     pub async fn new_with_model_id(
         app_state: AppState,
         router_id: &RouterId,

@@ -77,6 +77,7 @@ pub enum InferenceProvider {
     Ollama,
     #[serde(rename = "gemini")]
     GoogleGemini,
+    #[serde(rename = "openrouter", alias = "open-router")]
     OpenRouter,
     #[serde(untagged)]
     Named(CompactString),
@@ -370,5 +371,19 @@ mod tests {
         let named_provider = InferenceProvider::Named("test".into());
         let named_provider_str = named_provider.to_string();
         assert_eq!("test", named_provider_str);
+    }
+
+    #[test]
+    fn inference_provider_openrouter_deserializes_canonical_name() {
+        let provider: InferenceProvider =
+            serde_json::from_str("\"openrouter\"").unwrap();
+        assert_eq!(provider, InferenceProvider::OpenRouter);
+    }
+
+    #[test]
+    fn inference_provider_openrouter_deserializes_legacy_kebab_name() {
+        let provider: InferenceProvider =
+            serde_json::from_str("\"open-router\"").unwrap();
+        assert_eq!(provider, InferenceProvider::OpenRouter);
     }
 }

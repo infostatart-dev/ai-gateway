@@ -1,13 +1,12 @@
 use std::{
     collections::HashMap,
     convert::Infallible,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex},
     task::{Context, Poll},
     time::{Duration, Instant},
 };
 
 use futures::future::BoxFuture;
-use http::StatusCode;
 use http_body_util::BodyExt;
 use nonempty_collections::NESet;
 use tower::{Service, ServiceExt};
@@ -15,32 +14,22 @@ use tower::{Service, ServiceExt};
 use crate::{
     app_state::AppState,
     config::router::RouterConfig,
-    dispatcher::{
-        Dispatcher, DispatcherService, service::utils::extract_retry_after,
-    },
+    dispatcher::{Dispatcher, DispatcherService},
     error::{api::ApiError, internal::InternalError},
+    router::provider_attempt::{
+        ProviderState, cooldown_for_response, is_failoverable_status,
+        lock_states, smoothed_latency,
+    },
     types::{
         provider::InferenceProvider, request::Request, response::Response,
         router::RouterId,
     },
 };
 
-const DEFAULT_PROVIDER_ERROR_COOLDOWN: Duration = Duration::from_secs(15);
-const DEFAULT_RATE_LIMIT_COOLDOWN: Duration = Duration::from_secs(60);
-const DEFAULT_AUTH_ERROR_COOLDOWN: Duration = Duration::from_secs(300);
-const RETRY_AFTER_BUFFER: Duration = Duration::from_secs(1);
-
 #[derive(Debug, Clone)]
 struct ProviderCandidate {
     provider: InferenceProvider,
     service: DispatcherService,
-}
-
-#[derive(Debug, Clone, Default)]
-struct ProviderState {
-    latency: Option<Duration>,
-    cooldown_until: Option<Instant>,
-    failures: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -234,57 +223,6 @@ async fn call_candidate(
         .oneshot(req)
         .await
         .map_err(infallible_to_api_error)
-}
-
-fn lock_states(
-    states: &Mutex<HashMap<InferenceProvider, ProviderState>>,
-) -> MutexGuard<'_, HashMap<InferenceProvider, ProviderState>> {
-    states
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
-fn smoothed_latency(current: Option<Duration>, observed: Duration) -> Duration {
-    current.map_or(observed, |current| {
-        let current = current.as_micros();
-        let observed = observed.as_micros();
-        let smoothed =
-            (current.saturating_mul(7) + observed.saturating_mul(3)) / 10;
-        Duration::from_micros(smoothed.try_into().unwrap_or(u64::MAX))
-    })
-}
-
-fn is_failoverable_status(status: StatusCode) -> bool {
-    matches!(
-        status,
-        StatusCode::BAD_REQUEST
-            | StatusCode::PAYMENT_REQUIRED
-            | StatusCode::UNAUTHORIZED
-            | StatusCode::FORBIDDEN
-            | StatusCode::NOT_FOUND
-            | StatusCode::REQUEST_TIMEOUT
-            | StatusCode::CONFLICT
-            | StatusCode::TOO_MANY_REQUESTS
-    ) || status.is_server_error()
-}
-
-fn cooldown_for_response(response: &Response) -> Duration {
-    if response.status() == StatusCode::TOO_MANY_REQUESTS {
-        return extract_retry_after(response.headers())
-            .map_or(DEFAULT_RATE_LIMIT_COOLDOWN, Duration::from_secs)
-            + RETRY_AFTER_BUFFER;
-    }
-
-    if matches!(
-        response.status(),
-        StatusCode::UNAUTHORIZED
-            | StatusCode::FORBIDDEN
-            | StatusCode::PAYMENT_REQUIRED
-    ) {
-        return DEFAULT_AUTH_ERROR_COOLDOWN;
-    }
-
-    DEFAULT_PROVIDER_ERROR_COOLDOWN
 }
 
 fn infallible_to_api_error(error: Infallible) -> ApiError {

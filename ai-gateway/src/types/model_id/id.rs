@@ -28,14 +28,23 @@ impl ModelId {
         s: &str,
     ) -> Result<Self, MapperError> {
         match request_style {
-            InferenceProvider::OpenAI
+            provider @ (InferenceProvider::OpenAI
             | InferenceProvider::Anthropic
             | InferenceProvider::GoogleGemini
-            | InferenceProvider::OpenRouter
-            | InferenceProvider::Named(_) => Ok(ModelId::ModelIdWithVersion {
-                provider: request_style,
-                id: ModelIdWithVersion::from_str(s)?,
-            }),
+            | InferenceProvider::OpenRouter) => {
+                Ok(ModelId::ModelIdWithVersion {
+                    id: ModelIdWithVersion::from_str(strip_provider_prefix(
+                        &provider, s,
+                    ))?,
+                    provider,
+                })
+            }
+            provider @ InferenceProvider::Named(_) => {
+                Ok(ModelId::ModelIdWithVersion {
+                    provider,
+                    id: ModelIdWithVersion::from_str(s)?,
+                })
+            }
             InferenceProvider::Bedrock => {
                 Ok(ModelId::Bedrock(BedrockModelId::from_str(s)?))
             }
@@ -93,6 +102,15 @@ impl ModelId {
             ModelId::Ollama(_) | ModelId::Unknown(_) => self,
         }
     }
+}
+
+fn strip_provider_prefix<'a>(
+    provider: &InferenceProvider,
+    s: &'a str,
+) -> &'a str {
+    s.strip_prefix(provider.as_ref())
+        .and_then(|rest| rest.strip_prefix('/'))
+        .unwrap_or(s)
 }
 
 impl<'de> Deserialize<'de> for ModelId {

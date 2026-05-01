@@ -19,6 +19,23 @@ openai:
     - "gpt-4o-search"
   base-url: https://api.openai.com/
 
+openrouter:
+  models:
+    - "openai/gpt-4"
+    - "openai/gpt-4-turbo"
+    - "openai/gpt-4o"
+    - "openai/gpt-4o-mini"
+    - "openai/gpt-4.1"
+    - "openai/gpt-4.1-mini"
+    - "openai/gpt-4.1-nano"
+    - "openai/o1"
+    - "openai/o1-mini"
+    - "openai/o1-pro"
+    - "openai/o3"
+    - "openai/o3-mini"
+    - "openai/o4-mini"
+  base-url: https://openrouter.ai/api/v1/
+
 anthropic:
   models:
     - "claude-opus-4-0"

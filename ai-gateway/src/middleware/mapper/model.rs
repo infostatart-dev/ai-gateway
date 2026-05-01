@@ -115,6 +115,15 @@ impl ModelMapper {
             return Ok(source_model.clone());
         }
 
+        if let Some(openrouter_model) =
+            self.openrouter_upstream_model(source_model, target_provider)
+            && models_offered_by_target_provider.contains(
+                &ModelIdWithoutVersion::from(openrouter_model.clone()),
+            )
+        {
+            return Ok(openrouter_model);
+        }
+
         let model_mapping_config = if let Some(router_model_mapping) =
             self.router_config.as_ref().and_then(|c| c.model_mappings())
         {
@@ -152,5 +161,24 @@ impl ModelMapper {
             .clone();
 
         Ok(target_model)
+    }
+
+    fn openrouter_upstream_model(
+        &self,
+        source_model: &ModelId,
+        target_provider: &InferenceProvider,
+    ) -> Option<ModelId> {
+        if target_provider != &InferenceProvider::OpenRouter
+            || source_model.inference_provider()
+                != Some(InferenceProvider::OpenAI)
+        {
+            return None;
+        }
+
+        ModelId::from_str_and_provider(
+            InferenceProvider::OpenRouter,
+            &format!("openai/{source_model}"),
+        )
+        .ok()
     }
 }

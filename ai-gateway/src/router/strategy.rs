@@ -47,6 +47,12 @@ pub enum RoutingStrategyService {
     ///    error, retry the same request against the next candidate.
     ProviderFailover(ProviderFailoverRouter),
     /// Strategy:
+    /// 1. receive request + deserialize body
+    /// 2. extract requirements
+    /// 3. pick candidate based on capability and health
+    /// 4. send request
+    CapabilityAware(crate::router::capability::CapabilityAwareRouter),
+    /// Strategy:
     /// 1. receive request
     /// 2. according to configured weighted distribution, randomly sample a
     ///    single provider from the set of providers.
@@ -107,6 +113,16 @@ impl RoutingStrategyService {
                 )
                 .await
                 .map(Self::ProviderFailover)
+            }
+            BalanceConfigInner::CapabilityAware { providers } => {
+                crate::router::capability::CapabilityAwareRouter::new(
+                    app_state,
+                    router_id,
+                    router_config,
+                    providers,
+                )
+                .await
+                .map(Self::CapabilityAware)
             }
             BalanceConfigInner::ModelWeighted { .. } => {
                 Self::model_weighted(app_state, router_id, router_config).await
@@ -262,6 +278,9 @@ impl tower::Service<Request> for RoutingStrategyService {
             RoutingStrategyService::ProviderFailover(inner) => {
                 return inner.poll_ready(cx);
             }
+            RoutingStrategyService::CapabilityAware(inner) => {
+                return inner.poll_ready(cx);
+            }
             RoutingStrategyService::WeightedProvider(inner) => {
                 inner.poll_ready(cx)
             }
@@ -285,6 +304,11 @@ impl tower::Service<Request> for RoutingStrategyService {
             }
             RoutingStrategyService::ProviderFailover(inner) => {
                 ResponseFuture::ProviderFailover {
+                    future: inner.call(req),
+                }
+            }
+            RoutingStrategyService::CapabilityAware(inner) => {
+                ResponseFuture::CapabilityAware {
                     future: inner.call(req),
                 }
             }
@@ -330,6 +354,10 @@ pin_project! {
             #[pin]
             future: <ProviderFailoverRouter as tower::Service<Request>>::Future,
         },
+        CapabilityAware {
+            #[pin]
+            future: <crate::router::capability::CapabilityAwareRouter as tower::Service<Request>>::Future,
+        },
         ModelWeighted {
             #[pin]
             future: <
@@ -366,7 +394,8 @@ impl Future for ResponseFuture {
                     .map_err(InternalError::LoadBalancerError)
                     .map_err(Into::into)
             )),
-            EnumProj::ProviderFailover { future } => {
+            EnumProj::ProviderFailover { future }
+            | EnumProj::CapabilityAware { future } => {
                 Poll::Ready(ready!(future.poll(cx)))
             }
             EnumProj::ModelLatency { future } => {

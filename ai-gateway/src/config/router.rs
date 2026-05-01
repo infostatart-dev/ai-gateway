@@ -54,7 +54,7 @@ pub struct RouterConfig {
 impl Default for RouterConfig {
     fn default() -> Self {
         Self {
-            load_balance: Default::default(),
+            load_balance: BalanceConfig::default(),
             model_mappings: None,
             cache: Some(CacheConfig::default()),
             retries: None,
@@ -88,7 +88,8 @@ impl RouterConfig {
                 }
                 BalanceConfigInner::BalancedLatency { .. }
                 | BalanceConfigInner::ProviderFailover { .. }
-                | BalanceConfigInner::ModelLatency { .. } => {}
+                | BalanceConfigInner::ModelLatency { .. }
+                | BalanceConfigInner::CapabilityAware { .. } => {}
             }
         }
 

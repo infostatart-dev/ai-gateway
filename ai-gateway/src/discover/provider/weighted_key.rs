@@ -86,6 +86,13 @@ impl DispatcherDiscovery<WeightedKey> {
                             .to_string(),
                     ));
                 }
+                BalanceConfigInner::CapabilityAware { .. } => {
+                    return Err(InitError::InvalidBalancer(
+                        "Capability aware balancer not supported for provider \
+                         weighted discovery"
+                            .to_string(),
+                    ));
+                }
             };
             for target in weighted_balance_targets {
                 let weight =

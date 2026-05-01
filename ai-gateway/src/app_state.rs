@@ -339,3 +339,14 @@ impl AppState {
             .await;
     }
 }
+
+#[cfg(feature = "testing")]
+impl AppState {
+    pub async fn test_default() -> Self {
+        use crate::tests::TestDefault;
+        crate::app::App::new(crate::config::Config::test_default())
+            .await
+            .expect("failed to create app")
+            .state
+    }
+}

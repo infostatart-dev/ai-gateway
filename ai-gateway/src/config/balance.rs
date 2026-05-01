@@ -150,6 +150,10 @@ pub enum BalanceConfigInner {
     /// unavailable.
     #[serde(alias = "failover")]
     ProviderFailover { providers: NESet<InferenceProvider> },
+    /// Selects provider/model based on request requirements and model
+    /// capabilities.
+    #[serde(alias = "capability-aware")]
+    CapabilityAware { providers: NESet<InferenceProvider> },
     /// Distributes and load balances requests among a set of (providers,model).
     ModelWeighted { models: NESet<WeightedModel> },
     /// Distributes and load balances requests among a set of (providers,model).
@@ -163,10 +167,9 @@ impl BalanceConfigInner {
             Self::ProviderWeighted { providers } => {
                 providers.iter().map(|t| t.provider.clone()).collect()
             }
-            Self::BalancedLatency { providers } => {
-                providers.iter().cloned().collect()
-            }
-            Self::ProviderFailover { providers } => {
+            Self::BalancedLatency { providers }
+            | Self::ProviderFailover { providers }
+            | Self::CapabilityAware { providers } => {
                 providers.iter().cloned().collect()
             }
             Self::ModelWeighted { models } => models

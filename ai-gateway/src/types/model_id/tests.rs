@@ -51,6 +51,68 @@ fn groq_model_id_format_without_slash() {
 }
 
 #[test]
+fn matching_provider_prefix_is_ignored_for_request_style_models() {
+    let prefixed = ModelId::from_str_and_provider(
+        InferenceProvider::OpenAI,
+        "openai/gpt-4o-mini",
+    )
+    .unwrap();
+    let plain = ModelId::from_str_and_provider(
+        InferenceProvider::OpenAI,
+        "gpt-4o-mini",
+    )
+    .unwrap();
+
+    assert_eq!(prefixed, plain);
+    assert_eq!(prefixed.to_string(), "gpt-4o-mini");
+}
+
+#[test]
+fn openrouter_model_ids_keep_upstream_provider_namespace() {
+    let result = ModelId::from_str_and_provider(
+        InferenceProvider::OpenRouter,
+        "openai/gpt-4o",
+    )
+    .unwrap();
+    let ModelId::ModelIdWithVersion { provider, id } = result else {
+        panic!("Expected ModelIdWithVersion with OpenRouter provider");
+    };
+
+    assert_eq!(provider, InferenceProvider::OpenRouter);
+    assert_eq!(id.model, "openai/gpt-4o");
+}
+
+#[test]
+fn openrouter_prefix_is_ignored_for_openrouter_request_style_models() {
+    let result = ModelId::from_str_and_provider(
+        InferenceProvider::OpenRouter,
+        "openrouter/openai/gpt-4o",
+    )
+    .unwrap();
+    let ModelId::ModelIdWithVersion { provider, id } = result else {
+        panic!("Expected ModelIdWithVersion with OpenRouter provider");
+    };
+
+    assert_eq!(provider, InferenceProvider::OpenRouter);
+    assert_eq!(id.model, "openai/gpt-4o");
+}
+
+#[test]
+fn named_provider_models_keep_matching_namespace() {
+    let result = ModelId::from_str_and_provider(
+        InferenceProvider::Named("groq".into()),
+        "groq/compound",
+    )
+    .unwrap();
+    let ModelId::ModelIdWithVersion { provider, id } = result else {
+        panic!("Expected ModelIdWithVersion with Groq provider");
+    };
+
+    assert_eq!(provider, InferenceProvider::Named("groq".into()));
+    assert_eq!(id.model, "groq/compound");
+}
+
+#[test]
 fn test_openai_o1_snapshot_model() {
     let model_id_str = "o1-2024-12-17";
     let result =

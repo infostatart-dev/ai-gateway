@@ -1,7 +1,9 @@
+pub mod capability;
 pub mod direct;
 pub mod failover;
 pub mod latency;
 pub mod meta;
+pub mod provider_attempt;
 pub mod router_details;
 pub mod service;
 pub mod strategy;
