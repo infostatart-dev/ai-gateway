@@ -123,23 +123,20 @@ impl Config {
         }
 
         // 2. Router-specific mapping
-        if let Some(router_mappings) = &router_config.model_mappings {
-            if let Some(alternatives) =
+        if let Some(router_mappings) = &router_config.model_mappings
+            && let Some(alternatives) =
                 router_mappings.as_ref().get(source_model)
-            {
-                if alternatives.iter().any(|m| target_models.contains(m)) {
-                    return Ok(());
-                }
-            }
+            && alternatives.iter().any(|m| target_models.contains(m))
+        {
+            return Ok(());
         }
 
         // 3. Default mapping
         if let Some(alternatives) =
             self.default_model_mapping.as_ref().get(source_model)
+            && alternatives.iter().any(|m| target_models.contains(m))
         {
-            if alternatives.iter().any(|m| target_models.contains(m)) {
-                return Ok(());
-            }
+            return Ok(());
         }
 
         Err(ModelMappingValidationError::NoValidMapping {

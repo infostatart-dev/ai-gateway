@@ -4,6 +4,7 @@ use crate::endpoints::bedrock::converse::{
     ContentBlock, ImageBlock, ImageSource, Message, SystemContentBlock,
 };
 
+#[must_use]
 pub fn map_messages(
     messages: Vec<openai::ChatCompletionRequestMessage>,
 ) -> (Vec<Message>, Vec<SystemContentBlock>) {

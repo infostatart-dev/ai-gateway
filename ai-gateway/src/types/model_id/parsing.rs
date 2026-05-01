@@ -3,31 +3,29 @@ use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};
 use super::version::Version;
 
 pub(crate) fn parse_date(input: &str) -> Option<(DateTime<Utc>, &'static str)> {
-    if let Ok(date) = NaiveDate::parse_from_str(input, "%Y-%m-%d") {
-        if let Some(naive_dt) = date.and_hms_opt(0, 0, 0) {
-            return Some((Utc.from_utc_datetime(&naive_dt), "%Y-%m-%d"));
-        }
+    if let Ok(date) = NaiveDate::parse_from_str(input, "%Y-%m-%d")
+        && let Some(naive_dt) = date.and_hms_opt(0, 0, 0)
+    {
+        return Some((Utc.from_utc_datetime(&naive_dt), "%Y-%m-%d"));
     }
-    if let Ok(date) = NaiveDate::parse_from_str(input, "%Y%m%d") {
-        if let Some(naive_dt) = date.and_hms_opt(0, 0, 0) {
-            return Some((Utc.from_utc_datetime(&naive_dt), "%Y%m%d"));
-        }
+    if let Ok(date) = NaiveDate::parse_from_str(input, "%Y%m%d")
+        && let Some(naive_dt) = date.and_hms_opt(0, 0, 0)
+    {
+        return Some((Utc.from_utc_datetime(&naive_dt), "%Y%m%d"));
     }
     if let Ok(date) = NaiveDate::parse_from_str(
         &format!("{}-{}", Utc::now().year(), input),
         "%Y-%m-%d",
-    ) {
-        if let Some(naive_dt) = date.and_hms_opt(0, 0, 0) {
-            return Some((Utc.from_utc_datetime(&naive_dt), "%m-%d"));
-        }
+    ) && let Some(naive_dt) = date.and_hms_opt(0, 0, 0)
+    {
+        return Some((Utc.from_utc_datetime(&naive_dt), "%m-%d"));
     }
     if let Ok(date) = NaiveDate::parse_from_str(
         &format!("{}{}", Utc::now().year(), input),
         "%Y%m%d",
-    ) {
-        if let Some(naive_dt) = date.and_hms_opt(0, 0, 0) {
-            return Some((Utc.from_utc_datetime(&naive_dt), "%m%d"));
-        }
+    ) && let Some(naive_dt) = date.and_hms_opt(0, 0, 0)
+    {
+        return Some((Utc.from_utc_datetime(&naive_dt), "%m%d"));
     }
     None
 }
@@ -64,16 +62,16 @@ pub(crate) fn parse_model_and_version(
     candidates.reverse();
 
     for (idx, candidate) in &candidates {
-        if let Some((dt, fmt)) = parse_date(candidate) {
-            if fmt == "%Y-%m-%d" || fmt == "%Y%m%d" {
-                return (
-                    &s[..*idx],
-                    Some(Version::Date {
-                        date: dt,
-                        format: fmt,
-                    }),
-                );
-            }
+        if let Some((dt, fmt)) = parse_date(candidate)
+            && (fmt == "%Y-%m-%d" || fmt == "%Y%m%d")
+        {
+            return (
+                &s[..*idx],
+                Some(Version::Date {
+                    date: dt,
+                    format: fmt,
+                }),
+            );
         }
     }
     for (idx, candidate) in &candidates {

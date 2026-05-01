@@ -37,14 +37,14 @@ where
             .map_err(|_| ApiError::Internal(InternalError::Internal));
     }
 
-    if let Some(directive) = &ctx.directive {
-        if req.headers().get(http::header::CACHE_CONTROL).is_none() {
-            req.headers_mut().insert(
-                http::header::CACHE_CONTROL,
-                HeaderValue::from_str(directive)
-                    .map_err(InternalError::InvalidHeader)?,
-            );
-        }
+    if let Some(directive) = &ctx.directive
+        && req.headers().get(http::header::CACHE_CONTROL).is_none()
+    {
+        req.headers_mut().insert(
+            http::header::CACHE_CONTROL,
+            HeaderValue::from_str(directive)
+                .map_err(InternalError::InvalidHeader)?,
+        );
     }
 
     let (parts, body) = req.into_parts();
@@ -106,10 +106,10 @@ where
                 return Ok(resp);
             }
             Ok((bucket, key, CacheCheckResult::Stale)) => {
-                stale_hits.push((bucket, key))
+                stale_hits.push((bucket, key));
             }
             Ok((bucket, _, CacheCheckResult::Miss)) => {
-                empty_buckets.push(bucket)
+                empty_buckets.push(bucket);
             }
             Err(e) => tracing::warn!(error = %e, "Cache check error"),
         }

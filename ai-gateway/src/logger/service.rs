@@ -145,10 +145,10 @@ impl LoggerService {
         // Extract helicone-properties-* headers
         let mut properties = IndexMap::new();
         for (name, value) in &self.request_headers {
-            if name.as_str().starts_with("helicone-property-") {
-                if let Ok(value_str) = value.to_str() {
-                    properties.insert(name.to_string(), value_str.to_string());
-                }
+            if name.as_str().starts_with("helicone-property-")
+                && let Ok(value_str) = value.to_str()
+            {
+                properties.insert(name.to_string(), value_str.to_string());
             }
         }
 
@@ -176,7 +176,7 @@ impl LoggerService {
             .build();
         let log = Log::new(request_log, response_log);
         let log_message = LogMessage::builder()
-            .authorization(self.auth_ctx.api_key.expose().to_string())
+            .authorization(self.auth_ctx.api_key.expose().clone())
             .helicone_meta(helicone_metadata)
             .log(log)
             .build();

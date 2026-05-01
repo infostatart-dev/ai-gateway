@@ -52,6 +52,7 @@ impl CacheLayer {
         })
     }
 
+    #[must_use]
     pub fn for_router(
         app_state: &AppState,
         router_config: &RouterConfig,

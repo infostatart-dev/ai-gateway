@@ -3,6 +3,7 @@ use http::StatusCode;
 pub(crate) const SERVER_ERROR_TYPE: &str = "server_error";
 pub(crate) const INVALID_REQUEST_ERROR_TYPE: &str = "invalid_request_error";
 
+#[must_use]
 pub fn get_error_type(status_code: StatusCode) -> String {
     if status_code == StatusCode::TOO_MANY_REQUESTS {
         "tokens".to_string()
@@ -13,6 +14,7 @@ pub fn get_error_type(status_code: StatusCode) -> String {
     }
 }
 
+#[must_use]
 pub fn get_error_code(status_code: StatusCode) -> Option<String> {
     if status_code == StatusCode::UNAUTHORIZED
         || status_code == StatusCode::FORBIDDEN

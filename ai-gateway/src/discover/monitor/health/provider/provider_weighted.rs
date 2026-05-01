@@ -61,10 +61,12 @@ pub async fn check_provider_weighted_monitor(
                     }
                     let metric_attributes =
                         [KeyValue::new("provider", provider.to_string())];
-                    inner.app_state.0.metrics.provider_health.record(
-                        if is_healthy { 1 } else { 0 },
-                        &metric_attributes,
-                    );
+                    inner
+                        .app_state
+                        .0
+                        .metrics
+                        .provider_health
+                        .record(u64::from(is_healthy), &metric_attributes);
                 }
             }
             _ => return Err(InternalError::Internal.into()),

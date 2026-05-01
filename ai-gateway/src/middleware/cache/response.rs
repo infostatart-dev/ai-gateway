@@ -82,65 +82,64 @@ impl CacheableResponse {
     ) -> Self {
         let mut resp_headers = resp.clone();
         resp_headers.remove(http::header::SET_COOKIE);
-        if let Some(directive) = ctx.directive.as_ref() {
-            if let Some(value) =
+        if let Some(directive) = ctx.directive.as_ref()
+            && let Some(value) =
                 cache_control::CacheControl::from_value(directive)
-            {
-                if let Some(max_age) = value.max_age {
+        {
+            if let Some(max_age) = value.max_age {
+                resp_headers.append(
+                    http::header::CACHE_CONTROL,
+                    HeaderValue::from_str(&format!(
+                        "max-age={}",
+                        max_age.as_secs()
+                    ))
+                    .unwrap(),
+                );
+            }
+            if value.must_revalidate {
+                resp_headers.append(
+                    http::header::CACHE_CONTROL,
+                    HeaderValue::from_static("must-revalidate"),
+                );
+            }
+            if value.proxy_revalidate {
+                resp_headers.append(
+                    http::header::CACHE_CONTROL,
+                    HeaderValue::from_static("proxy-revalidate"),
+                );
+            }
+            if value.no_store {
+                resp_headers.append(
+                    http::header::CACHE_CONTROL,
+                    HeaderValue::from_static("no-store"),
+                );
+            }
+            if value.no_transform {
+                resp_headers.append(
+                    http::header::CACHE_CONTROL,
+                    HeaderValue::from_static("no-transform"),
+                );
+            }
+            match value.cachability {
+                Some(cache_control::Cachability::Private) => {
                     resp_headers.append(
                         http::header::CACHE_CONTROL,
-                        HeaderValue::from_str(&format!(
-                            "max-age={}",
-                            max_age.as_secs()
-                        ))
-                        .unwrap(),
+                        HeaderValue::from_static("private"),
                     );
                 }
-                if value.must_revalidate {
+                Some(cache_control::Cachability::Public) => {
                     resp_headers.append(
                         http::header::CACHE_CONTROL,
-                        HeaderValue::from_static("must-revalidate"),
+                        HeaderValue::from_static("public"),
                     );
                 }
-                if value.proxy_revalidate {
+                Some(cache_control::Cachability::NoCache) => {
                     resp_headers.append(
                         http::header::CACHE_CONTROL,
-                        HeaderValue::from_static("proxy-revalidate"),
+                        HeaderValue::from_static("no-cache"),
                     );
                 }
-                if value.no_store {
-                    resp_headers.append(
-                        http::header::CACHE_CONTROL,
-                        HeaderValue::from_static("no-store"),
-                    );
-                }
-                if value.no_transform {
-                    resp_headers.append(
-                        http::header::CACHE_CONTROL,
-                        HeaderValue::from_static("no-transform"),
-                    );
-                }
-                match value.cachability {
-                    Some(cache_control::Cachability::Private) => {
-                        resp_headers.append(
-                            http::header::CACHE_CONTROL,
-                            HeaderValue::from_static("private"),
-                        );
-                    }
-                    Some(cache_control::Cachability::Public) => {
-                        resp_headers.append(
-                            http::header::CACHE_CONTROL,
-                            HeaderValue::from_static("public"),
-                        );
-                    }
-                    Some(cache_control::Cachability::NoCache) => {
-                        resp_headers.append(
-                            http::header::CACHE_CONTROL,
-                            HeaderValue::from_static("no-cache"),
-                        );
-                    }
-                    _ => {}
-                }
+                _ => {}
             }
         }
         Self {

@@ -49,12 +49,7 @@ pub async fn sse_stream(
         async move {
             while let Some(ev) = es.next().await {
                 match ev {
-                    Err(e)
-                        if matches!(
-                            e,
-                            reqwest_eventsource::Error::StreamEnded
-                        ) =>
-                    {
+                    Err(reqwest_eventsource::Error::StreamEnded) => {
                         break;
                     }
                     Err(e) => {

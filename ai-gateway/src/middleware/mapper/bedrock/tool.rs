@@ -4,6 +4,7 @@ use crate::endpoints::bedrock::converse::{
     SpecificToolChoice, Tool, ToolChoice, ToolInputSchema, ToolSpecification,
 };
 
+#[must_use]
 pub fn map_tools(
     tools: Option<Vec<openai::ChatCompletionTools>>,
 ) -> Option<Vec<Tool>> {
@@ -30,6 +31,7 @@ pub fn map_tools(
     })
 }
 
+#[must_use]
 pub fn map_tool_choice(
     choice: Option<openai::ChatCompletionToolChoiceOption>,
 ) -> Option<ToolChoice> {

@@ -35,16 +35,20 @@ pub struct HeliconeConfig {
 }
 
 impl HeliconeConfig {
+    #[must_use]
     pub fn is_auth_enabled(&self) -> bool {
         self.features != HeliconeFeatures::None
     }
+    #[must_use]
     pub fn is_auth_disabled(&self) -> bool {
         self.features == HeliconeFeatures::None
     }
+    #[must_use]
     pub fn is_observability_enabled(&self) -> bool {
         self.features == HeliconeFeatures::All
             || self.features == HeliconeFeatures::Observability
     }
+    #[must_use]
     pub fn is_prompts_enabled(&self) -> bool {
         self.features == HeliconeFeatures::All
             || self.features == HeliconeFeatures::Prompts
@@ -62,15 +66,18 @@ impl Default for HeliconeConfig {
     }
 }
 
+#[must_use]
 pub fn default_api_key() -> Secret<String> {
     Secret::from(
         std::env::var("HELICONE_CONTROL_PLANE_API_KEY")
             .unwrap_or("sk-helicone-...".to_string()),
     )
 }
+#[must_use]
 pub fn default_base_url() -> Url {
     "https://api.helicone.ai".parse().unwrap()
 }
+#[must_use]
 pub fn default_websocket_url() -> Url {
     "wss://api.helicone.ai/ws/v1/router/control-plane"
         .parse()

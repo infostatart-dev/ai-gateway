@@ -91,10 +91,10 @@ impl Dispatcher {
         target_url: url::Url,
     ) {
         let app_state = self.app_state.clone();
-        let model = mapper_ctx
-            .model
-            .as_ref()
-            .map_or_else(|| "unknown".to_string(), |m| m.to_string());
+        let model = mapper_ctx.model.as_ref().map_or_else(
+            || "unknown".to_string(),
+            std::string::ToString::to_string,
+        );
         let path = target_url.path().to_string();
         let provider = self.provider.to_string();
         tokio::spawn(

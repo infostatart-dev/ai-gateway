@@ -59,9 +59,8 @@ impl
         if let Some(delta_payload) = payload.get("contentBlockDelta") {
             let index = delta_payload
                 .get("contentBlockIndex")
-                .and_then(|v| v.as_u64())
-                .map(|v| v as u32)
-                .unwrap_or(0);
+                .and_then(serde_json::Value::as_u64)
+                .map_or(0, |v| v as u32);
             if let Some(text) = delta_payload.pointer("/delta/text") {
                 let delta = openai::ChatCompletionStreamResponseDelta {
                     role: None,
@@ -140,15 +139,14 @@ fn map_tool_chunk(
     let id = tool_use
         .get("toolUseId")
         .and_then(|v| v.as_str())
-        .map(|v| v.to_string());
+        .map(std::string::ToString::to_string);
     let name = tool_use
         .get("name")
         .and_then(|v| v.as_str())
-        .map(|v| v.to_string());
+        .map(std::string::ToString::to_string);
     let index = index_val
-        .and_then(|v| v.as_u64())
-        .map(|v| v as u32)
-        .unwrap_or(0);
+        .and_then(serde_json::Value::as_u64)
+        .map_or(0, |v| v as u32);
     openai::ChatCompletionMessageToolCallChunk {
         index,
         id,
@@ -167,7 +165,7 @@ fn map_tool_delta(
     let input = tool_use
         .get("input")
         .and_then(|v| v.as_str())
-        .map(|v| v.to_string());
+        .map(std::string::ToString::to_string);
     openai::ChatCompletionMessageToolCallChunk {
         index,
         id: None,
@@ -183,19 +181,16 @@ fn map_usage(payload: &serde_json::Value) -> Option<openai::CompletionUsage> {
     payload.pointer("/metadata/usage").map(|u| {
         let input_tokens = u
             .get("inputTokens")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as u32)
-            .unwrap_or(0);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(0, |v| v as u32);
         let output_tokens = u
             .get("outputTokens")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as u32)
-            .unwrap_or(0);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(0, |v| v as u32);
         let total_tokens = u
             .get("totalTokens")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as u32)
-            .unwrap_or(0);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(0, |v| v as u32);
         openai::CompletionUsage {
             prompt_tokens: input_tokens,
             completion_tokens: output_tokens,

@@ -239,7 +239,9 @@ async fn call_candidate(
 fn lock_states(
     states: &Mutex<HashMap<InferenceProvider, ProviderState>>,
 ) -> MutexGuard<'_, HashMap<InferenceProvider, ProviderState>> {
-    states.lock().unwrap_or_else(|error| error.into_inner())
+    states
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn smoothed_latency(current: Option<Duration>, observed: Duration) -> Duration {
@@ -269,8 +271,7 @@ fn is_failoverable_status(status: StatusCode) -> bool {
 fn cooldown_for_response(response: &Response) -> Duration {
     if response.status() == StatusCode::TOO_MANY_REQUESTS {
         return extract_retry_after(response.headers())
-            .map(Duration::from_secs)
-            .unwrap_or(DEFAULT_RATE_LIMIT_COOLDOWN)
+            .map_or(DEFAULT_RATE_LIMIT_COOLDOWN, Duration::from_secs)
             + RETRY_AFTER_BUFFER;
     }
 

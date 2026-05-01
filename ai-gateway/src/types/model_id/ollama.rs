@@ -23,7 +23,7 @@ impl FromStr for OllamaModelId {
         let tag = parts
             .next()
             .filter(|t| !t.is_empty())
-            .map(|t| t.to_string());
+            .map(std::string::ToString::to_string);
         Ok(OllamaModelId {
             model: model.to_string(),
             tag,

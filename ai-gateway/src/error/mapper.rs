@@ -32,7 +32,7 @@ pub enum MapperError {
     ImageMappingInvalid(String),
     /// Failed to map Bedrock message: {0}
     FailedToMapBedrockMessage(BoxError),
-    /// OpenRouter unsupported format: {0}
+    /// `OpenRouter` unsupported format: {0}
     UnsupportedFormat(String),
 }
 
@@ -63,7 +63,7 @@ pub enum MapperErrorMetric {
     ImageMappingInvalid,
     /// Failed to map Bedrock message
     FailedToMapBedrockMessage,
-    /// OpenRouter unsupported format
+    /// `OpenRouter` unsupported format
     UnsupportedFormat,
 }
 

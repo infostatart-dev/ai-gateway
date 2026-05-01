@@ -31,7 +31,7 @@ impl
                 for (idx, content_block) in message.content.iter().enumerate() {
                     match content_block {
                         anthropic::ContentBlock::Text { text, .. } => {
-                            current_text_content.push_str(text)
+                            current_text_content.push_str(text);
                         }
                         anthropic::ContentBlock::ToolUse {
                             id,

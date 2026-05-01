@@ -41,8 +41,9 @@ pub fn process_prompt_schema(
                 let p_key = if is_whole_variable_match(&key, regex) {
                     let name = get_variable_name_from_string(&key, regex)?;
                     if let Some(val) = inputs.get(&name) {
-                        val.as_str().map(|s| s.to_string()).ok_or_else(
-                            || {
+                        val.as_str()
+                            .map(std::string::ToString::to_string)
+                            .ok_or_else(|| {
                                 ApiError::InvalidRequest(
                                     InvalidRequestError::InvalidPromptInputs(
                                         format!(
@@ -52,8 +53,7 @@ pub fn process_prompt_schema(
                                         ),
                                     ),
                                 )
-                            },
-                        )?
+                            })?
                     } else {
                         key
                     }

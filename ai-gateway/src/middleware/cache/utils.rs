@@ -19,6 +19,7 @@ pub const CACHE_HIT_HEADER_VALUE: HeaderValue = HeaderValue::from_static("HIT");
 pub const CACHE_MISS_HEADER_VALUE: HeaderValue =
     HeaderValue::from_static("MISS");
 
+#[must_use]
 pub fn bucket_header_value(bucket: u8) -> HeaderValue {
     HeaderValue::from_str(&bucket.to_string())
         .unwrap_or_else(|_| HeaderValue::from_static("0"))
@@ -85,6 +86,7 @@ pub fn record_cache_miss(app_state: &AppState, uri: &http::Uri, bucket: u8) {
     app_state.0.metrics.cache.misses.add(1, attrs);
 }
 
+#[must_use]
 pub fn get_version(version: http::Version) -> http_cache::HttpVersion {
     match version {
         http::Version::HTTP_09 => http_cache::HttpVersion::Http09,
@@ -95,6 +97,7 @@ pub fn get_version(version: http::Version) -> http_cache::HttpVersion {
     }
 }
 
+#[must_use]
 pub fn header_map_to_hash_map(headers: HeaderMap) -> HashMap<String, String> {
     headers
         .into_iter()

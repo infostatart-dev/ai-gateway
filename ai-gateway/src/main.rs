@@ -112,7 +112,7 @@ fn init_telemetry(
 
 async fn run_app(config: Config) -> Result<(), RuntimeError> {
     // 5 mins
-    const CLEANUP_INTERVAL: Duration = Duration::from_secs(60 * 5);
+    const CLEANUP_INTERVAL: Duration = Duration::from_mins(5);
     let mut shutting_down = false;
     let helicone_config = config.helicone.clone();
     let app = App::new(config).await?;
@@ -211,17 +211,17 @@ fn shutdown_telemetry(
     tracer_provider: &SdkTracerProvider,
     metrics_provider: Option<SdkMeterProvider>,
 ) {
-    if let Some(logger_provider) = logger_provider {
-        if let Err(e) = logger_provider.shutdown() {
-            println!("error shutting down logger provider: {e}");
-        }
+    if let Some(logger_provider) = logger_provider
+        && let Err(e) = logger_provider.shutdown()
+    {
+        println!("error shutting down logger provider: {e}");
     }
     if let Err(e) = tracer_provider.shutdown() {
         println!("error shutting down tracer provider: {e}");
     }
-    if let Some(metrics_provider) = metrics_provider {
-        if let Err(e) = metrics_provider.shutdown() {
-            println!("error shutting down metrics provider: {e}");
-        }
+    if let Some(metrics_provider) = metrics_provider
+        && let Err(e) = metrics_provider.shutdown()
+    {
+        println!("error shutting down metrics provider: {e}");
     }
 }

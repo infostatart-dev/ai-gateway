@@ -22,6 +22,7 @@ pub struct ProviderMonitorInner<K> {
 }
 
 impl<K> ProviderMonitorInner<K> {
+    #[must_use]
     pub fn new(
         tx: Sender<Change<K, DispatcherService>>,
         router_id: RouterId,

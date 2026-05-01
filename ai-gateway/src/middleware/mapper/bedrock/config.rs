@@ -5,6 +5,7 @@ use crate::{
     middleware::mapper::DEFAULT_MAX_TOKENS,
 };
 
+#[must_use]
 pub fn map_inference_config(
     max_completion_tokens: Option<u32>,
     temperature: Option<f32>,

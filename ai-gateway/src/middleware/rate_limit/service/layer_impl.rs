@@ -57,6 +57,7 @@ impl Layer {
         }
     }
 
+    #[must_use]
     pub fn new_redis_inner(
         rl: crate::config::rate_limit::LimitsConfig,
         url: url::Url,
@@ -90,6 +91,7 @@ impl Layer {
         }
     }
 
+    #[must_use]
     pub fn disabled() -> Self {
         Self {
             inner: InnerLayer::None,
@@ -112,16 +114,16 @@ impl Layer {
                     .ok_or(InitError::InvalidRateLimitConfig(
                         "store not configured",
                     ))?;
-                if let RateLimitStore::Redis(redis) = store {
-                    if let Ok(layer) = RedisRateLimitLayer::new(
+                if let RateLimitStore::Redis(redis) = store
+                    && let Ok(layer) = RedisRateLimitLayer::new(
                         Arc::new(limits.clone()),
                         redis.host_url.expose().clone(),
                         Some(router_id.clone()),
-                    ) {
-                        return Ok(Self {
-                            inner: InnerLayer::Redis(layer),
-                        });
-                    }
+                    )
+                {
+                    return Ok(Self {
+                        inner: InnerLayer::Redis(layer),
+                    });
                 }
                 let rl = Arc::new(crate::config::rate_limit::limiter_config(
                     limits,

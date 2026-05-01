@@ -94,7 +94,7 @@ pub async fn check_model_latency_monitor(
                         }
                     }
                     inner.app_state.0.metrics.provider_health.record(
-                        if is_healthy { 1 } else { 0 },
+                        u64::from(is_healthy),
                         &[KeyValue::new("provider", provider.to_string())],
                     );
                 }

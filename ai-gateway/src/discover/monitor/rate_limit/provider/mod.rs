@@ -75,6 +75,7 @@ impl<K> ProviderMonitorInner<K> {
 }
 
 impl ProviderRateLimitMonitor {
+    #[must_use]
     pub fn provider_weighted(
         tx: Sender<Change<ProviderWeightedKey, DispatcherService>>,
         router_id: RouterId,
@@ -89,6 +90,7 @@ impl ProviderRateLimitMonitor {
         ))
     }
 
+    #[must_use]
     pub fn model_weighted(
         tx: Sender<Change<ModelWeightedKey, DispatcherService>>,
         router_id: RouterId,
@@ -103,6 +105,7 @@ impl ProviderRateLimitMonitor {
         ))
     }
 
+    #[must_use]
     pub fn provider_latency(
         tx: Sender<Change<ProviderKey, DispatcherService>>,
         router_id: RouterId,
@@ -117,6 +120,7 @@ impl ProviderRateLimitMonitor {
         ))
     }
 
+    #[must_use]
     pub fn model_latency(
         tx: Sender<Change<ModelKey, DispatcherService>>,
         router_id: RouterId,

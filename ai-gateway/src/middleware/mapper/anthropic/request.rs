@@ -19,6 +19,7 @@ pub struct AnthropicConverter {
 }
 
 impl AnthropicConverter {
+    #[must_use]
     pub fn new(model_mapper: ModelMapper) -> Self {
         Self { model_mapper }
     }

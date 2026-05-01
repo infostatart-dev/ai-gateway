@@ -39,16 +39,14 @@ impl
         if let Some(tool_calls) = choice.message.tool_calls {
             for tc in tool_calls {
                 if let openai::ChatCompletionMessageToolCalls::Function(f) = tc
-                {
-                    if let Ok(input) =
+                    && let Ok(input) =
                         serde_json::from_str(&f.function.arguments)
-                    {
-                        content.push(anthropic::ContentBlock::ToolUse {
-                            id: f.id,
-                            name: f.function.name,
-                            input,
-                        });
-                    }
+                {
+                    content.push(anthropic::ContentBlock::ToolUse {
+                        id: f.id,
+                        name: f.function.name,
+                        input,
+                    });
                 }
             }
         }

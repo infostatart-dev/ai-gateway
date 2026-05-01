@@ -14,6 +14,7 @@ pub struct OpenAIConverter {
 }
 
 impl OpenAIConverter {
+    #[must_use]
     pub fn new(model_mapper: ModelMapper) -> Self {
         Self { model_mapper }
     }
@@ -210,7 +211,7 @@ impl
             builder.prompt_cache_key(u);
         }
 
-        Ok(builder.build().map_err(|_| MapperError::InvalidRequest)?)
+        builder.build().map_err(|_| MapperError::InvalidRequest)
     }
 }
 

@@ -52,19 +52,16 @@ fn map_usage(payload: &serde_json::Value) -> openai::CompletionUsage {
     let usage = payload.get("usage");
     let input_tokens = usage
         .and_then(|u| u.get("inputTokens"))
-        .and_then(|v| v.as_u64())
-        .map(|v| v as u32)
-        .unwrap_or(0);
+        .and_then(serde_json::Value::as_u64)
+        .map_or(0, |v| v as u32);
     let output_tokens = usage
         .and_then(|u| u.get("outputTokens"))
-        .and_then(|v| v.as_u64())
-        .map(|v| v as u32)
-        .unwrap_or(0);
+        .and_then(serde_json::Value::as_u64)
+        .map_or(0, |v| v as u32);
     let total_tokens = usage
         .and_then(|u| u.get("totalTokens"))
-        .and_then(|v| v.as_u64())
-        .map(|v| v as u32)
-        .unwrap_or(0);
+        .and_then(serde_json::Value::as_u64)
+        .map_or(0, |v| v as u32);
 
     openai::CompletionUsage {
         prompt_tokens: input_tokens,
@@ -104,7 +101,7 @@ fn map_output(
                     .to_string();
                 let arguments = tool_use
                     .get("input")
-                    .map(|v| v.to_string())
+                    .map(std::string::ToString::to_string)
                     .unwrap_or_default();
 
                 tool_calls.push(

@@ -3,6 +3,7 @@ use async_openai::types::chat as openai;
 
 use crate::middleware::mapper::mime_from_data_uri;
 
+#[must_use]
 pub fn map_user_content(
     content: openai::ChatCompletionRequestUserMessageContent,
 ) -> anthropic::MessageContent {
@@ -47,6 +48,7 @@ pub fn map_user_content(
     }
 }
 
+#[must_use]
 pub fn map_assistant_content(
     message: &openai::ChatCompletionRequestAssistantMessage,
 ) -> Vec<anthropic::ContentBlock> {
@@ -105,6 +107,7 @@ pub fn map_assistant_content(
     content_blocks
 }
 
+#[must_use]
 pub fn map_tool_message(
     message: openai::ChatCompletionRequestToolMessage,
 ) -> anthropic::MessageContent {

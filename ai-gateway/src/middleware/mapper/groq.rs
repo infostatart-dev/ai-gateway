@@ -71,15 +71,14 @@ impl TryConvert<Value, CreateChatCompletionResponse> for GroqConverter {
         &self,
         mut value: Value,
     ) -> Result<CreateChatCompletionResponse, Self::Error> {
-        if let Some(obj) = value.as_object_mut() {
-            if let Some(tier) = obj.get("service_tier") {
-                if tier == "on_demand" {
-                    obj.insert(
-                        "service_tier".to_string(),
-                        serde_json::json!("default"),
-                    );
-                }
-            }
+        if let Some(obj) = value.as_object_mut()
+            && let Some(tier) = obj.get("service_tier")
+            && tier == "on_demand"
+        {
+            obj.insert(
+                "service_tier".to_string(),
+                serde_json::json!("default"),
+            );
         }
         serde_json::from_value(value).map_err(MapperError::SerdeError)
     }
@@ -93,15 +92,14 @@ impl TryConvertStreamData<Value, CreateChatCompletionStreamResponse>
         &self,
         mut value: Value,
     ) -> Result<Option<CreateChatCompletionStreamResponse>, Self::Error> {
-        if let Some(obj) = value.as_object_mut() {
-            if let Some(tier) = obj.get("service_tier") {
-                if tier == "on_demand" {
-                    obj.insert(
-                        "service_tier".to_string(),
-                        serde_json::json!("default"),
-                    );
-                }
-            }
+        if let Some(obj) = value.as_object_mut()
+            && let Some(tier) = obj.get("service_tier")
+            && tier == "on_demand"
+        {
+            obj.insert(
+                "service_tier".to_string(),
+                serde_json::json!("default"),
+            );
         }
         let chunk: CreateChatCompletionStreamResponse =
             serde_json::from_value(value).map_err(MapperError::SerdeError)?;

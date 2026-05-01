@@ -50,7 +50,7 @@ impl CloudDiscovery {
         let mut router_organisation_map = FxHashMap::default();
         for db_router in routers {
             let router_id = RouterId::Named(CompactString::from(
-                db_router.router_hash.to_string(),
+                db_router.router_hash.clone(),
             ));
             let Ok(router_config) = serde_json::from_value::<RouterConfig>(
                 db_router.config.clone(),

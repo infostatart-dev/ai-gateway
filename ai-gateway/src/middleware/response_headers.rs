@@ -99,14 +99,13 @@ where
         if this.config.provider {
             let inference_provider =
                 response.extensions().get::<InferenceProvider>();
-            if let Some(inference_provider) = inference_provider {
-                if let Ok(header_value) =
+            if let Some(inference_provider) = inference_provider
+                && let Ok(header_value) =
                     http::HeaderValue::from_str(inference_provider.as_ref())
-                {
-                    response
-                        .headers_mut()
-                        .insert("helicone-provider", header_value);
-                }
+            {
+                response
+                    .headers_mut()
+                    .insert("helicone-provider", header_value);
             }
         }
 

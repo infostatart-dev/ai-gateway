@@ -105,17 +105,16 @@ impl Dispatcher {
                     .health_metrics(ep)?
                     .incr_remote_internal_error_count();
             }
-        } else if status == StatusCode::TOO_MANY_REQUESTS {
-            if let Some(ref ep) = api_endpoint {
-                let retry_after = extract_retry_after(headers);
-                if let Some(tx) = &self.rate_limit_tx {
-                    let mut event =
-                        RateLimitEvent::new(ep.clone(), retry_after);
-                    if let Some(m) = model_id {
-                        event = event.with_model_id(m);
-                    }
-                    let _ = tx.send(event).await;
+        } else if status == StatusCode::TOO_MANY_REQUESTS
+            && let Some(ref ep) = api_endpoint
+        {
+            let retry_after = extract_retry_after(headers);
+            if let Some(tx) = &self.rate_limit_tx {
+                let mut event = RateLimitEvent::new(ep.clone(), retry_after);
+                if let Some(m) = model_id {
+                    event = event.with_model_id(m);
                 }
+                let _ = tx.send(event).await;
             }
         }
         Ok(())

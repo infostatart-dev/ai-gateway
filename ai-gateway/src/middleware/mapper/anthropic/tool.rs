@@ -1,6 +1,7 @@
 use anthropic_ai_sdk::types::message as anthropic;
 use async_openai::types::chat as openai;
 
+#[must_use]
 pub fn map_tools(
     tools: &Option<Vec<openai::ChatCompletionTools>>,
 ) -> Option<Vec<anthropic::Tool>> {
@@ -26,6 +27,7 @@ pub fn map_tools(
     })
 }
 
+#[must_use]
 pub fn map_tool_choice(
     choice: &Option<openai::ChatCompletionToolChoiceOption>,
 ) -> Option<anthropic::ToolChoice> {

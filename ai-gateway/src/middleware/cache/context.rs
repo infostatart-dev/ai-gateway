@@ -15,6 +15,7 @@ pub struct CacheContext {
 }
 
 impl CacheContext {
+    #[must_use]
     pub fn merge(&self, other: &Self) -> Self {
         let enabled = other.enabled.or(self.enabled).unwrap_or(false);
         Self {

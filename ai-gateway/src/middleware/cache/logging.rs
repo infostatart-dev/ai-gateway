@@ -59,7 +59,7 @@ pub fn spawn_cache_logging(
                     .collect()
                     .await
                     .ok()
-                    .map(|b| b.to_bytes())
+                    .map(http_body_util::Collected::to_bytes)
                     .unwrap_or_default();
                 let Ok(deserialized_body) = serde_json::from_slice::<
                     async_openai::types::chat::CreateChatCompletionRequest,
