@@ -1,6 +1,7 @@
-use crate::middleware::mapper::mime_from_data_uri;
 use anthropic_ai_sdk::types::message as anthropic;
 use async_openai::types::chat as openai;
+
+use crate::middleware::mapper::mime_from_data_uri;
 
 pub fn map_user_content(
     content: openai::ChatCompletionRequestUserMessageContent,

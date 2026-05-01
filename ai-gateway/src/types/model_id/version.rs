@@ -1,11 +1,13 @@
-use super::parsing::parse_date;
-use crate::error::mapper::MapperError;
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     fmt::{self, Display},
     str::FromStr,
 };
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use super::parsing::parse_date;
+use crate::error::mapper::MapperError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Version {

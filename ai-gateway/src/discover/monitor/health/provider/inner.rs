@@ -1,3 +1,9 @@
+use std::sync::Arc;
+
+use rustc_hash::FxHashSet as HashSet;
+use tokio::sync::mpsc::Sender;
+use tower::discover::Change;
+
 use crate::{
     app_state::AppState,
     config::{monitor::GracePeriod, router::RouterConfig},
@@ -5,10 +11,6 @@ use crate::{
     error::internal::InternalError,
     types::{provider::InferenceProvider, router::RouterId},
 };
-use rustc_hash::FxHashSet as HashSet;
-use std::sync::Arc;
-use tokio::sync::mpsc::Sender;
-use tower::discover::Change;
 
 #[derive(Debug, Clone)]
 pub struct ProviderMonitorInner<K> {

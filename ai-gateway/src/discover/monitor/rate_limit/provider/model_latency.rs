@@ -1,3 +1,11 @@
+use std::time::{Duration, Instant};
+
+use futures::{StreamExt, stream::FuturesUnordered};
+use rustc_hash::FxHashMap as HashMap;
+use tokio::sync::mpsc::Receiver;
+use tower::discover::Change;
+use tracing::{debug, error, info};
+
 use super::{
     DEFAULT_WAIT_SECONDS, ProviderMonitorInner, RATE_LIMIT_BUFFER_SECONDS,
 };
@@ -7,12 +15,6 @@ use crate::{
     error::{internal::InternalError, runtime::RuntimeError},
     types::rate_limit::{ProviderRestore, RateLimitEvent},
 };
-use futures::{StreamExt, stream::FuturesUnordered};
-use rustc_hash::FxHashMap as HashMap;
-use std::time::{Duration, Instant};
-use tokio::sync::mpsc::Receiver;
-use tower::discover::Change;
-use tracing::{debug, error, info};
 
 impl ProviderMonitorInner<ModelKey> {
     fn create_model_latency_key(

@@ -1,9 +1,10 @@
+use async_openai::types::chat as openai;
+use uuid::Uuid;
+
 use crate::{
     endpoints::bedrock::converse::BedrockConverseResponse,
     error::mapper::MapperError, middleware::mapper::TryConvert,
 };
-use async_openai::types::chat as openai;
-use uuid::Uuid;
 
 impl TryConvert<BedrockConverseResponse, openai::CreateChatCompletionResponse>
     for super::BedrockConverter

@@ -1,3 +1,8 @@
+use opentelemetry::KeyValue;
+use tokio::task::JoinSet;
+use tower::discover::Change;
+use tracing::{error, trace};
+
 use super::inner::ProviderMonitorInner;
 use crate::{
     config::balance::BalanceConfigInner,
@@ -5,10 +10,6 @@ use crate::{
     dispatcher::Dispatcher,
     error::{init::InitError, internal::InternalError, runtime::RuntimeError},
 };
-use opentelemetry::KeyValue;
-use tokio::task::JoinSet;
-use tower::discover::Change;
-use tracing::{error, trace};
 
 #[allow(clippy::too_many_lines)]
 pub async fn check_model_latency_monitor(

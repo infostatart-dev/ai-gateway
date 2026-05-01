@@ -1,3 +1,8 @@
+use std::sync::Arc;
+
+use tokio::sync::mpsc::Sender;
+use tower::discover::Change;
+
 use super::ProviderHealthMonitor;
 use crate::{
     app_state::AppState,
@@ -14,9 +19,6 @@ use crate::{
     dispatcher::DispatcherService,
     types::router::RouterId,
 };
-use std::sync::Arc;
-use tokio::sync::mpsc::Sender;
-use tower::discover::Change;
 
 impl AppState {
     pub async fn add_provider_weighted_router_health_monitor(

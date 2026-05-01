@@ -146,7 +146,8 @@ pub enum BalanceConfigInner {
     #[serde(alias = "latency")]
     BalancedLatency { providers: NESet<InferenceProvider> },
     /// Routes to the lowest-latency available provider and retries the same
-    /// request against other providers when the selected provider is unavailable.
+    /// request against other providers when the selected provider is
+    /// unavailable.
     #[serde(alias = "failover")]
     ProviderFailover { providers: NESet<InferenceProvider> },
     /// Distributes and load balances requests among a set of (providers,model).

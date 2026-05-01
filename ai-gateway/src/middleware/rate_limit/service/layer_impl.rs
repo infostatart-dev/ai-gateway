@@ -1,3 +1,7 @@
+use std::sync::Arc;
+
+use tower_governor::GovernorLayer;
+
 use super::{InnerLayer, Layer};
 use crate::{
     app_state::AppState,
@@ -9,8 +13,6 @@ use crate::{
     middleware::rate_limit::redis_service::RedisRateLimitLayer,
     types::router::RouterId,
 };
-use std::sync::Arc;
-use tower_governor::GovernorLayer;
 
 impl Layer {
     pub fn global(app_state: &AppState) -> Result<Self, InitError> {

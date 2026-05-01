@@ -1,3 +1,9 @@
+use std::sync::Arc;
+
+use tokio::sync::mpsc::Sender;
+use tower::discover::Change;
+use tracing::error;
+
 use super::DatabaseListener;
 use crate::{
     config::router::RouterConfig,
@@ -5,10 +11,6 @@ use crate::{
     router::service::Router,
     types::{org::OrgId, router::RouterId},
 };
-use std::sync::Arc;
-use tokio::sync::mpsc::Sender;
-use tower::discover::Change;
-use tracing::error;
 
 impl DatabaseListener {
     pub async fn handle_router_config_insert(

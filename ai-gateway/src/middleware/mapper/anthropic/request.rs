@@ -1,3 +1,8 @@
+use std::{collections::HashMap, str::FromStr};
+
+use anthropic_ai_sdk::types::message as anthropic;
+use async_openai::types::chat as openai;
+
 use super::{message, tool};
 use crate::{
     endpoints::openai::chat_completions::system_prompt,
@@ -8,9 +13,6 @@ use crate::{
         provider::InferenceProvider,
     },
 };
-use anthropic_ai_sdk::types::message as anthropic;
-use async_openai::types::chat as openai;
-use std::{collections::HashMap, str::FromStr};
 
 pub struct AnthropicConverter {
     pub(crate) model_mapper: ModelMapper,
@@ -106,7 +108,8 @@ impl
                     });
                 }
                 openai::ChatCompletionRequestMessage::Function(_) => {
-                    // Function messages are handled via tools mapping in Anthropic
+                    // Function messages are handled via tools mapping in
+                    // Anthropic
                 }
             }
         }

@@ -1,5 +1,6 @@
-use crate::error::{api::ApiError, internal::InternalError};
 use regex::Regex;
+
+use crate::error::{api::ApiError, internal::InternalError};
 
 pub fn is_whole_variable_match(text: &str, regex: &Regex) -> bool {
     regex

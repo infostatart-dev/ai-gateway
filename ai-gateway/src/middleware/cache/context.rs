@@ -1,8 +1,9 @@
+use http_cache_semantics::CacheOptions;
+
 use crate::{
     config::cache::MAX_BUCKET_SIZE, error::invalid_req::InvalidRequestError,
     types::request::Request,
 };
-use http_cache_semantics::CacheOptions;
 
 #[derive(Debug, Clone)]
 pub struct CacheContext {

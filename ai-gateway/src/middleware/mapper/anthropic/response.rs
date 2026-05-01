@@ -1,7 +1,8 @@
-use super::OPENAI_CHAT_COMPLETION_OBJECT;
-use crate::{error::mapper::MapperError, middleware::mapper::TryConvert};
 use anthropic_ai_sdk::types::message as anthropic;
 use async_openai::types::chat as openai;
+
+use super::OPENAI_CHAT_COMPLETION_OBJECT;
+use crate::{error::mapper::MapperError, middleware::mapper::TryConvert};
 
 impl
     TryConvert<

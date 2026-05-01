@@ -1,3 +1,9 @@
+use std::{sync::Arc, time::Duration};
+
+use rustc_hash::FxHashMap as HashMap;
+use tokio::sync::{RwLock, mpsc::Sender};
+use tower::discover::Change;
+
 use crate::{
     app_state::AppState,
     config::router::RouterConfig,
@@ -13,10 +19,6 @@ use crate::{
     dispatcher::DispatcherService,
     types::router::RouterId,
 };
-use rustc_hash::FxHashMap as HashMap;
-use std::{sync::Arc, time::Duration};
-use tokio::sync::{RwLock, mpsc::Sender};
-use tower::discover::Change;
 
 pub mod app_state;
 pub mod model_latency;

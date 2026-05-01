@@ -1,11 +1,12 @@
+use bytes::Bytes;
+use futures::TryStreamExt;
+use reqwest::RequestBuilder;
+
 use super::Dispatcher;
 use crate::{
     error::{api::ApiError, internal::InternalError},
     types::body::{Body, BodyReader},
 };
-use bytes::Bytes;
-use futures::TryStreamExt;
-use reqwest::RequestBuilder;
 
 impl Dispatcher {
     pub async fn dispatch_sync(

@@ -1,9 +1,11 @@
-use crate::error::mapper::MapperError;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     fmt::{self, Display},
     str::FromStr,
 };
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::error::mapper::MapperError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OllamaModelId {

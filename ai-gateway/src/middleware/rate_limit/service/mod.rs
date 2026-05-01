@@ -1,9 +1,10 @@
-use crate::middleware::rate_limit::extractor::RateLimitKeyExtractor;
-use crate::middleware::rate_limit::redis_service::{
-    RedisRateLimitLayer, RedisRateLimitService,
-};
 use governor::middleware::StateInformationMiddleware;
 use tower_governor::GovernorLayer;
+
+use crate::middleware::rate_limit::{
+    extractor::RateLimitKeyExtractor,
+    redis_service::{RedisRateLimitLayer, RedisRateLimitService},
+};
 
 pub mod future;
 pub mod layer_impl;

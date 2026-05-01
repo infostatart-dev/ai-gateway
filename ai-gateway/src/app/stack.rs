@@ -1,16 +1,3 @@
-use super::BoxedServiceStack;
-use crate::{
-    app_state::AppState,
-    error::init::InitError,
-    metrics::{self, attribute_extractor::AttributeExtractor},
-    middleware::response_headers::ResponseHeaderLayer,
-    router::meta::MetaRouter,
-    utils::{
-        catch_panic::PanicResponder, handle_error::ErrorHandlerLayer,
-        health_check::HealthCheckLayer, timer::TimerLayer,
-        validate_config::ValidateRouterConfigLayer,
-    },
-};
 use opentelemetry::global;
 use telemetry::{make_span::SpanFactory, tracing::MakeRequestId};
 use tower::{ServiceBuilder, buffer::BufferLayer};
@@ -24,6 +11,20 @@ use tower_http::{
     trace::TraceLayer,
 };
 use tracing::Level;
+
+use super::BoxedServiceStack;
+use crate::{
+    app_state::AppState,
+    error::init::InitError,
+    metrics::{self, attribute_extractor::AttributeExtractor},
+    middleware::response_headers::ResponseHeaderLayer,
+    router::meta::MetaRouter,
+    utils::{
+        catch_panic::PanicResponder, handle_error::ErrorHandlerLayer,
+        health_check::HealthCheckLayer, timer::TimerLayer,
+        validate_config::ValidateRouterConfigLayer,
+    },
+};
 
 pub async fn build_service_stack(
     app_state: AppState,

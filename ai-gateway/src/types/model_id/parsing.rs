@@ -1,5 +1,6 @@
-use super::version::Version;
 use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};
+
+use super::version::Version;
 
 pub(crate) fn parse_date(input: &str) -> Option<(DateTime<Utc>, &'static str)> {
     if let Ok(date) = NaiveDate::parse_from_str(input, "%Y-%m-%d") {

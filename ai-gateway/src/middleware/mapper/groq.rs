@@ -1,13 +1,13 @@
+use std::str::FromStr;
+
 use async_openai::types::chat::{
     CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
 };
 use http::response::Parts;
 use serde_json::Value;
-use std::str::FromStr;
 
 use crate::{
-    endpoints::Endpoint,
-    endpoints::openai::OpenAICompatibleChatCompletionRequest,
+    endpoints::{Endpoint, openai::OpenAICompatibleChatCompletionRequest},
     error::mapper::MapperError,
     middleware::mapper::{
         TryConvert, TryConvertError, TryConvertStreamData, model::ModelMapper,

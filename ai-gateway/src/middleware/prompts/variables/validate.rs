@@ -16,7 +16,8 @@ pub fn validate_variable_type(
     if !matches {
         return Err(ApiError::InvalidRequest(
             InvalidRequestError::InvalidPromptInputs(format!(
-                "Variable '{name}' has type '{expected}' but received value: {value}"
+                "Variable '{name}' has type '{expected}' but received value: \
+                 {value}"
             )),
         ));
     }

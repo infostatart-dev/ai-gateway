@@ -1,3 +1,6 @@
+use chrono::Utc;
+use tracing::{debug, error, info};
+
 use super::DatabaseListener;
 use crate::{
     config::router::RouterConfig,
@@ -5,8 +8,6 @@ use crate::{
     error::runtime::RuntimeError,
     types::{org::OrgId, router::RouterId, user::UserId},
 };
-use chrono::Utc;
-use tracing::{debug, error, info};
 
 impl DatabaseListener {
     #[allow(clippy::too_many_lines)]

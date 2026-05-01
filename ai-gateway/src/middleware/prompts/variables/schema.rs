@@ -1,10 +1,12 @@
+use std::collections::{HashMap, HashSet};
+
+use regex::Regex;
+
 use super::{
     replace::replace_variables,
     utils::{get_variable_name_from_string, is_whole_variable_match},
 };
 use crate::error::{api::ApiError, invalid_req::InvalidRequestError};
-use regex::Regex;
-use std::collections::{HashMap, HashSet};
 
 pub fn process_prompt_schema(
     value: serde_json::Value,
@@ -39,7 +41,19 @@ pub fn process_prompt_schema(
                 let p_key = if is_whole_variable_match(&key, regex) {
                     let name = get_variable_name_from_string(&key, regex)?;
                     if let Some(val) = inputs.get(&name) {
-                        val.as_str().map(|s| s.to_string()).ok_or_else(|| ApiError::InvalidRequest(InvalidRequestError::InvalidPromptInputs(format!("Variable '{name}' in object schema key must be a string, got: {val}"))))?
+                        val.as_str().map(|s| s.to_string()).ok_or_else(
+                            || {
+                                ApiError::InvalidRequest(
+                                    InvalidRequestError::InvalidPromptInputs(
+                                        format!(
+                                            "Variable '{name}' in object \
+                                             schema key must be a string, \
+                                             got: {val}"
+                                        ),
+                                    ),
+                                )
+                            },
+                        )?
                     } else {
                         key
                     }

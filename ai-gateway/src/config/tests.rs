@@ -1,10 +1,12 @@
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use regex::Regex;
+
     use crate::config::{
         Config, ROUTER_ID_REGEX, deployment_target::DeploymentTarget,
     };
-    use regex::Regex;
-    use std::time::Duration;
 
     #[test]
     fn router_id_regex_is_valid() {

@@ -1,14 +1,15 @@
+use futures::future::BoxFuture;
+use meltdown::Token;
+use sqlx::postgres::PgListener;
+use tokio::time::{Duration, MissedTickBehavior, interval};
+use tracing::{debug, error, info};
+
 use super::{DatabaseListener, types::ServiceState};
 use crate::{
     app_state::AppState,
     config::deployment_target::DeploymentTarget,
     error::{init::InitError, runtime::RuntimeError},
 };
-use futures::future::BoxFuture;
-use meltdown::Token;
-use sqlx::postgres::PgListener;
-use tokio::time::{Duration, MissedTickBehavior, interval};
-use tracing::{debug, error, info};
 
 impl DatabaseListener {
     pub async fn new(

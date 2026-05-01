@@ -1,7 +1,9 @@
+use std::collections::{HashMap, HashSet};
+
+use regex::Regex;
+
 use super::validate::validate_variable_type;
 use crate::error::{api::ApiError, invalid_req::InvalidRequestError};
-use regex::Regex;
-use std::collections::{HashMap, HashSet};
 
 pub fn replace_variables(
     text: &str,

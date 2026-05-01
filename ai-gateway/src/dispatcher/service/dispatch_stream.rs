@@ -1,3 +1,7 @@
+use bytes::Bytes;
+use http::StatusCode;
+use reqwest::RequestBuilder;
+
 use super::{Dispatcher, retry::stream_response_headers};
 use crate::{
     discover::monitor::metrics::EndpointMetricsRegistry,
@@ -6,9 +10,6 @@ use crate::{
     error::{api::ApiError, internal::InternalError},
     types::body::{Body, BodyReader},
 };
-use bytes::Bytes;
-use http::StatusCode;
-use reqwest::RequestBuilder;
 
 impl Dispatcher {
     pub async fn dispatch_stream(

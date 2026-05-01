@@ -44,7 +44,8 @@ impl
             .map_model(&source_model, &InferenceProvider::OpenRouter)?;
         tracing::trace!(source_model = ?source_model, target_model = ?target_model, "mapped model");
 
-        // Convert via JSON to adapt from async_openai structure to openrouter-rs cleanly
+        // Convert via JSON to adapt from async_openai structure to
+        // openrouter-rs cleanly
         let mut value_json = serde_json::to_value(&value)
             .map_err(|e| MapperError::UnsupportedFormat(e.to_string()))?;
         if let Some(obj) = value_json.as_object_mut() {

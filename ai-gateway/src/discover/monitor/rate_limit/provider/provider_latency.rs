@@ -1,3 +1,11 @@
+use std::time::Duration;
+
+use futures::{StreamExt, stream::FuturesUnordered};
+use rustc_hash::FxHashSet as HashSet;
+use tokio::sync::mpsc::Receiver;
+use tower::discover::Change;
+use tracing::{debug, error, info, warn};
+
 use super::{
     DEFAULT_WAIT_SECONDS, ProviderMonitorInner, RATE_LIMIT_BUFFER_SECONDS,
 };
@@ -8,12 +16,6 @@ use crate::{
     error::runtime::RuntimeError,
     types::rate_limit::{ProviderRestore, RateLimitEvent},
 };
-use futures::{StreamExt, stream::FuturesUnordered};
-use rustc_hash::FxHashSet as HashSet;
-use std::time::Duration;
-use tokio::sync::mpsc::Receiver;
-use tower::discover::Change;
-use tracing::{debug, error, info, warn};
 
 impl ProviderMonitorInner<ProviderKey> {
     pub(crate) fn create_key_for_endpoint(

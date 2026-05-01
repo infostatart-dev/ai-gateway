@@ -1,8 +1,9 @@
-use crate::{app_state::AppState, error::runtime::RuntimeError};
 use futures::future::{self, BoxFuture};
 use meltdown::Token;
 use tokio::time;
 use tracing::{Instrument, debug, error};
+
+use crate::{app_state::AppState, error::runtime::RuntimeError};
 
 #[derive(Debug, Clone)]
 pub struct HealthMonitor {

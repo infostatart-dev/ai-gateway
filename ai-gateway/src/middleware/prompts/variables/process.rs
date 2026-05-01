@@ -1,9 +1,10 @@
+use std::collections::HashSet;
+
 use super::{
     get_variable_regex, message::process_message_variables,
     schema::process_prompt_schema,
 };
 use crate::{error::api::ApiError, types::extensions::PromptContext};
-use std::collections::HashSet;
 
 pub fn process_prompt_variables(
     mut body: serde_json::Value,

@@ -1,3 +1,11 @@
+use bytes::Bytes;
+use chrono::{DateTime, Utc};
+use http::HeaderMap;
+use opentelemetry::KeyValue;
+use tokio::{sync::oneshot, time::Instant};
+use tracing::Instrument;
+use uuid::Uuid;
+
 use super::Dispatcher;
 use crate::{
     logger::service::LoggerService,
@@ -8,13 +16,6 @@ use crate::{
         router::RouterId,
     },
 };
-use bytes::Bytes;
-use chrono::{DateTime, Utc};
-use http::HeaderMap;
-use opentelemetry::KeyValue;
-use tokio::{sync::oneshot, time::Instant};
-use tracing::Instrument;
-use uuid::Uuid;
 
 impl Dispatcher {
     #[allow(clippy::too_many_arguments)]

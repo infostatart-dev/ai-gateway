@@ -1,14 +1,16 @@
+use std::str::FromStr;
+
+use http::{HeaderName, HeaderValue};
+use http_body_util::BodyExt;
+use tracing::{Instrument, info_span};
+use uuid::Uuid;
+
 use super::{Dispatcher, retry::dispatch_stream_with_retry};
 use crate::{
     dispatcher::{client::ProviderClient, extensions::ExtensionsCopier},
     error::{api::ApiError, internal::InternalError},
     types::{body::Body, request::Request},
 };
-use http::{HeaderName, HeaderValue};
-use http_body_util::BodyExt;
-use std::str::FromStr;
-use tracing::{Instrument, info_span};
-use uuid::Uuid;
 
 impl Dispatcher {
     #[allow(clippy::too_many_lines)]

@@ -1,5 +1,9 @@
 #[cfg(all(test, feature = "testing"))]
 mod tests {
+    use std::{num::NonZeroU32, time::Duration};
+
+    use compact_str::CompactString;
+
     use super::super::{InnerLayer, Layer};
     use crate::{
         app_state::AppState,
@@ -13,8 +17,6 @@ mod tests {
         tests::TestDefault,
         types::router::RouterId,
     };
-    use compact_str::CompactString;
-    use std::{num::NonZeroU32, time::Duration};
 
     async fn create_test_app_state(rl_config: RateLimitConfig) -> AppState {
         let mut config = Config::test_default();

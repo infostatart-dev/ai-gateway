@@ -1,16 +1,18 @@
-use crate::{
-    app::{App, AppResponse, BoxedHyperServiceStack},
-    app_state::AppState,
-};
-use axum_core::body::Body;
-use futures::future::{BoxFuture, Ready, ready};
 use std::{
     convert::Infallible,
     net::SocketAddr,
     task::{Context, Poll},
 };
+
+use axum_core::body::Body;
+use futures::future::{BoxFuture, Ready, ready};
 use tower::{ServiceBuilder, util::BoxCloneService};
 use tower_http::add_extension::AddExtension;
+
+use crate::{
+    app::{App, AppResponse, BoxedHyperServiceStack},
+    app_state::AppState,
+};
 
 #[derive(Clone)]
 pub struct HyperApp {

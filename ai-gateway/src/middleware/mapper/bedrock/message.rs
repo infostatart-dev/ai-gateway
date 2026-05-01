@@ -1,7 +1,8 @@
+use async_openai::types::chat as openai;
+
 use crate::endpoints::bedrock::converse::{
     ContentBlock, ImageBlock, ImageSource, Message, SystemContentBlock,
 };
-use async_openai::types::chat as openai;
 
 pub fn map_messages(
     messages: Vec<openai::ChatCompletionRequestMessage>,
@@ -42,8 +43,9 @@ pub fn map_messages(
                 });
             }
             openai::ChatCompletionRequestMessage::Function(_msg) => {
-                // Function messages are handled differently or ignored in this mapping
-                // For now, matching original logic which was more complex and required tools access
+                // Function messages are handled differently or ignored in this
+                // mapping For now, matching original logic
+                // which was more complex and required tools access
             }
         }
     }

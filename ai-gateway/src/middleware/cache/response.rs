@@ -1,3 +1,10 @@
+use std::time::SystemTime;
+
+use http::{HeaderMap, HeaderValue, StatusCode};
+use http_body_util::BodyExt;
+use http_cache::CacheManager;
+use http_cache_semantics::{CachePolicy, ResponseLike};
+
 use super::{
     context::CacheContext,
     utils::{
@@ -11,11 +18,6 @@ use crate::{
     error::{api::ApiError, internal::InternalError},
     types::{request::Request, response::Response},
 };
-use http::{HeaderMap, HeaderValue, StatusCode};
-use http_body_util::BodyExt;
-use http_cache::CacheManager;
-use http_cache_semantics::{CachePolicy, ResponseLike};
-use std::time::SystemTime;
 
 pub async fn handle_response_for_cache_miss(
     cache: &CacheClient,

@@ -1,9 +1,10 @@
+use async_openai::types::chat as openai;
+use uuid::Uuid;
+
 use crate::{
     endpoints::bedrock::converse::BedrockConverseStreamOutput,
     error::mapper::MapperError, middleware::mapper::TryConvertStreamData,
 };
-use async_openai::types::chat as openai;
-use uuid::Uuid;
 
 impl
     TryConvertStreamData<

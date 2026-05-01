@@ -1,3 +1,7 @@
+use opentelemetry::KeyValue;
+use tower::discover::Change;
+use tracing::{error, trace};
+
 use super::inner::ProviderMonitorInner;
 use crate::{
     config::balance::BalanceConfigInner,
@@ -5,9 +9,6 @@ use crate::{
     dispatcher::Dispatcher,
     error::{internal::InternalError, runtime::RuntimeError},
 };
-use opentelemetry::KeyValue;
-use tower::discover::Change;
-use tracing::{error, trace};
 
 pub async fn check_provider_latency_monitor(
     inner: &mut ProviderMonitorInner<ProviderKey>,

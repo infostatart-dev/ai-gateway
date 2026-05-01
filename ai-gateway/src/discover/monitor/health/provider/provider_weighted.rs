@@ -1,3 +1,9 @@
+use opentelemetry::KeyValue;
+use rust_decimal::prelude::ToPrimitive;
+use tower::discover::Change;
+use tracing::{error, trace};
+use weighted_balance::weight::Weight;
+
 use super::inner::ProviderMonitorInner;
 use crate::{
     config::balance::BalanceConfigInner,
@@ -5,11 +11,6 @@ use crate::{
     dispatcher::Dispatcher,
     error::{init::InitError, internal::InternalError, runtime::RuntimeError},
 };
-use opentelemetry::KeyValue;
-use rust_decimal::prelude::ToPrimitive;
-use tower::discover::Change;
-use tracing::{error, trace};
-use weighted_balance::weight::Weight;
 
 pub async fn check_provider_weighted_monitor(
     inner: &mut ProviderMonitorInner<ProviderWeightedKey>,

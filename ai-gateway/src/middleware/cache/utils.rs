@@ -1,14 +1,15 @@
-use crate::{
-    app_state::AppState, error::internal::InternalError,
-    types::response::Response,
-};
+use std::{collections::HashMap, hash::Hash};
+
 use http::{HeaderMap, HeaderName, HeaderValue, StatusCode, request::Parts};
 use http_cache::HttpResponse;
 use opentelemetry::KeyValue;
 use rustc_hash::FxHasher;
-use std::collections::HashMap;
-use std::hash::Hash;
 use url::Url;
+
+use crate::{
+    app_state::AppState, error::internal::InternalError,
+    types::response::Response,
+};
 
 pub const CACHE_HIT_HEADER: HeaderName =
     HeaderName::from_static("helicone-cache");

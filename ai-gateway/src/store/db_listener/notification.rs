@@ -1,3 +1,8 @@
+use chrono::Utc;
+use tokio::sync::mpsc::Sender;
+use tower::discover::Change;
+use tracing::{debug, error, info};
+
 use super::{
     DatabaseListener,
     types::{ConnectedCloudGatewaysNotification, Op},
@@ -8,10 +13,6 @@ use crate::{
     router::service::Router,
     types::router::RouterId,
 };
-use chrono::Utc;
-use tokio::sync::mpsc::Sender;
-use tower::discover::Change;
-use tracing::{debug, error, info};
 
 impl DatabaseListener {
     #[allow(clippy::too_many_lines)]

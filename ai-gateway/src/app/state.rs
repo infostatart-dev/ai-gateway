@@ -1,3 +1,9 @@
+use std::sync::Arc;
+
+use opentelemetry::global;
+use rustc_hash::FxHashMap as HashMap;
+use tokio::sync::RwLock;
+
 use super::cache::setup_cache;
 use crate::{
     app_state::{AppState, InnerAppState},
@@ -13,10 +19,6 @@ use crate::{
     store::{connect, minio::BaseMinioClient, router::RouterStore},
     types::provider::ProviderKeys,
 };
-use opentelemetry::global;
-use rustc_hash::FxHashMap as HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
     let minio = BaseMinioClient::new(config.minio.clone())?;

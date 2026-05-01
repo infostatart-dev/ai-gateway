@@ -1,11 +1,12 @@
-use super::parsing::parse_model_and_version;
-use super::version::Version;
-use crate::error::mapper::MapperError;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     fmt::{self, Display},
     str::FromStr,
 };
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use super::{parsing::parse_model_and_version, version::Version};
+use crate::error::mapper::MapperError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ModelIdWithVersion {

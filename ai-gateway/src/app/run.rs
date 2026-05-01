@@ -1,12 +1,16 @@
-use crate::{
-    app::App, app::factory::AppFactory, cli, config::server::TlsConfig,
-    error::init::InitError, error::runtime::RuntimeError,
-};
+use std::net::SocketAddr;
+
 use axum_server::{accept::NoDelayAcceptor, tls_rustls::RustlsConfig};
 use futures::future::BoxFuture;
 use meltdown::Token;
-use std::net::SocketAddr;
 use tracing::info;
+
+use crate::{
+    app::{App, factory::AppFactory},
+    cli,
+    config::server::TlsConfig,
+    error::{init::InitError, runtime::RuntimeError},
+};
 
 impl meltdown::Service for App {
     type Future = BoxFuture<'static, Result<(), RuntimeError>>;

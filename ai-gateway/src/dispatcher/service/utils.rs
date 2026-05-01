@@ -1,3 +1,9 @@
+use std::sync::Arc;
+
+use chrono::{DateTime, Utc};
+use http::{HeaderMap, StatusCode};
+use tokio::time::Instant;
+
 use super::Dispatcher;
 use crate::{
     endpoints::ApiEndpoint,
@@ -13,10 +19,6 @@ use crate::{
         router::RouterId,
     },
 };
-use chrono::{DateTime, Utc};
-use http::{HeaderMap, StatusCode};
-use std::sync::Arc;
-use tokio::time::Instant;
 
 impl Dispatcher {
     #[allow(clippy::type_complexity)]

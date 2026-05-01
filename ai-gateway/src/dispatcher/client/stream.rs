@@ -1,3 +1,9 @@
+use bytes::Bytes;
+use futures::StreamExt;
+use http_body_util::BodyExt;
+use reqwest_eventsource::{Event, EventSource, RequestBuilderExt};
+use tracing::{Instrument, info_span};
+
 use super::metrics::record_stream_err_metrics;
 use crate::{
     discover::monitor::metrics::EndpointMetricsRegistry,
@@ -5,11 +11,6 @@ use crate::{
     endpoints::ApiEndpoint,
     error::{api::ApiError, internal::InternalError, stream::StreamError},
 };
-use bytes::Bytes;
-use futures::StreamExt;
-use http_body_util::BodyExt;
-use reqwest_eventsource::{Event, EventSource, RequestBuilderExt};
-use tracing::{Instrument, info_span};
 
 impl super::Client {
     pub async fn sse_stream<B>(

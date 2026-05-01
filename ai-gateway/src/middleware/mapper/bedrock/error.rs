@@ -1,8 +1,9 @@
+use http::response::Parts;
+
 use crate::{
     endpoints::bedrock::converse::ConverseError, error::mapper::MapperError,
     middleware::mapper::TryConvertError,
 };
-use http::response::Parts;
 
 impl TryConvertError<ConverseError, async_openai::error::WrappedError>
     for super::BedrockConverter

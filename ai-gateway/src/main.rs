@@ -102,7 +102,8 @@ fn init_telemetry(
 
     if config.has_autodefault_router() {
         tracing::info!(
-            "Router 'autodefault' is configured, will be available at /router/autodefault"
+            "Router 'autodefault' is configured, will be available at \
+             /router/autodefault"
         );
     }
 

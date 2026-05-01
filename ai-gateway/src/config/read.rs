@@ -1,6 +1,9 @@
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
+
 use json_patch::merge;
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 use url::Url;
 
 use crate::{

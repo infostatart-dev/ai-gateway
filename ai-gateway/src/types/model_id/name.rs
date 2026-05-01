@@ -1,7 +1,9 @@
-use super::ModelId;
+use std::borrow::Cow;
+
 use derive_more::AsRef;
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
+
+use super::ModelId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, AsRef, Serialize, Deserialize)]
 pub struct ModelName<'a>(pub(crate) Cow<'a, str>);

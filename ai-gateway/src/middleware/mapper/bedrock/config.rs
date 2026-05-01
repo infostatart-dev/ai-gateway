@@ -1,6 +1,9 @@
-use crate::endpoints::bedrock::converse::InferenceConfig;
-use crate::middleware::mapper::DEFAULT_MAX_TOKENS;
 use async_openai::types::chat as openai;
+
+use crate::{
+    endpoints::bedrock::converse::InferenceConfig,
+    middleware::mapper::DEFAULT_MAX_TOKENS,
+};
 
 pub fn map_inference_config(
     max_completion_tokens: Option<u32>,

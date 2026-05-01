@@ -1,3 +1,5 @@
+use http_body_util::BodyExt;
+
 use super::{
     merge::merge_prompt_with_request, variables::process_prompt_variables,
     version::get_prompt_version,
@@ -14,7 +16,6 @@ use crate::{
         request::Request,
     },
 };
-use http_body_util::BodyExt;
 
 pub async fn build_prompt_request(
     app_state: AppState,

@@ -1,24 +1,25 @@
+use std::str::FromStr;
+
+use chrono::{DateTime, Utc};
+use http::request::Parts;
+use http_body_util::BodyExt;
+use opentelemetry::KeyValue;
+use tokio::{sync::oneshot, time::Instant};
+use tracing::Instrument;
+use uuid::Uuid;
+
 use super::context::CacheContext;
 use crate::{
     app_state::AppState,
     logger::service::LoggerService,
     metrics::tfft::TFFTFuture,
-    types::body::Body,
     types::{
-        body::BodyReader,
+        body::{Body, BodyReader},
         extensions::{AuthContext, MapperContext},
         model_id::ModelId,
         provider::InferenceProvider,
     },
 };
-use chrono::{DateTime, Utc};
-use http::request::Parts;
-use http_body_util::BodyExt;
-use opentelemetry::KeyValue;
-use std::str::FromStr;
-use tokio::{sync::oneshot, time::Instant};
-use tracing::Instrument;
-use uuid::Uuid;
 
 pub const DEFAULT_UUID: Uuid = Uuid::from_u128(0);
 

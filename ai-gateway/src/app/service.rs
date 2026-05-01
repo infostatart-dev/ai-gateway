@@ -1,9 +1,11 @@
-use crate::app::App;
-use futures::future::BoxFuture;
 use std::{
     convert::Infallible,
     task::{Context, Poll},
 };
+
+use futures::future::BoxFuture;
+
+use crate::app::App;
 
 impl tower::Service<crate::types::request::Request> for App {
     type Response = super::AppResponse;

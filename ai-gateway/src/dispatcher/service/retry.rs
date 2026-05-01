@@ -1,3 +1,11 @@
+use std::time::Duration;
+
+use backon::{BackoffBuilder, ConstantBuilder, ExponentialBuilder, Retryable};
+use bytes::Bytes;
+use http::{HeaderMap, HeaderValue};
+use reqwest::RequestBuilder;
+use rust_decimal::prelude::ToPrimitive;
+
 use super::Dispatcher;
 use crate::{
     app_state::AppState,
@@ -10,12 +18,6 @@ use crate::{
         extensions::{RequestContext, RequestKind},
     },
 };
-use backon::{BackoffBuilder, ConstantBuilder, ExponentialBuilder, Retryable};
-use bytes::Bytes;
-use http::{HeaderMap, HeaderValue};
-use reqwest::RequestBuilder;
-use rust_decimal::prelude::ToPrimitive;
-use std::time::Duration;
 
 impl Dispatcher {
     pub async fn dispatch_sync_with_retry(

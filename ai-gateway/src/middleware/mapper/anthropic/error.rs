@@ -1,8 +1,9 @@
+use http::response::Parts;
+
 use crate::{
     endpoints::anthropic::messages::AnthropicApiError,
     error::mapper::MapperError, middleware::mapper::TryConvertError,
 };
-use http::response::Parts;
 
 impl TryConvertError<AnthropicApiError, async_openai::error::WrappedError>
     for super::AnthropicConverter

@@ -1,3 +1,11 @@
+use std::{
+    convert::Infallible,
+    sync::Arc,
+    task::{Context, Poll},
+};
+
+use futures::future::BoxFuture;
+
 use super::{
     context::{CacheContext, get_cache_ctx},
     request::make_request,
@@ -8,12 +16,6 @@ use crate::{
     config::{cache::CacheConfig, router::RouterConfig},
     error::{api::ApiError, init::InitError, internal::InternalError},
     types::{request::Request, response::Response},
-};
-use futures::future::BoxFuture;
-use std::{
-    convert::Infallible,
-    sync::Arc,
-    task::{Context, Poll},
 };
 
 #[derive(Debug, Clone)]

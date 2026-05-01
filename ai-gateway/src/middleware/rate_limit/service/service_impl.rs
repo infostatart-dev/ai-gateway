@@ -1,8 +1,10 @@
+use std::task::{Context, Poll};
+
+use http::Response;
+
 use crate::middleware::rate_limit::service::{
     GovernorService, RedisRateLimitService, Service, future::ResponseFuture,
 };
-use http::Response;
-use std::task::{Context, Poll};
 
 impl<S, Request, ResponseBody> tower::Service<Request> for Service<S>
 where

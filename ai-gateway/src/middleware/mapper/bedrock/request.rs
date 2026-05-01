@@ -1,3 +1,7 @@
+use std::str::FromStr;
+
+use async_openai::types::chat as openai;
+
 use super::{config, message, tool};
 use crate::{
     endpoints::bedrock::converse::{BedrockConverseRequest, ToolConfig},
@@ -5,8 +9,6 @@ use crate::{
     middleware::mapper::{TryConvert, model::ModelMapper},
     types::{model_id::ModelId, provider::InferenceProvider},
 };
-use async_openai::types::chat as openai;
-use std::str::FromStr;
 
 pub struct BedrockConverter {
     model_mapper: ModelMapper,

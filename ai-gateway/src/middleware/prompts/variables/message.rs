@@ -1,7 +1,9 @@
+use std::collections::{HashMap, HashSet};
+
+use regex::Regex;
+
 use super::replace::replace_variables;
 use crate::error::api::ApiError;
-use regex::Regex;
-use std::collections::{HashMap, HashSet};
 
 pub fn process_message_variables(
     msg: &mut serde_json::Value,

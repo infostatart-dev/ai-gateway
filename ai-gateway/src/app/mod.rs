@@ -1,6 +1,8 @@
-use crate::{app_state::AppState, config::Config, error::init::InitError};
 use std::convert::Infallible;
+
 use tower::util::BoxCloneService;
+
+use crate::{app_state::AppState, config::Config, error::init::InitError};
 
 pub mod cache;
 pub mod factory;

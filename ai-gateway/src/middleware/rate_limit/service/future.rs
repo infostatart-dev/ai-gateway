@@ -1,10 +1,12 @@
-use super::utils::increment_retry_after_header;
-use http::Response;
 use std::{
     future::Future,
     pin::Pin,
     task::{Context, Poll},
 };
+
+use http::Response;
+
+use super::utils::increment_retry_after_header;
 
 pin_project_lite::pin_project! {
     #[derive(Debug)]

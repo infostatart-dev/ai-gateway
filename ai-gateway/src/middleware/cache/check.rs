@@ -1,3 +1,9 @@
+use std::time::SystemTime;
+
+use chrono::{DateTime, Utc};
+use http_cache::CacheManager;
+use http_cache_semantics::BeforeRequest;
+
 use super::{
     context::CacheContext,
     logging::spawn_cache_logging,
@@ -6,14 +12,9 @@ use super::{
 use crate::{
     app_state::AppState,
     cache::CacheClient,
-    error::api::ApiError,
-    error::internal::InternalError,
+    error::{api::ApiError, internal::InternalError},
     types::{body::BodyReader, request::Request, response::Response},
 };
-use chrono::{DateTime, Utc};
-use http_cache::CacheManager;
-use http_cache_semantics::BeforeRequest;
-use std::time::SystemTime;
 
 pub enum CacheCheckResult {
     Fresh(Response),

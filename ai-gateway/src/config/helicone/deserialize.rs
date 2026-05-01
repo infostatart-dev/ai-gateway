@@ -1,12 +1,14 @@
-use super::{
-    HeliconeConfig, HeliconeFeatures, default_api_key, default_base_url,
-    default_websocket_url,
-};
+use std::fmt;
+
 use serde::{
     Deserialize,
     de::{self, MapAccess, Visitor},
 };
-use std::fmt;
+
+use super::{
+    HeliconeConfig, HeliconeFeatures, default_api_key, default_base_url,
+    default_websocket_url,
+};
 
 #[derive(Deserialize)]
 #[serde(field_identifier, rename_all = "kebab-case")]

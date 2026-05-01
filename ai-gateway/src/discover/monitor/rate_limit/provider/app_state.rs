@@ -1,21 +1,26 @@
+use std::sync::Arc;
+
+use tokio::sync::mpsc::{Receiver, Sender};
+use tower::discover::Change;
+use tracing::warn;
+
 use super::ProviderRateLimitMonitor;
 use crate::{
     app_state::AppState,
     config::router::RouterConfig,
     discover::{
-        model::key::Key as ModelKey,
-        model::weighted_key::WeightedKey as ModelWeightedKey,
-        provider::key::Key as ProviderKey,
-        provider::weighted_key::WeightedKey as ProviderWeightedKey,
+        model::{
+            key::Key as ModelKey, weighted_key::WeightedKey as ModelWeightedKey,
+        },
+        provider::{
+            key::Key as ProviderKey,
+            weighted_key::WeightedKey as ProviderWeightedKey,
+        },
     },
     dispatcher::DispatcherService,
     error::init::InitError,
     types::{rate_limit::RateLimitEvent, router::RouterId},
 };
-use std::sync::Arc;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tower::discover::Change;
-use tracing::warn;
 
 impl AppState {
     pub async fn add_provider_weighted_router_rate_limit_monitor(

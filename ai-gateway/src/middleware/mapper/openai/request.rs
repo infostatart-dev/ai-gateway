@@ -1,11 +1,13 @@
+use std::str::FromStr;
+
+use anthropic_ai_sdk::types::message as anthropic;
+use async_openai::types::chat as openai;
+
 use crate::{
     error::mapper::MapperError,
     middleware::mapper::{TryConvert, model::ModelMapper},
     types::{model_id::ModelId, provider::InferenceProvider},
 };
-use anthropic_ai_sdk::types::message as anthropic;
-use async_openai::types::chat as openai;
-use std::str::FromStr;
 
 pub struct OpenAIConverter {
     pub(crate) model_mapper: ModelMapper,

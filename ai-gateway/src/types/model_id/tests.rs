@@ -1,12 +1,12 @@
-use super::base::ModelIdWithVersion;
-use crate::error::mapper::MapperError;
-
-use super::id::ModelId;
-use super::version::Version;
-use crate::types::model_id::parsing::parse_date;
-use crate::types::provider::InferenceProvider;
-use chrono::{DateTime, Datelike, Utc};
 use std::str::FromStr;
+
+use chrono::{DateTime, Datelike, Utc};
+
+use super::{base::ModelIdWithVersion, id::ModelId, version::Version};
+use crate::{
+    error::mapper::MapperError,
+    types::{model_id::parsing::parse_date, provider::InferenceProvider},
+};
 
 #[test]
 fn groq_model_id_format_with_slash() {
@@ -477,8 +477,8 @@ fn test_bedrock_openai_invalid_format() {
         assert_eq!(model_name, "openai.gpt-4:1");
     } else {
         panic!(
-            "Expected InvalidModelName error for OpenAI format on \
-             Bedrock, got: {result:?}"
+            "Expected InvalidModelName error for OpenAI format on Bedrock, \
+             got: {result:?}"
         );
     }
 }
@@ -887,8 +887,7 @@ fn test_invalid_bedrock_no_dot_separator() {
         assert_eq!(model_name, "custom-local-model");
     } else {
         panic!(
-            "Expected InvalidModelName error for model without dot \
-             separator"
+            "Expected InvalidModelName error for model without dot separator"
         );
     }
 }

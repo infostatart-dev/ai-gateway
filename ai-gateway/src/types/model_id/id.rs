@@ -1,15 +1,15 @@
-use super::base::ModelIdWithVersion;
-use super::bedrock::BedrockModelId;
-use super::name::ModelName;
-use super::ollama::OllamaModelId;
-use super::version::Version;
-use crate::error::mapper::MapperError;
-use crate::types::provider::InferenceProvider;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     fmt::{self, Display},
     str::FromStr,
 };
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use super::{
+    base::ModelIdWithVersion, bedrock::BedrockModelId, name::ModelName,
+    ollama::OllamaModelId, version::Version,
+};
+use crate::{error::mapper::MapperError, types::provider::InferenceProvider};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ModelId {

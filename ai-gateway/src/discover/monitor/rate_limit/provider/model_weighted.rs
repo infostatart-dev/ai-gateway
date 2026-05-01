@@ -1,3 +1,13 @@
+use std::time::{Duration, Instant};
+
+use futures::{StreamExt, stream::FuturesUnordered};
+use rust_decimal::prelude::ToPrimitive;
+use rustc_hash::FxHashMap as HashMap;
+use tokio::sync::mpsc::Receiver;
+use tower::discover::Change;
+use tracing::{debug, error, info};
+use weighted_balance::weight::Weight;
+
 use super::{
     DEFAULT_WAIT_SECONDS, ProviderMonitorInner, RATE_LIMIT_BUFFER_SECONDS,
 };
@@ -8,14 +18,6 @@ use crate::{
     error::{internal::InternalError, runtime::RuntimeError},
     types::rate_limit::{ProviderRestore, RateLimitEvent},
 };
-use futures::{StreamExt, stream::FuturesUnordered};
-use rust_decimal::prelude::ToPrimitive;
-use rustc_hash::FxHashMap as HashMap;
-use std::time::{Duration, Instant};
-use tokio::sync::mpsc::Receiver;
-use tower::discover::Change;
-use tracing::{debug, error, info};
-use weighted_balance::weight::Weight;
 
 impl ProviderMonitorInner<ModelWeightedKey> {
     fn create_model_weighted_key(

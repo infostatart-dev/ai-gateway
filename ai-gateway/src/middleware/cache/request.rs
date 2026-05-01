@@ -1,3 +1,9 @@
+use std::{convert::Infallible, hash::Hash};
+
+use futures::{StreamExt, stream::FuturesUnordered};
+use http::HeaderValue;
+use http_body_util::BodyExt;
+
 use super::{
     check::{CacheCheckResult, check_cache},
     context::CacheContext,
@@ -11,11 +17,6 @@ use crate::{
     error::{api::ApiError, internal::InternalError},
     types::{request::Request, response::Response},
 };
-use futures::{StreamExt, stream::FuturesUnordered};
-use http::HeaderValue;
-use http_body_util::BodyExt;
-use std::convert::Infallible;
-use std::hash::Hash;
 
 pub async fn make_request<S>(
     inner: &mut S,

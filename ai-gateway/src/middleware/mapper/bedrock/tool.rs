@@ -1,7 +1,8 @@
+use async_openai::types::chat as openai;
+
 use crate::endpoints::bedrock::converse::{
     SpecificToolChoice, Tool, ToolChoice, ToolInputSchema, ToolSpecification,
 };
-use async_openai::types::chat as openai;
 
 pub fn map_tools(
     tools: Option<Vec<openai::ChatCompletionTools>>,

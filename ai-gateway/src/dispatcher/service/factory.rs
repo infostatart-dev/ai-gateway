@@ -1,3 +1,8 @@
+use std::sync::Arc;
+
+use tokio::sync::mpsc::Sender;
+use tower::ServiceBuilder;
+
 use super::{Dispatcher, DispatcherService, DispatcherServiceWithoutMapper};
 use crate::{
     app_state::AppState,
@@ -14,9 +19,6 @@ use crate::{
     },
     utils::handle_error::ErrorHandlerLayer,
 };
-use std::sync::Arc;
-use tokio::sync::mpsc::Sender;
-use tower::ServiceBuilder;
 
 impl Dispatcher {
     async fn new_inner(

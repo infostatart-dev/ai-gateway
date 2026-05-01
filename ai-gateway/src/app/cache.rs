@@ -1,11 +1,12 @@
+use http_cache::MokaManager;
+use moka::future::Cache;
+
 use crate::{
     cache::{CacheClient, RedisCacheManager},
     config::{Config, cache::CacheStore},
     error::init::InitError,
     metrics::Metrics,
 };
-use http_cache::MokaManager;
-use moka::future::Cache;
 
 pub fn setup_cache(config: &Config, metrics: Metrics) -> Option<CacheClient> {
     match &config.cache_store {

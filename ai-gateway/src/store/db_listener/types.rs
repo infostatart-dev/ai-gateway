@@ -1,8 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
     config::router::RouterConfig,
     types::{org::OrgId, router::RouterId, user::UserId},
 };
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub enum Op {

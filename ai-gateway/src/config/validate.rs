@@ -1,8 +1,9 @@
+use regex::Regex;
+
 use crate::{
     config::{Config, ROUTER_ID_REGEX},
     error::init::InitError,
 };
-use regex::Regex;
 
 impl Config {
     pub fn validate(&self) -> Result<(), InitError> {

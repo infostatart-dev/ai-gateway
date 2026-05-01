@@ -4,16 +4,17 @@ mod types;
 pub mod variables;
 mod version;
 
-pub use request::build_prompt_request;
-
-use crate::app_state::AppState;
-use crate::error::api::ApiError;
-use crate::error::init::InitError;
-use crate::types::request::Request;
-use crate::types::response::Response;
-use futures::future::BoxFuture;
 use std::task::{Context, Poll};
+
+use futures::future::BoxFuture;
+pub use request::build_prompt_request;
 use tower::{Layer, Service};
+
+use crate::{
+    app_state::AppState,
+    error::{api::ApiError, init::InitError},
+    types::{request::Request, response::Response},
+};
 
 #[derive(Clone)]
 pub struct PromptLayer {

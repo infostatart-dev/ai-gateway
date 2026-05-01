@@ -1,6 +1,7 @@
-use crate::types::secret::Secret;
 use serde::{Deserialize, Serialize};
 use url::Url;
+
+use crate::types::secret::Secret;
 
 mod deserialize;
 #[cfg(test)]

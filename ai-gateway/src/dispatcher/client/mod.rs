@@ -1,12 +1,14 @@
-use crate::app_state::AppState;
-use crate::dispatcher::{
-    anthropic_client::Client as AnthropicClient,
-    bedrock_client::Client as BedrockClient,
-    ollama_client::Client as OllamaClient,
-    openai_compatible_client::Client as OpenAICompatibleClient,
+use crate::{
+    app_state::AppState,
+    dispatcher::{
+        anthropic_client::Client as AnthropicClient,
+        bedrock_client::Client as BedrockClient,
+        ollama_client::Client as OllamaClient,
+        openai_compatible_client::Client as OpenAICompatibleClient,
+    },
+    error::api::ApiError,
+    types::{extensions::AuthContext, provider::InferenceProvider},
 };
-use crate::error::api::ApiError;
-use crate::types::{extensions::AuthContext, provider::InferenceProvider};
 
 pub mod auth;
 pub mod factory;
