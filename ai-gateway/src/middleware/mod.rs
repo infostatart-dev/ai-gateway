@@ -1,6 +1,7 @@
 pub mod add_extension;
 pub mod auth;
 pub mod cache;
+pub mod decision;
 pub mod mapper;
 pub mod prompts;
 pub mod rate_limit;

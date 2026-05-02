@@ -73,12 +73,18 @@ impl Router {
                 balance_config,
             )
             .await?;
+            let decision_engine_layer = crate::middleware::decision::service::DecisionEngineLayer::new(
+                app_state.clone(),
+                id.clone(),
+                router_config.clone(),
+            );
             let service_stack = ServiceBuilder::new()
                 .layer(ErrorHandlerLayer::new(app_state.clone()))
                 .layer(prompt_layer.clone())
                 .layer(cache_layer.clone())
                 .layer(ErrorHandlerLayer::new(app_state.clone()))
                 .layer(rl_layer.clone())
+                .layer(decision_engine_layer)
                 .map_err(|e| ApiError::from(InternalError::BufferError(e)))
                 .layer(buffer::BufferLayer::new(MIDDLEWARE_BUFFER_SIZE))
                 .layer(request_context_layer.clone())
