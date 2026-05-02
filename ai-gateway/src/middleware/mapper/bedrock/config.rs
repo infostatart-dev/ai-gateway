@@ -23,7 +23,7 @@ pub fn map_inference_config(
         temperature,
         max_tokens: Some(
             i32::try_from(max_completion_tokens.unwrap_or(DEFAULT_MAX_TOKENS))
-                .unwrap_or(DEFAULT_MAX_TOKENS as i32),
+                .unwrap_or(i32::MAX),
         ),
         stop_sequences,
     })

@@ -19,20 +19,20 @@ use uuid::Uuid;
 #[tokio::test]
 #[serial_test::serial]
 async fn rate_limit_capacity_enforced_in_memory() {
-    rate_limit_capacity_enforced_impl(
+    Box::pin(rate_limit_capacity_enforced_impl(
         ai_gateway::config::rate_limit::store_enabled_for_test_in_memory(),
         ai_gateway::config::rate_limit::config_enabled_for_test(),
-    )
+    ))
     .await;
 }
 
 #[tokio::test]
 #[serial_test::serial]
 async fn rate_limit_per_user_isolation_in_memory() {
-    rate_limit_per_user_isolation_impl(
+    Box::pin(rate_limit_per_user_isolation_impl(
         ai_gateway::config::rate_limit::store_enabled_for_test_in_memory(),
         ai_gateway::config::rate_limit::config_enabled_for_test(),
-    )
+    ))
     .await;
 }
 
@@ -40,10 +40,10 @@ async fn rate_limit_per_user_isolation_in_memory() {
 #[tokio::test]
 #[serial_test::serial]
 async fn rate_limit_capacity_enforced_redis() {
-    rate_limit_capacity_enforced_impl(
+    Box::pin(rate_limit_capacity_enforced_impl(
         ai_gateway::config::rate_limit::store_enabled_for_test_redis(),
         ai_gateway::config::rate_limit::config_enabled_for_test(),
-    )
+    ))
     .await;
 }
 
@@ -51,10 +51,10 @@ async fn rate_limit_capacity_enforced_redis() {
 #[tokio::test]
 #[serial_test::serial]
 async fn rate_limit_per_user_isolation_redis() {
-    rate_limit_per_user_isolation_impl(
+    Box::pin(rate_limit_per_user_isolation_impl(
         ai_gateway::config::rate_limit::store_enabled_for_test_redis(),
         ai_gateway::config::rate_limit::config_enabled_for_test(),
-    )
+    ))
     .await;
 }
 

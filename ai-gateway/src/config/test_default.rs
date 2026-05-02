@@ -26,6 +26,8 @@ impl TestDefault for Config {
             global: MiddlewareConfig::default(),
             unified_api: MiddlewareConfig::default(),
             providers: crate::config::providers::ProvidersConfig::default(),
+            provider_limits:
+                crate::config::provider_limits::ProviderLimitCatalog::default(),
             helicone: crate::config::helicone::HeliconeConfig::test_default(),
             deployment_target:
                 crate::config::deployment_target::DeploymentTarget::Sidecar,

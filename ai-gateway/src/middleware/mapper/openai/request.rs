@@ -175,7 +175,7 @@ impl
         }
 
         let mut metadata = value.metadata;
-        let _user = metadata.as_mut().and_then(|m| m.fields.remove("user_id"));
+        let user = metadata.as_mut().and_then(|m| m.fields.remove("user_id"));
 
         let mut builder = openai::CreateChatCompletionRequestArgs::default();
         builder
@@ -207,7 +207,7 @@ impl
         if let Some(tc) = tool_choice {
             builder.tool_choice(tc);
         }
-        if let Some(u) = _user {
+        if let Some(u) = user {
             builder.prompt_cache_key(u);
         }
 

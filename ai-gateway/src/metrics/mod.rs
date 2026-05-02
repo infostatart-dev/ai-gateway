@@ -1,4 +1,5 @@
 pub mod attribute_extractor;
+pub mod llm;
 pub mod request_count;
 pub mod rolling_counter;
 pub mod system;
@@ -19,6 +20,7 @@ pub struct Metrics {
     pub request_count: Counter<u64>,
     pub response_count: Counter<u64>,
     pub tfft_duration: Histogram<f64>,
+    pub llm: llm::LlmMetrics,
     pub cache: CacheMetrics,
     pub routers: RouterMetrics,
 }
@@ -55,6 +57,7 @@ impl Metrics {
             .with_unit("ms")
             .with_description("Time to first token duration")
             .build();
+        let llm = llm::LlmMetrics::new(meter);
         let cache = CacheMetrics::new(meter);
         let routers = RouterMetrics::new(meter);
         Self {
@@ -65,6 +68,7 @@ impl Metrics {
             request_count,
             response_count,
             tfft_duration,
+            llm,
             cache,
             routers,
         }

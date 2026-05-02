@@ -90,6 +90,6 @@ impl TryConvertError<serde_json::Value, async_openai::error::WrappedError>
         resp_parts: &Parts,
         value: serde_json::Value,
     ) -> Result<async_openai::error::WrappedError, Self::Error> {
-        Ok(openai_error_from_value(resp_parts.status, value))
+        Ok(openai_error_from_value(resp_parts.status, &value))
     }
 }

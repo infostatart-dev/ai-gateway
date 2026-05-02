@@ -24,6 +24,7 @@ enum Field {
 }
 
 impl<'de> Deserialize<'de> for HeliconeConfig {
+    #[allow(clippy::too_many_lines)]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

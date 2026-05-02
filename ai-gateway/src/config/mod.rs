@@ -9,6 +9,7 @@ pub mod helicone;
 pub mod minio;
 pub mod model_mapping;
 pub mod monitor;
+pub mod provider_limits;
 pub mod providers;
 pub mod rate_limit;
 pub mod redis;

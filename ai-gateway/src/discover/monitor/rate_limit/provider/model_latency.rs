@@ -38,7 +38,9 @@ impl ProviderMonitorInner<ModelKey> {
         loop {
             tokio::select! {
                 Some(event) = rx.recv() => {
-                    let key = match self.create_model_latency_key(&event) { Ok(k) => k, Err(_) => continue };
+                    let Ok(key) = self.create_model_latency_key(&event) else {
+                        continue;
+                    };
                     if let std::collections::hash_map::Entry::Vacant(e) = rate_limited_providers.entry(key.clone()) {
                         debug!(provider = ?event.api_endpoint.provider(), api_endpoint = ?event.api_endpoint, router_id = ?self.router_id, "Removing rate-limited provider from Weighted balancer");
                         if let Err(e) = self.tx.send(Change::Remove(key.clone())).await { error!(error = ?e, "Failed to send remove event for rate-limited provider"); }

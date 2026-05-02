@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{fmt::Write as _, net::SocketAddr};
 
 pub fn show_welcome_banner(addr: &SocketAddr, has_autodefault: bool) {
     let banner = format!(
@@ -49,7 +49,8 @@ pub fn show_welcome_banner(addr: &SocketAddr, has_autodefault: bool) {
             "\n\n\x1b[1mOr use your auto-configured 'autodefault' \
              router:\x1b[0m\n\n",
         );
-        curl_example.push_str(&format!(
+        write!(
+            curl_example,
             "\x1b[0mcurl --request POST \\
   --url http://{addr:?}/router/autodefault/chat/completions \
              \\
@@ -63,7 +64,8 @@ pub fn show_welcome_banner(addr: &SocketAddr, has_autodefault: bool) {
       }}
     ]
   }}'\x1b[0m"
-        ));
+        )
+        .expect("writing to a String cannot fail");
     }
 
     println!("{banner}\n\n{welcome_message}\n\n{curl_example}\n");

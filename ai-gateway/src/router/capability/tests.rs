@@ -82,7 +82,7 @@ fn test_supports_logic() {
     let model = ModelCapability {
         provider: InferenceProvider::OpenAI,
         model: test_model(InferenceProvider::OpenAI, "gpt-4"),
-        context_window: Some(128000),
+        context_window: Some(128_000),
         supports_tools: true,
         supports_json_schema: true,
         supports_vision: true,
@@ -102,10 +102,11 @@ fn test_supports_logic() {
     assert!(!supports(&reqs, &model_no_tools));
 
     reqs.tools_required = false;
-    reqs.min_context_tokens = Some(200000);
+    reqs.min_context_tokens = Some(200_000);
     assert!(!supports(&reqs, &model));
 
-    // Strict context check: None context should NOT pass if min_context is specified
+    // Strict context check: None context should NOT pass if min_context is
+    // specified
     let model_unknown_context = ModelCapability {
         context_window: None,
         ..model.clone()
@@ -115,10 +116,10 @@ fn test_supports_logic() {
 
 #[cfg(feature = "testing")]
 mod async_tests {
-    use super::*;
-    use crate::config::router::RouterConfig;
-    use crate::types::router::RouterId;
     use std::sync::Arc;
+
+    use super::*;
+    use crate::{config::router::RouterConfig, types::router::RouterId};
 
     #[tokio::test]
     async fn test_ordered_candidates_hard_requirements() {
@@ -136,18 +137,21 @@ mod async_tests {
         .await
         .unwrap();
 
-        let mut reqs = RequestRequirements::default();
-        reqs.vision_required = true;
+        let mut reqs = RequestRequirements {
+            vision_required: true,
+            ..RequestRequirements::default()
+        };
 
-        // В нашем каталоге OpenAI gpt-4 поддерживает vision, так что кандидаты должны быть
+        // В нашем каталоге OpenAI gpt-4 поддерживает vision, так что кандидаты
+        // должны быть
         let candidates = router.ordered_candidates(&reqs, None).unwrap();
         assert!(!candidates.is_empty());
         assert!(candidates.iter().all(|c| c.capability.supports_vision));
 
         // Теперь требуем что-то невозможное (огромный контекст)
         reqs.min_context_tokens = Some(10_000_000);
-        let res = router.ordered_candidates(&reqs, None);
-        assert!(res.is_err());
+        let result = router.ordered_candidates(&reqs, None);
+        assert!(result.is_err());
     }
 
     #[tokio::test]

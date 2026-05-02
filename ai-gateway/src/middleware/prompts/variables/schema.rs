@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::BuildHasher,
+};
 
 use regex::Regex;
 
@@ -8,11 +11,14 @@ use super::{
 };
 use crate::error::{api::ApiError, invalid_req::InvalidRequestError};
 
-pub fn process_prompt_schema(
+pub fn process_prompt_schema<I>(
     value: serde_json::Value,
-    inputs: &HashMap<String, serde_json::Value>,
+    inputs: &HashMap<String, serde_json::Value, I>,
     regex: &Regex,
-) -> Result<serde_json::Value, ApiError> {
+) -> Result<serde_json::Value, ApiError>
+where
+    I: BuildHasher,
+{
     match value {
         serde_json::Value::String(s) => {
             if is_whole_variable_match(&s, regex) {

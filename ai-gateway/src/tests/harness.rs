@@ -92,8 +92,7 @@ impl Harness {
             app_factory.state.0.control_plane_state.write().await.state =
                 Some(control_plane_state);
         }
-        let socket_addr =
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0);
+        let socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
         Self {
             app_factory,
             mock,

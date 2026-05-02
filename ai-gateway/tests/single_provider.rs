@@ -15,8 +15,8 @@ use http::{Method, Request, StatusCode};
 use serde_json::json;
 use tower::Service;
 
-/// Sending a request to https://localhost/router should
-/// result in the proxied request targeting https://api.openai.com/v1/chat/completions
+/// Sending a request to <https://localhost/router> should result in the proxied
+/// request targeting <https://api.openai.com/v1/chat/completions>.
 #[tokio::test]
 #[serial_test::serial(default_mock)]
 async fn openai() {
@@ -58,8 +58,9 @@ async fn openai() {
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-/// Sending a request to https://localhost/router should
-// result in the proxied request targeting https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+/// Sending a request to <https://localhost/router> should result in the proxied
+/// request targeting
+/// <https://generativelanguage.googleapis.com/v1beta/openai/chat/completions>.
 #[tokio::test]
 #[serial_test::serial(default_mock)]
 async fn google_with_openai_request_style() {
@@ -124,8 +125,8 @@ async fn google_with_openai_request_style() {
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-/// Sending a request to https://localhost/router should
-/// result in the proxied request targeting https://api.openai.com/v1/chat/completions
+/// Sending a request to <https://localhost/router> should result in the proxied
+/// request targeting <https://api.openai.com/v1/chat/completions>.
 #[tokio::test]
 #[serial_test::serial(default_mock)]
 async fn anthropic_with_openai_request_style() {
@@ -198,7 +199,7 @@ async fn anthropic_with_openai_request_style() {
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-/// Sending a request to https://localhost/router should
+/// Sending a request to <https://localhost/router> should
 /// result in the proxied request targeting Ollama chat completions endpoint
 #[tokio::test]
 #[serial_test::serial(default_mock)]
@@ -250,7 +251,7 @@ async fn ollama() {
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-/// Sending a request to https://localhost/router should
+/// Sending a request to <https://localhost/router> should
 /// result in the proxied request targeting Bedrock converse endpoint
 #[tokio::test]
 #[serial_test::serial(default_mock)]

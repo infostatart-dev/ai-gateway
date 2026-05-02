@@ -13,7 +13,7 @@ impl
 {
     type Error = MapperError;
 
-    #[allow(deprecated)]
+    #[allow(deprecated, clippy::too_many_lines)]
     fn try_convert_chunk(
         &self,
         value: anthropic::StreamEvent,
@@ -40,7 +40,7 @@ impl
                         } => {
                             tool_calls.push(
                                 openai::ChatCompletionMessageToolCallChunk {
-                                    index: idx as u32,
+                                    index: stream_index(idx),
                                     id: Some(id.clone()),
                                     r#type: Some(
                                         openai::FunctionType::Function,
@@ -138,7 +138,7 @@ impl
                 {
                     let tool_call_chunk =
                         openai::ChatCompletionMessageToolCallChunk {
-                            index: index as u32,
+                            index: stream_index(index),
                             id: Some(id),
                             r#type: Some(openai::FunctionType::Function),
                             function: Some(openai::FunctionCallStream {
@@ -195,7 +195,7 @@ impl
                         function_call: None,
                         tool_calls: Some(vec![
                             openai::ChatCompletionMessageToolCallChunk {
-                                index: index as u32,
+                                index: stream_index(index),
                                 id: None,
                                 r#type: Some(openai::FunctionType::Function),
                                 function: Some(openai::FunctionCallStream {
@@ -272,6 +272,10 @@ impl
             _ => Ok(None),
         }
     }
+}
+
+fn stream_index(index: usize) -> u32 {
+    u32::try_from(index).unwrap_or(u32::MAX)
 }
 
 impl TryConvertStreamData<anthropic::StreamEvent, anthropic::StreamEvent>

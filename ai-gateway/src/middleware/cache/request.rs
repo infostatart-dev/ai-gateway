@@ -18,6 +18,7 @@ use crate::{
     types::{request::Request, response::Response},
 };
 
+#[allow(clippy::too_many_lines)]
 pub async fn make_request<S>(
     inner: &mut S,
     app_state: &AppState,

@@ -1,11 +1,15 @@
-use std::collections::HashMap;
-use std::sync::{Mutex, MutexGuard};
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashMap,
+    sync::{Mutex, MutexGuard},
+    time::{Duration, Instant},
+};
 
 use http::StatusCode;
 
-use crate::dispatcher::service::utils::extract_retry_after;
-use crate::types::{provider::InferenceProvider, response::Response};
+use crate::{
+    dispatcher::service::utils::extract_retry_after,
+    types::{provider::InferenceProvider, response::Response},
+};
 
 pub const DEFAULT_PROVIDER_ERROR_COOLDOWN: Duration = Duration::from_secs(15);
 pub const DEFAULT_RATE_LIMIT_COOLDOWN: Duration = Duration::from_mins(1);

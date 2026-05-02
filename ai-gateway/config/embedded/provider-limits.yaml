@@ -1,0 +1,322 @@
+gemini:
+  observed-at: "2026-05-01"
+  scope: project
+  source: google-cloud-console
+  tiers:
+    free:
+      models:
+        gemini-3.1-pro:
+          display-name: Gemini 3.1 Pro
+          category: text-out
+          limits:
+            rpm: 2000
+            tpm: 8000000
+            rpd: unlimited
+        gemini-3-flash:
+          display-name: Gemini 3 Flash
+          category: text-out
+          limits:
+            rpm: 20000
+            tpm: 20000000
+            rpd: unlimited
+        gemini-2.5-flash:
+          display-name: Gemini 2.5 Flash
+          category: text-out
+          limits:
+            rpm: 20000
+            tpm: 20000000
+            rpd: unlimited
+        gemini-2.0-flash:
+          display-name: Gemini 2 Flash
+          category: text-out
+          limits:
+            rpm: 30000
+            tpm: 30000000
+            rpd: unlimited
+        gemini-2.5-pro:
+          display-name: Gemini 2.5 Pro
+          category: text-out
+          limits:
+            rpm: 2000
+            tpm: 8000000
+            rpd: unlimited
+        gemini-2.0-flash-lite:
+          display-name: Gemini 2 Flash Lite
+          category: text-out
+          limits:
+            rpm: 30000
+            tpm: 30000000
+            rpd: unlimited
+        gemini-3.1-flash-lite:
+          display-name: Gemini 3.1 Flash Lite
+          category: text-out
+          limits:
+            rpm: 30000
+            tpm: 30000000
+            rpd: unlimited
+        gemini-2.5-flash-lite:
+          display-name: Gemini 2.5 Flash Lite
+          category: text-out
+          limits:
+            rpm: 30000
+            tpm: 30000000
+            rpd: unlimited
+        gemini-2.5-flash-tts:
+          display-name: Gemini 2.5 Flash TTS
+          category: multimodal-generative
+          limits:
+            rpm: 1000
+            tpm: 1000000
+            rpd: unlimited
+        gemini-2.5-pro-tts:
+          display-name: Gemini 2.5 Pro TTS
+          category: multimodal-generative
+          limits:
+            rpm: 250
+            tpm: 1000000
+            rpd: unlimited
+        gemini-3.1-flash-tts:
+          display-name: Gemini 3.1 Flash TTS
+          category: multimodal-generative
+          limits:
+            rpm: 1000
+            tpm: 1000000
+            rpd: unlimited
+      tools:
+        search-grounding:
+          gemini-2:
+            category: search-grounding
+            limits:
+              rpd: 5000
+          gemini-2.5:
+            category: search-grounding
+            limits:
+              rpd: 5000
+          gemini-3:
+            category: search-grounding
+            limits:
+              rpd: 1500
+          default:
+            category: search-grounding
+            limits:
+              rpd: 5000
+        map-grounding:
+          gemini-2.5-flash:
+            category: map-grounding
+            limits:
+              rpd: unlimited
+          gemini-2.5-pro:
+            category: map-grounding
+            limits:
+              rpd: unlimited
+          gemini-3-flash:
+            category: map-grounding
+            limits:
+              rpd: unlimited
+          gemini-3.1-flash-lite:
+            category: map-grounding
+            limits:
+              rpd: unlimited
+          gemini-3.1-pro:
+            category: map-grounding
+            limits:
+              rpd: unlimited
+
+groq:
+  observed-at: "2026-05-01"
+  scope: organization
+  source: groq-console
+  tiers:
+    developer:
+      billing: free
+      endpoints:
+        chat-completions:
+          models:
+            allam-2-7b:
+              limits:
+                rpm: 30
+                rpd: 7000
+                tpm: 6000
+                tpd: 500000
+            groq/compound:
+              limits:
+                rpm: 30
+                rpd: 250
+                tpm: 70000
+                tpd: unlimited
+            groq/compound-mini:
+              limits:
+                rpm: 30
+                rpd: 250
+                tpm: 70000
+                tpd: unlimited
+            llama-3.1-8b-instant:
+              limits:
+                rpm: 30
+                rpd: 14400
+                tpm: 6000
+                tpd: 500000
+            llama-3.3-70b-versatile:
+              limits:
+                rpm: 30
+                rpd: 1000
+                tpm: 12000
+                tpd: 100000
+            meta-llama/llama-4-scout-17b-16e-instruct:
+              limits:
+                rpm: 30
+                rpd: 1000
+                tpm: 30000
+                tpd: 500000
+            meta-llama/llama-prompt-guard-2-22m:
+              limits:
+                rpm: 30
+                rpd: 14400
+                tpm: 15000
+                tpd: 500000
+            meta-llama/llama-prompt-guard-2-86m:
+              limits:
+                rpm: 30
+                rpd: 14400
+                tpm: 15000
+                tpd: 500000
+            openai/gpt-oss-120b:
+              limits:
+                rpm: 30
+                rpd: 1000
+                tpm: 8000
+                tpd: 200000
+            openai/gpt-oss-20b:
+              limits:
+                rpm: 30
+                rpd: 1000
+                tpm: 8000
+                tpd: 200000
+            openai/gpt-oss-safeguard-20b:
+              limits:
+                rpm: 30
+                rpd: 1000
+                tpm: 8000
+                tpd: 200000
+            qwen/qwen3-32b:
+              limits:
+                rpm: 60
+                rpd: 1000
+                tpm: 6000
+                tpd: 500000
+        speech-to-text:
+          models:
+            whisper-large-v3:
+              limits:
+                rpm: 20
+                rpd: 2000
+                audio-seconds-per-hour: 7200
+                audio-seconds-per-day: 28800
+            whisper-large-v3-turbo:
+              limits:
+                rpm: 20
+                rpd: 2000
+                audio-seconds-per-hour: 7200
+                audio-seconds-per-day: 28800
+        text-to-speech:
+          models:
+            canopylabs/orpheus-arabic-saudi:
+              limits:
+                rpm: 10
+                rpd: 100
+                tpm: 1200
+                tpd: 3600
+            canopylabs/orpheus-v1-english:
+              limits:
+                rpm: 10
+                rpd: 100
+                tpm: 1200
+                tpd: 3600
+
+openrouter:
+  observed-at: "2026-05-02"
+  scope: api-key
+  source: openrouter-docs
+  notes:
+    - Credit balance is dynamic and must be read per API key.
+    - Negative credit balance can return 402, including for free models.
+    - Cloudflare DDoS protection may block unreasonable traffic spikes.
+  runtime-sources:
+    key-info:
+      method: GET
+      url: https://openrouter.ai/api/v1/key
+      fields:
+        limit: Credit limit for the key, null if unlimited.
+        limit-reset: Limit reset type, null if never resets.
+        limit-remaining: Remaining credits, null if unlimited.
+        usage: All-time credits used.
+        usage-daily: Current UTC day credits used.
+        usage-weekly: Current UTC week credits used.
+        usage-monthly: Current UTC month credits used.
+        byok-usage: All-time external BYOK credits used.
+        is-free-tier: Whether the user has paid for credits before.
+      deprecated-fields:
+        - rate_limit
+  tiers:
+    free:
+      qualification: is_free_tier=true or less than 10 credits purchased
+      rules:
+        free-model-variants:
+          model-suffix: ":free"
+          limits:
+            rpm: 20
+            rpd: 50
+    paid-credits:
+      qualification: at least 10 credits purchased
+      rules:
+        free-model-variants:
+          model-suffix: ":free"
+          limits:
+            rpm: 20
+            rpd: 1000
+
+openai:
+  observed-at: "2026-05-02"
+  scope: organization
+  source: openai-docs
+  notes:
+    - Per-model request and token limits are dynamic by organization and model.
+    - Runtime request/token limits should be read from response headers.
+    - Unsuccessful requests can still count against per-minute limits.
+  runtime-sources:
+    response-headers:
+      headers:
+        limit-requests: x-ratelimit-limit-requests
+        limit-tokens: x-ratelimit-limit-tokens
+        remaining-requests: x-ratelimit-remaining-requests
+        remaining-tokens: x-ratelimit-remaining-tokens
+        reset-requests: x-ratelimit-reset-requests
+        reset-tokens: x-ratelimit-reset-tokens
+    fine-tuning-model-limits:
+      method: GET
+      url: https://api.openai.com/v1/fine_tuning/model_limits
+  tiers:
+    free:
+      qualification: User must be in an allowed geography.
+      limits:
+        monthly-usd: 100
+    tier-1:
+      qualification: $5 paid.
+      limits:
+        monthly-usd: 100
+    tier-2:
+      qualification: $50 paid and 7+ days since first successful payment.
+      limits:
+        monthly-usd: 500
+    tier-3:
+      qualification: $100 paid and 7+ days since first successful payment.
+      limits:
+        monthly-usd: 1000
+    tier-4:
+      qualification: $250 paid and 14+ days since first successful payment.
+      limits:
+        monthly-usd: 5000
+    tier-5:
+      qualification: $1000 paid and 30+ days since first successful payment.
+      limits:
+        monthly-usd: 200000

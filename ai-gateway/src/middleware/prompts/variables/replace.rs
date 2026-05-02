@@ -1,16 +1,23 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::BuildHasher,
+};
 
 use regex::Regex;
 
 use super::validate::validate_variable_type;
 use crate::error::{api::ApiError, invalid_req::InvalidRequestError};
 
-pub fn replace_variables(
+pub fn replace_variables<I, V>(
     text: &str,
-    inputs: &HashMap<String, serde_json::Value>,
+    inputs: &HashMap<String, serde_json::Value, I>,
     regex: &Regex,
-    validated: &mut HashSet<String>,
-) -> Result<String, ApiError> {
+    validated: &mut HashSet<String, V>,
+) -> Result<String, ApiError>
+where
+    I: BuildHasher,
+    V: BuildHasher,
+{
     let mut result = text.to_string();
     for cap in regex.captures_iter(text) {
         let full_match = &cap[0];

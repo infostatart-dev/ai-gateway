@@ -116,7 +116,7 @@ impl ModelMapper {
         }
 
         if let Some(openrouter_model) =
-            self.openrouter_upstream_model(source_model, target_provider)
+            Self::openrouter_upstream_model(source_model, target_provider)
             && models_offered_by_target_provider.contains(
                 &ModelIdWithoutVersion::from(openrouter_model.clone()),
             )
@@ -164,7 +164,6 @@ impl ModelMapper {
     }
 
     fn openrouter_upstream_model(
-        &self,
         source_model: &ModelId,
         target_provider: &InferenceProvider,
     ) -> Option<ModelId> {

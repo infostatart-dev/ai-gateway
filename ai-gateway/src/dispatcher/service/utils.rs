@@ -153,7 +153,7 @@ pub fn extract_retry_after(headers: &HeaderMap) -> Option<u64> {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let target = dt.to_utc().timestamp() as u64;
+        let target = u64::try_from(dt.to_utc().timestamp()).ok()?;
         if target > now {
             return Some(target - now);
         }

@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
-use http::request::Parts;
 use http_body_util::BodyExt;
 use opentelemetry::KeyValue;
 use tokio::{sync::oneshot, time::Instant};
@@ -18,6 +17,7 @@ use crate::{
         extensions::{AuthContext, MapperContext},
         model_id::ModelId,
         provider::InferenceProvider,
+        router::RouterId,
     },
 };
 
@@ -26,7 +26,8 @@ pub const DEFAULT_UUID: Uuid = Uuid::from_u128(0);
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_cache_logging(
     app_state: AppState,
-    req_parts: Parts,
+    auth_ctx: Option<AuthContext>,
+    router_id: Option<RouterId>,
     req_body: Body,
     body_reader: BodyReader,
     tfft_rx: oneshot::Receiver<()>,
@@ -39,7 +40,6 @@ pub fn spawn_cache_logging(
     resp_headers: &http::HeaderMap,
 ) {
     if app_state.config().helicone.is_observability_enabled() {
-        let auth_ctx = req_parts.extensions.get::<AuthContext>().cloned();
         let app_state_cloned = app_state.clone();
         let buckets = ctx.buckets;
         let directive = ctx.directive.clone();
@@ -47,10 +47,6 @@ pub fn spawn_cache_logging(
             .get("helicone-id")
             .and_then(|hv| Uuid::parse_str(hv.to_str().unwrap()).ok())
             .unwrap_or(DEFAULT_UUID);
-        let router_id = req_parts
-            .extensions
-            .get::<crate::types::router::RouterId>()
-            .cloned();
         let deployment_target = app_state.config().deployment_target.clone();
 
         tokio::spawn(
@@ -116,7 +112,7 @@ pub fn spawn_cache_logging(
                     tokio::join!(body_reader.collect(), tfft_future);
                 if let Ok(tfft_duration) = tfft_duration {
                     app_state.0.metrics.tfft_duration.record(
-                        tfft_duration.as_millis() as f64,
+                        tfft_duration.as_secs_f64() * 1000.0,
                         &[KeyValue::new("path", target_url.path().to_string())],
                     );
                 }

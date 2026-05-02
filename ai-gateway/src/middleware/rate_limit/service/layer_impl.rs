@@ -33,13 +33,10 @@ impl Layer {
         app_state: &AppState,
         config: Option<&RateLimitConfig>,
     ) -> Result<Self, InitError> {
-        let config = match config {
-            Some(c) => c,
-            None => {
-                return Ok(Self {
-                    inner: InnerLayer::None,
-                });
-            }
+        let Some(config) = config else {
+            return Ok(Self {
+                inner: InnerLayer::None,
+            });
         };
         let store =
             app_state.config().rate_limit_store.as_ref().ok_or(

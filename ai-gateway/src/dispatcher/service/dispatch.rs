@@ -139,6 +139,34 @@ impl Dispatcher {
 
         let response_status = client_response.status();
         let response_headers = client_response.headers();
+        let provider_metric_attrs = crate::metrics::llm::provider_attrs(
+            &self.provider,
+            mapper_ctx.model.as_ref(),
+            router_id.as_ref(),
+            target_url.path(),
+            response_status,
+            mapper_ctx.is_stream,
+            request_kind,
+        );
+        self.app_state
+            .0
+            .metrics
+            .llm
+            .provider_requests
+            .add(1, &provider_metric_attrs);
+        self.app_state
+            .0
+            .metrics
+            .llm
+            .provider_request_body_bytes
+            .add(
+                u64::try_from(req_body_bytes.len()).unwrap_or(u64::MAX),
+                &provider_metric_attrs,
+            );
+        self.app_state.0.metrics.llm.record_rate_limit_headers(
+            response_headers,
+            &provider_metric_attrs,
+        );
         self.handle_error_and_rate_limiting(
             response_status,
             response_headers,
@@ -161,6 +189,7 @@ impl Dispatcher {
             router_id,
             helicone_request_id,
             prompt_ctx,
+            request_kind,
         );
 
         Ok(client_response)

@@ -20,6 +20,18 @@ use rust_decimal::Decimal;
 use serde_json::json;
 use tower::Service;
 
+fn expected_distribution_range(
+    num_requests: u64,
+    weight_percent: u64,
+    tolerance_percent: u64,
+) -> std::ops::Range<u64> {
+    let lower_percent = weight_percent.saturating_sub(tolerance_percent);
+    let upper_percent = (weight_percent + tolerance_percent).min(100);
+    let lower = num_requests * lower_percent / 100;
+    let upper = (num_requests * upper_percent).div_ceil(100);
+    lower..upper
+}
+
 #[tokio::test]
 #[serial_test::serial]
 async fn rate_limit_removes_provider_from_lb_pool() {
@@ -114,19 +126,8 @@ async fn rate_limit_removes_provider_from_lb_pool() {
     // reset stubs so that openai is no longer returning 429s
 
     let num_requests = 50;
-    let tolerance = num_requests as f64 * 0.20;
-    let expected_openai_midpt = num_requests as f64 * 0.5;
-    let expected_anthropic_midpt = num_requests as f64 * 0.5;
-    let openai_range_lower =
-        (expected_openai_midpt - tolerance).max(0.0).floor() as u64;
-    let openai_range_upper = (expected_openai_midpt + tolerance).ceil() as u64;
-    let openai_range = openai_range_lower..openai_range_upper;
-    let anthropic_range_lower =
-        (expected_anthropic_midpt - tolerance).floor() as u64;
-    let anthropic_range_upper = ((expected_anthropic_midpt + tolerance).ceil()
-        as u64)
-        .min(num_requests as u64);
-    let anthropic_range = anthropic_range_lower..anthropic_range_upper;
+    let openai_range = expected_distribution_range(num_requests, 50, 20);
+    let anthropic_range = expected_distribution_range(num_requests, 50, 20);
 
     harness
         .mock

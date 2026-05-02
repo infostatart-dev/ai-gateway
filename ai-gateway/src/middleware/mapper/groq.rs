@@ -116,6 +116,6 @@ impl TryConvertError<Value, async_openai::error::WrappedError>
         resp_parts: &Parts,
         value: Value,
     ) -> Result<async_openai::error::WrappedError, Self::Error> {
-        Ok(openai_error_from_value(resp_parts.status, value))
+        Ok(openai_error_from_value(resp_parts.status, &value))
     }
 }

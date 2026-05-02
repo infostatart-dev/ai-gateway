@@ -13,7 +13,10 @@ use crate::{
     app_state::AppState,
     cache::CacheClient,
     error::{api::ApiError, internal::InternalError},
-    types::{body::BodyReader, request::Request, response::Response},
+    types::{
+        body::BodyReader, extensions::AuthContext, request::Request,
+        response::Response, router::RouterId,
+    },
 };
 
 pub enum CacheCheckResult {
@@ -73,10 +76,13 @@ pub async fn check_cache(
                     false,
                 );
             let response = Response::from_parts(resp_parts, user_resp_body);
+            let auth_ctx = req_parts.extensions.get::<AuthContext>().cloned();
+            let router_id = req_parts.extensions.get::<RouterId>().cloned();
 
             spawn_cache_logging(
                 app_state,
-                req_parts,
+                auth_ctx,
+                router_id,
                 req_body,
                 body_reader,
                 tfft_rx,

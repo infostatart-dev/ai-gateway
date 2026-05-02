@@ -1,16 +1,23 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::BuildHasher,
+};
 
 use regex::Regex;
 
 use super::replace::replace_variables;
 use crate::error::api::ApiError;
 
-pub fn process_message_variables(
+pub fn process_message_variables<I, V>(
     msg: &mut serde_json::Value,
-    inputs: &HashMap<String, serde_json::Value>,
+    inputs: &HashMap<String, serde_json::Value, I>,
     regex: &Regex,
-    validated: &mut HashSet<String>,
-) -> Result<(), ApiError> {
+    validated: &mut HashSet<String, V>,
+) -> Result<(), ApiError>
+where
+    I: BuildHasher,
+    V: BuildHasher,
+{
     if let Some(content) = msg.get_mut("content") {
         if let Some(s) = content.as_str() {
             let replaced = replace_variables(s, inputs, regex, validated)?;

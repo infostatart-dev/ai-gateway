@@ -338,7 +338,7 @@ impl CapabilityAwareRouter {
             .iter()
             .filter(|c| {
                 supports(requirements, &c.capability)
-                    && source_model.map_or(true, |source_model| {
+                    && source_model.is_none_or(|source_model| {
                         self.matches_source_model(source_model, c)
                     })
             })

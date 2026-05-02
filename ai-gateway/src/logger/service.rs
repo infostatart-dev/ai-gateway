@@ -20,7 +20,7 @@ use crate::{
     store::minio::MinioClient,
     types::{
         body::BodyReader,
-        extensions::{AuthContext, MapperContext, PromptContext},
+        extensions::{AuthContext, MapperContext, PromptContext, RequestKind},
         logger::{
             HeliconeLogMetadata, Log, LogMessage, RequestLog, ResponseLog,
         },
@@ -65,6 +65,8 @@ pub struct LoggerService {
     deployment_target: DeploymentTarget,
     tfft_rx: oneshot::Receiver<()>,
     request_id: Uuid,
+    #[builder(default = RequestKind::Router)]
+    request_kind: RequestKind,
     #[builder(default)]
     cache_enabled: Option<bool>,
     #[builder(default)]
@@ -97,21 +99,6 @@ impl LoggerService {
         tracing::trace!(tfft_duration = ?tfft_duration, "tfft_duration");
         let req_body_len = self.request_body.len();
         let resp_body_len = response_body.len();
-        let s3_client = if self.app_state.config().deployment_target.is_cloud()
-        {
-            MinioClient::cloud(&self.app_state.0.minio)
-        } else {
-            MinioClient::sidecar(&self.app_state.0.jawn_http_client)
-        };
-        s3_client
-            .log_bodies(
-                &self.app_state,
-                &self.auth_ctx,
-                self.request_id,
-                self.request_body,
-                response_body,
-            )
-            .await?;
 
         let model = self
             .mapper_ctx
@@ -127,7 +114,64 @@ impl LoggerService {
             .0
             .metrics
             .tfft_duration
-            .record(tfft_duration.as_millis() as f64, &attributes);
+            .record(tfft_duration.as_secs_f64() * 1000.0, &attributes);
+
+        if self.cache_reference_id.is_none() {
+            let provider_metric_attrs = crate::metrics::llm::provider_attrs(
+                &self.provider,
+                self.mapper_ctx.model.as_ref(),
+                self.router_id.as_ref(),
+                self.target_url.path(),
+                self.response_status,
+                self.mapper_ctx.is_stream,
+                self.request_kind,
+            );
+            self.app_state
+                .0
+                .metrics
+                .llm
+                .provider_response_body_bytes
+                .add(
+                    u64::try_from(resp_body_len).unwrap_or(u64::MAX),
+                    &provider_metric_attrs,
+                );
+            self.app_state
+                .0
+                .metrics
+                .llm
+                .provider_response_duration
+                .record(
+                    self.start_instant.elapsed().as_secs_f64() * 1000.0,
+                    &provider_metric_attrs,
+                );
+            let usage = crate::metrics::llm::extract_usage_from_response_body(
+                &response_body,
+                self.mapper_ctx.is_stream,
+            );
+            if !usage.is_empty() {
+                self.app_state
+                    .0
+                    .metrics
+                    .llm
+                    .record_provider_tokens(usage, &provider_metric_attrs);
+            }
+        }
+
+        let s3_client = if self.app_state.config().deployment_target.is_cloud()
+        {
+            MinioClient::cloud(&self.app_state.0.minio)
+        } else {
+            MinioClient::sidecar(&self.app_state.0.jawn_http_client)
+        };
+        s3_client
+            .log_bodies(
+                &self.app_state,
+                &self.auth_ctx,
+                self.request_id,
+                self.request_body,
+                response_body,
+            )
+            .await?;
 
         let helicone_metadata = HeliconeLogMetadata::from_headers(
             &mut self.request_headers,
@@ -172,7 +216,7 @@ impl LoggerService {
             .status(f64::from(self.response_status.as_u16()))
             .body_size(resp_body_len as f64)
             .response_created_at(Utc::now())
-            .delay_ms(tfft_duration.as_millis() as f64)
+            .delay_ms(tfft_duration.as_secs_f64() * 1000.0)
             .build();
         let log = Log::new(request_log, response_log);
         let log_message = LogMessage::builder()

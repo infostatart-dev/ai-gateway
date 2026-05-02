@@ -8,8 +8,8 @@ use http::{Method, Request, StatusCode};
 use serde_json::json;
 use tower::Service;
 
-/// Test that requests are properly passed through to the OpenAI provider
-/// when using the /{provider} base url.
+/// Test that requests are properly passed through to the `OpenAI` provider
+/// when using the `/{provider}` base url.
 #[tokio::test]
 #[serial_test::serial(default_mock)]
 async fn openai_direct_proxy() {

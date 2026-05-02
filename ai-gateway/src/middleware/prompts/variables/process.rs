@@ -10,13 +10,11 @@ pub fn process_prompt_variables(
     mut body: serde_json::Value,
     prompt_ctx: &PromptContext,
 ) -> Result<serde_json::Value, ApiError> {
-    let inputs = match &prompt_ctx.inputs {
-        Some(i) => i,
-        None => return Ok(body),
+    let Some(inputs) = &prompt_ctx.inputs else {
+        return Ok(body);
     };
-    let body_obj = match body.as_object_mut() {
-        Some(o) => o,
-        None => return Ok(body),
+    let Some(body_obj) = body.as_object_mut() else {
+        return Ok(body);
     };
     let regex = get_variable_regex()?;
 

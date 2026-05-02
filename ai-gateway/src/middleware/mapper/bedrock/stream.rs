@@ -60,7 +60,7 @@ impl
             let index = delta_payload
                 .get("contentBlockIndex")
                 .and_then(serde_json::Value::as_u64)
-                .map_or(0, |v| v as u32);
+                .map_or(0, u64_to_u32);
             if let Some(text) = delta_payload.pointer("/delta/text") {
                 let delta = openai::ChatCompletionStreamResponseDelta {
                     role: None,
@@ -146,7 +146,7 @@ fn map_tool_chunk(
         .map(std::string::ToString::to_string);
     let index = index_val
         .and_then(serde_json::Value::as_u64)
-        .map_or(0, |v| v as u32);
+        .map_or(0, u64_to_u32);
     openai::ChatCompletionMessageToolCallChunk {
         index,
         id,
@@ -182,15 +182,15 @@ fn map_usage(payload: &serde_json::Value) -> Option<openai::CompletionUsage> {
         let input_tokens = u
             .get("inputTokens")
             .and_then(serde_json::Value::as_u64)
-            .map_or(0, |v| v as u32);
+            .map_or(0, u64_to_u32);
         let output_tokens = u
             .get("outputTokens")
             .and_then(serde_json::Value::as_u64)
-            .map_or(0, |v| v as u32);
+            .map_or(0, u64_to_u32);
         let total_tokens = u
             .get("totalTokens")
             .and_then(serde_json::Value::as_u64)
-            .map_or(0, |v| v as u32);
+            .map_or(0, u64_to_u32);
         openai::CompletionUsage {
             prompt_tokens: input_tokens,
             completion_tokens: output_tokens,
@@ -199,4 +199,8 @@ fn map_usage(payload: &serde_json::Value) -> Option<openai::CompletionUsage> {
             completion_tokens_details: None,
         }
     })
+}
+
+fn u64_to_u32(value: u64) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
 }

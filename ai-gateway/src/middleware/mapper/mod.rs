@@ -251,13 +251,13 @@ pub(crate) fn openai_error_from_status(
 
 pub(crate) fn openai_error_from_value(
     status_code: StatusCode,
-    value: serde_json::Value,
+    value: &serde_json::Value,
 ) -> WrappedError {
     if let Ok(error) = serde_json::from_value::<WrappedError>(value.clone()) {
         return error;
     }
 
-    openai_error_from_status(status_code, provider_error_message(&value))
+    openai_error_from_status(status_code, provider_error_message(value))
 }
 
 fn provider_error_message(value: &serde_json::Value) -> Option<String> {

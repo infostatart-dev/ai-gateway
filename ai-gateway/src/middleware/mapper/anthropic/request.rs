@@ -84,7 +84,8 @@ impl
         for message in value.messages {
             match message {
                 openai::ChatCompletionRequestMessage::Developer(_)
-                | openai::ChatCompletionRequestMessage::System(_) => {}
+                | openai::ChatCompletionRequestMessage::System(_)
+                | openai::ChatCompletionRequestMessage::Function(_) => {}
                 openai::ChatCompletionRequestMessage::User(msg) => {
                     mapped_messages.push(anthropic::Message {
                         role: anthropic::Role::User,
@@ -107,10 +108,6 @@ impl
                         role: anthropic::Role::User,
                         content: message::map_tool_message(msg),
                     });
-                }
-                openai::ChatCompletionRequestMessage::Function(_) => {
-                    // Function messages are handled via tools mapping in
-                    // Anthropic
                 }
             }
         }

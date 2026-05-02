@@ -13,13 +13,13 @@ impl
 {
     type Error = MapperError;
 
+    #[allow(clippy::too_many_lines)]
     fn try_convert_chunk(
         &self,
         value: openai::CreateChatCompletionStreamResponse,
     ) -> Result<Option<anthropic::StreamEvent>, Self::Error> {
-        let first_choice = match value.choices.first() {
-            Some(c) => c,
-            None => return Ok(None),
+        let Some(first_choice) = value.choices.first() else {
+            return Ok(None);
         };
         let delta = &first_choice.delta;
 

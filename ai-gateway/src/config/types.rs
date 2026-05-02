@@ -60,6 +60,7 @@ pub struct Config {
     pub default_model_mapping: crate::config::model_mapping::ModelMappingConfig,
     pub helicone: crate::config::helicone::HeliconeConfig,
     pub providers: crate::config::providers::ProvidersConfig,
+    pub provider_limits: crate::config::provider_limits::ProviderLimitCatalog,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_store: Option<crate::config::cache::CacheStore>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -72,23 +73,30 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            telemetry: Default::default(),
-            server: Default::default(),
-            minio: Default::default(),
-            database: Default::default(),
-            dispatcher: Default::default(),
-            discover: Default::default(),
-            response_headers: Default::default(),
-            deployment_target: Default::default(),
-            control_plane: Default::default(),
-            default_model_mapping: Default::default(),
-            helicone: Default::default(),
-            providers: Default::default(),
+            telemetry: telemetry::Config::default(),
+            server: crate::config::server::ServerConfig::default(),
+            minio: crate::config::minio::Config::default(),
+            database: crate::config::database::DatabaseConfig::default(),
+            dispatcher: crate::config::dispatcher::DispatcherConfig::default(),
+            discover: crate::config::discover::DiscoverConfig::default(),
+            response_headers:
+                crate::config::response_headers::ResponseHeadersConfig::default(
+                ),
+            deployment_target:
+                crate::config::deployment_target::DeploymentTarget::default(),
+            control_plane:
+                crate::config::control_plane::ControlPlaneConfig::default(),
+            default_model_mapping:
+                crate::config::model_mapping::ModelMappingConfig::default(),
+            helicone: crate::config::helicone::HeliconeConfig::default(),
+            providers: crate::config::providers::ProvidersConfig::default(),
+            provider_limits:
+                crate::config::provider_limits::ProviderLimitCatalog::default(),
             cache_store: Some(crate::config::cache::CacheStore::default()),
             rate_limit_store: None,
             global: MiddlewareConfig::default(),
             unified_api: MiddlewareConfig::default(),
-            routers: Default::default(),
+            routers: crate::config::router::RouterConfigs::default(),
         }
     }
 }
