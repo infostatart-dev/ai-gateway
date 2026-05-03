@@ -1,0 +1,42 @@
+telemetry:
+  level: "info,ai_gateway=trace"
+  exporter: both
+
+helicone:
+  features: all
+
+cache-store:
+  type: in-memory
+  max-size: 268435456
+
+decision:
+  enabled: true
+  state-store:
+    type: memory
+  default-policy:
+    tier: free
+    max-output-tokens: 4000
+    allow-delay: true
+  shaper:
+    global: 32
+    free-tier: 16
+    paid-tier: 16
+    provider: 8
+    acquire-timeout: 2s
+
+routers:
+  decision:
+    load-balance:
+      chat:
+        strategy: budget-aware
+        providers:
+          - groq
+          - gemini
+          - openrouter
+          - anthropic
+        provider-priorities:
+          groq: 0
+          gemini: 0
+          openrouter: 20
+          anthropic: 40
+        max-cooldown-wait: 3s

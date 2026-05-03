@@ -36,6 +36,7 @@ impl TestDefault for Config {
             rate_limit_store: Some(
                 crate::config::rate_limit::RateLimitStore::default(),
             ),
+            decision: crate::config::decision::DecisionEngineConfig::default(),
             routers: crate::config::router::RouterConfigs::test_default(),
             response_headers:
                 crate::config::response_headers::ResponseHeadersConfig::default(

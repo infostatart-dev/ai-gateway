@@ -1,4 +1,5 @@
 use std::time::Duration;
+
 use tokio::time::Instant;
 
 /// Orchestrates a hedging strategy where a cheap request is fired first,
@@ -9,6 +10,7 @@ pub struct HedgingOrchestrator {
 }
 
 impl HedgingOrchestrator {
+    #[must_use]
     pub fn new(ttft_threshold: Duration) -> Self {
         Self { ttft_threshold }
     }
@@ -26,7 +28,9 @@ impl HedgingOrchestrator {
     }
 }
 
-/// Helper function for checking if an OpenAI-compatible SSE chunk contains a meaningful token.
+/// Helper function for checking if an OpenAI-compatible SSE chunk contains a
+/// meaningful token.
+#[must_use]
 pub fn is_meaningful_token(chunk: &str) -> bool {
     // Ignore empty lines and SSE comments
     if chunk.trim().is_empty() || chunk.starts_with(':') {
@@ -40,14 +44,16 @@ pub fn is_meaningful_token(chunk: &str) -> bool {
             return false;
         }
 
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
-            if let Some(choices) = json.get("choices").and_then(|v| v.as_array()) {
-                for choice in choices {
-                    if let Some(content) = choice.pointer("/delta/content").and_then(|v| v.as_str()) {
-                        if !content.trim().is_empty() {
-                            return true;
-                        }
-                    }
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(data)
+            && let Some(choices) =
+                json.get("choices").and_then(|v| v.as_array())
+        {
+            for choice in choices {
+                if let Some(content) =
+                    choice.pointer("/delta/content").and_then(|v| v.as_str())
+                    && !content.trim().is_empty()
+                {
+                    return true;
                 }
             }
         }

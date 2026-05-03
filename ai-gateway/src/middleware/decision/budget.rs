@@ -1,149 +1,220 @@
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::{collections::HashMap, fmt, sync::Mutex};
+
+use r2d2::Pool;
+use redis::Client;
 use uuid::Uuid;
 
-/// Defines the contract for an atomic state store for budget usage.
 #[async_trait::async_trait]
-pub trait StateStore: Send + Sync {
-    /// Atomically increment the usage counter. Returns the new total.
-    async fn increment_usage(&self, key: &str, amount: f64) -> Result<f64, String>;
-    
-    /// Reserve budget. Creates a lease.
-    async fn reserve(&self, key: &str, amount: f64, ttl_secs: u64) -> Result<String, String>;
-    
-    /// Commit a reservation (finalize the actual usage, which might be less than reserved).
-    async fn commit_reservation(&self, key: &str, reservation_id: &str, final_amount: f64) -> Result<(), String>;
-    
-    /// Refund/cancel a reservation entirely.
-    async fn refund_reservation(&self, key: &str, reservation_id: &str) -> Result<(), String>;
-    
-    /// Renew a lease for a given reservation ID.
-    async fn renew_lease(&self, key: &str, reservation_id: &str, ttl_secs: u64) -> Result<(), String>;
-    
-    /// Evict expired leases and return the refunded budget for tracking
-    async fn reconcile_expired_leases(&self) -> Result<Vec<(String, f64)>, String>;
+pub trait StateStore: Send + Sync + fmt::Debug {
+    async fn reserve(&self, key: &str, amount: i64) -> Result<String, String>;
+
+    async fn commit_reservation(
+        &self,
+        key: &str,
+        reservation_id: &str,
+        final_amount: i64,
+    ) -> Result<(), String>;
+
+    async fn refund_reservation(
+        &self,
+        key: &str,
+        reservation_id: &str,
+    ) -> Result<(), String>;
 }
 
-/// A simple in-memory implementation of the StateStore for fallback or free-tier usage without Redis.
+#[derive(Debug)]
 pub struct MemoryStateStore {
-    // Basic in-memory counters (e.g. key -> used amount)
-    usage: Mutex<std::collections::HashMap<String, f64>>,
-    // Active reservations: reservation_id -> (key, amount, expires_at)
-    reservations: Mutex<std::collections::HashMap<String, (String, f64, std::time::Instant)>>,
+    state: Mutex<MemoryState>,
+}
+
+#[derive(Debug)]
+struct MemoryState {
+    usage: HashMap<String, i64>,
+    reservations: HashMap<String, (String, i64)>,
 }
 
 impl MemoryStateStore {
+    #[must_use]
     pub fn new() -> Self {
         Self {
-            usage: Mutex::new(std::collections::HashMap::new()),
-            reservations: Mutex::new(std::collections::HashMap::new()),
+            state: Mutex::new(MemoryState {
+                usage: HashMap::new(),
+                reservations: HashMap::new(),
+            }),
         }
+    }
+}
+
+impl Default for MemoryStateStore {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 #[async_trait::async_trait]
 impl StateStore for MemoryStateStore {
-    async fn increment_usage(&self, key: &str, amount: f64) -> Result<f64, String> {
-        let mut usage = self.usage.lock().await;
-        let current = usage.entry(key.to_string()).or_insert(0.0);
-        *current += amount;
-        Ok(*current)
-    }
-
-    async fn reserve(&self, key: &str, amount: f64, ttl_secs: u64) -> Result<String, String> {
+    async fn reserve(&self, key: &str, amount: i64) -> Result<String, String> {
         let reservation_id = Uuid::new_v4().to_string();
-        let expires_at = std::time::Instant::now() + std::time::Duration::from_secs(ttl_secs);
-        let mut reservations = self.reservations.lock().await;
-        reservations.insert(reservation_id.clone(), (key.to_string(), amount, expires_at));
-        
-        self.increment_usage(key, amount).await?;
-        
+        let mut state = self.state.lock().map_err(|_| "state lock poisoned")?;
+
+        state
+            .reservations
+            .insert(reservation_id.clone(), (key.to_string(), amount));
+        *state.usage.entry(key.to_string()).or_insert(0) += amount;
+
         Ok(reservation_id)
     }
 
-    async fn commit_reservation(&self, key: &str, reservation_id: &str, final_amount: f64) -> Result<(), String> {
-        let mut reservations = self.reservations.lock().await;
-        if let Some((stored_key, reserved_amount, _)) = reservations.remove(reservation_id) {
-            if stored_key == key {
-                let diff = final_amount - reserved_amount;
-                // Temporarily release lock to avoid deadlock if increment_usage tried to acquire it,
-                // but increment_usage acquires usage, not reservations. So we're fine, but since we call `&self`
-                // we should drop the lock to be safe.
-                drop(reservations);
-                self.increment_usage(key, diff).await?;
-                return Ok(());
-            }
+    async fn commit_reservation(
+        &self,
+        key: &str,
+        reservation_id: &str,
+        final_amount: i64,
+    ) -> Result<(), String> {
+        let mut state = self.state.lock().map_err(|_| "state lock poisoned")?;
+        let Some((stored_key, reserved_amount)) =
+            state.reservations.remove(reservation_id)
+        else {
+            return Err("reservation not found".to_string());
+        };
+        if stored_key != key {
+            return Err("reservation key mismatch".to_string());
         }
-        Err("Reservation not found".to_string())
+
+        *state.usage.entry(key.to_string()).or_insert(0) +=
+            final_amount - reserved_amount;
+        Ok(())
     }
 
-    async fn refund_reservation(&self, key: &str, reservation_id: &str) -> Result<(), String> {
-        self.commit_reservation(key, reservation_id, 0.0).await
-    }
-
-    async fn renew_lease(&self, _key: &str, reservation_id: &str, ttl_secs: u64) -> Result<(), String> {
-        let mut reservations = self.reservations.lock().await;
-        if let Some((_, _, expires_at)) = reservations.get_mut(reservation_id) {
-            *expires_at = std::time::Instant::now() + std::time::Duration::from_secs(ttl_secs);
-            Ok(())
-        } else {
-            Err("Reservation not found".to_string())
-        }
-    }
-
-    async fn reconcile_expired_leases(&self) -> Result<Vec<(String, f64)>, String> {
-        let mut reservations = self.reservations.lock().await;
-        let now = std::time::Instant::now();
-        let mut expired = Vec::new();
-        
-        // Retain only active leases, collect expired ones
-        reservations.retain(|reservation_id, (key, amount, expires_at)| {
-            if *expires_at < now {
-                expired.push((reservation_id.clone(), key.clone(), *amount));
-                false
-            } else {
-                true
-            }
-        });
-        
-        drop(reservations);
-        let mut refunds = Vec::new();
-        
-        for (_res_id, key, amount) in expired {
-            self.increment_usage(&key, -amount).await?;
-            refunds.push((key, amount));
-        }
-        
-        Ok(refunds)
+    async fn refund_reservation(
+        &self,
+        key: &str,
+        reservation_id: &str,
+    ) -> Result<(), String> {
+        self.commit_reservation(key, reservation_id, 0).await
     }
 }
 
-pub struct BudgetManager {
-    store: Arc<dyn StateStore>,
+pub struct RedisStateStore {
+    pool: Pool<Client>,
 }
 
-impl BudgetManager {
-    pub fn new(store: Arc<dyn StateStore>) -> Self {
-        Self { store }
+impl fmt::Debug for RedisStateStore {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RedisStateStore").finish_non_exhaustive()
     }
-    
-    /// Spawns a background task that periodically reconciles expired leases.
-    pub fn spawn_reconciliation_task(store: Arc<dyn StateStore>, interval_secs: u64) {
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
-            loop {
-                interval.tick().await;
-                match store.reconcile_expired_leases().await {
-                    Ok(refunds) => {
-                        if !refunds.is_empty() {
-                            tracing::info!(count = refunds.len(), "reconciled expired budget leases");
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!(error = %e, "failed to reconcile expired budget leases");
-                    }
-                }
-            }
-        });
+}
+
+impl RedisStateStore {
+    #[must_use]
+    pub fn new(pool: Pool<Client>) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait::async_trait]
+impl StateStore for RedisStateStore {
+    async fn reserve(&self, key: &str, amount: i64) -> Result<String, String> {
+        let mut conn =
+            self.pool.get().map_err(|e| format!("pool error: {e}"))?;
+        let reservation_id = Uuid::new_v4().to_string();
+        let usage_key = format!("usage:{key}");
+        let reservation_key = format!("res:{reservation_id}");
+
+        redis::pipe()
+            .atomic()
+            .incr(&usage_key, amount)
+            .hset(&reservation_key, "amount", amount)
+            .hset(&reservation_key, "key", key)
+            .query::<()>(&mut conn)
+            .map_err(|e| format!("redis error: {e}"))?;
+
+        Ok(reservation_id)
+    }
+
+    async fn commit_reservation(
+        &self,
+        key: &str,
+        reservation_id: &str,
+        final_amount: i64,
+    ) -> Result<(), String> {
+        let mut conn =
+            self.pool.get().map_err(|e| format!("pool error: {e}"))?;
+        let reservation_key = format!("res:{reservation_id}");
+
+        let (stored_key, reserved_amount): (Option<String>, Option<i64>) =
+            redis::pipe()
+                .hget(&reservation_key, "key")
+                .hget(&reservation_key, "amount")
+                .query(&mut conn)
+                .map_err(|e| format!("redis error: {e}"))?;
+
+        let (stored_key, reserved_amount) = stored_key
+            .zip(reserved_amount)
+            .ok_or_else(|| "reservation not found".to_string())?;
+        if stored_key != key {
+            return Err("reservation key mismatch".to_string());
+        }
+
+        let usage_key = format!("usage:{key}");
+        redis::pipe()
+            .atomic()
+            .incr(usage_key, final_amount - reserved_amount)
+            .del(&reservation_key)
+            .query::<()>(&mut conn)
+            .map_err(|e| format!("redis error: {e}"))?;
+
+        Ok(())
+    }
+
+    async fn refund_reservation(
+        &self,
+        key: &str,
+        reservation_id: &str,
+    ) -> Result<(), String> {
+        self.commit_reservation(key, reservation_id, 0).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    impl MemoryStateStore {
+        fn usage(&self, key: &str) -> i64 {
+            *self
+                .state
+                .lock()
+                .expect("state lock")
+                .usage
+                .get(key)
+                .unwrap_or(&0)
+        }
+    }
+
+    #[tokio::test]
+    async fn memory_store_commits_final_amount() {
+        let store = MemoryStateStore::new();
+        let reservation = store.reserve("user", 100).await.unwrap();
+
+        store
+            .commit_reservation("user", &reservation, 40)
+            .await
+            .unwrap();
+
+        assert_eq!(store.usage("user"), 40);
+    }
+
+    #[tokio::test]
+    async fn memory_store_refunds_reserved_amount() {
+        let store = MemoryStateStore::new();
+        let reservation = store.reserve("user", 100).await.unwrap();
+
+        store
+            .refund_reservation("user", &reservation)
+            .await
+            .unwrap();
+
+        assert_eq!(store.usage("user"), 0);
     }
 }

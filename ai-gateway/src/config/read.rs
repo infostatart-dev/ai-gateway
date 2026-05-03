@@ -3,14 +3,16 @@ use std::{
     path::PathBuf,
 };
 
+use indexmap::IndexMap;
 use json_patch::merge;
 use url::Url;
 
 use crate::{
     config::{
         Config, DEFAULT_CONFIG_PATH, Error,
-        balance::{BalanceConfig, BalanceConfigInner},
-        providers::ProvidersConfig,
+        balance::{
+            BalanceConfig, BalanceConfigInner, default_budget_max_cooldown_wait,
+        },
         router::RouterConfig,
     },
     endpoints::EndpointType,
@@ -63,8 +65,7 @@ impl Config {
         }
 
         if config.deployment_target.is_sidecar()
-            && let Some(autodefault_router) =
-                build_autodefault_router(&config.providers)
+            && let Some(autodefault_router) = build_autodefault_router(&config)
         {
             config
                 .routers
@@ -86,25 +87,77 @@ impl Config {
     }
 }
 
-fn build_autodefault_router(
-    providers_config: &ProvidersConfig,
-) -> Option<RouterConfig> {
-    let providers: HashSet<_> = providers_config
+fn build_autodefault_router(config: &Config) -> Option<RouterConfig> {
+    let providers: HashSet<_> = config
+        .providers
         .keys()
         .filter(|provider| is_available_for_autodefault(provider))
         .cloned()
         .collect();
     let providers = nonempty_collections::NESet::try_from_set(providers)?;
+    Some(build_autodefault_router_config(
+        providers,
+        config.decision.enabled,
+    ))
+}
 
-    Some(RouterConfig {
+fn build_autodefault_router_config(
+    providers: nonempty_collections::NESet<InferenceProvider>,
+    decision_enabled: bool,
+) -> RouterConfig {
+    let strategy = if decision_enabled {
+        BalanceConfigInner::BudgetAware {
+            providers,
+            provider_priorities: IndexMap::new(),
+            max_cooldown_wait: default_budget_max_cooldown_wait(),
+        }
+    } else {
+        BalanceConfigInner::CapabilityAware { providers }
+    };
+
+    RouterConfig {
         load_balance: BalanceConfig(HashMap::from([(
             EndpointType::Chat,
-            BalanceConfigInner::CapabilityAware { providers },
+            strategy,
         )])),
         ..Default::default()
-    })
+    }
 }
 
 fn is_available_for_autodefault(provider: &InferenceProvider) -> bool {
     ProviderKey::from_env(provider).is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use compact_str::CompactString;
+
+    use super::*;
+    use crate::types::router::RouterId;
+
+    #[test]
+    fn decision_example_config_loads_budget_aware_router() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("config/decision-example.yaml");
+        let config = Config::try_read(Some(path)).unwrap();
+        let router_id = RouterId::Named(CompactString::new("decision"));
+        let router = config.routers.get(&router_id).unwrap();
+        let strategy = router.load_balance.0.get(&EndpointType::Chat).unwrap();
+
+        assert!(config.decision.enabled);
+        assert!(matches!(strategy, BalanceConfigInner::BudgetAware { .. }));
+    }
+
+    #[test]
+    fn autodefault_uses_budget_aware_when_decision_is_enabled() {
+        let router = build_autodefault_router_config(
+            nonempty_collections::nes![InferenceProvider::Named("groq".into())],
+            true,
+        );
+        let strategy = router.load_balance.0.get(&EndpointType::Chat).unwrap();
+
+        assert!(matches!(strategy, BalanceConfigInner::BudgetAware { .. }));
+    }
 }

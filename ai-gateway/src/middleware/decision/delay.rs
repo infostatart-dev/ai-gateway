@@ -1,14 +1,16 @@
-use axum_core::response::Response;
-use bytes::Bytes;
-// use http::StatusCode;
-use http_body::Body;
 use std::{
     pin::Pin,
     task::{Context, Poll},
     time::Duration,
 };
 
-/// An SSE body that periodically emits keep-alive comments before streaming the actual response.
+use axum_core::response::Response;
+use bytes::Bytes;
+// use http::StatusCode;
+use http_body::Body;
+
+/// An SSE body that periodically emits keep-alive comments before streaming the
+/// actual response.
 pub struct DelayedSseBody<B> {
     inner: Option<B>,
     delay_until: tokio::time::Instant,
@@ -18,7 +20,8 @@ pub struct DelayedSseBody<B> {
 impl<B> DelayedSseBody<B> {
     pub fn new(inner: B, delay: Duration) -> Self {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        interval
+            .set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         Self {
             inner: Some(inner),
             delay_until: tokio::time::Instant::now() + delay,
@@ -43,7 +46,9 @@ where
             match self.interval.poll_tick(cx) {
                 Poll::Ready(_) => {
                     let keep_alive = Bytes::from(": keep-alive\n\n");
-                    return Poll::Ready(Some(Ok(http_body::Frame::data(keep_alive))));
+                    return Poll::Ready(Some(Ok(http_body::Frame::data(
+                        keep_alive,
+                    ))));
                 }
                 Poll::Pending => return Poll::Pending,
             }
@@ -59,7 +64,10 @@ where
 }
 
 /// Helper function to wrap a response in a bounded emulated delay SSE stream.
-pub fn apply_bounded_delay<B>(response: Response<B>, delay: Duration) -> Response<DelayedSseBody<B>>
+pub fn apply_bounded_delay<B>(
+    response: Response<B>,
+    delay: Duration,
+) -> Response<DelayedSseBody<B>>
 where
     B: Body<Data = Bytes> + Unpin,
 {

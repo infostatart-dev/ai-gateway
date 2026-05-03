@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, fmt, sync::Arc};
 
 use opentelemetry::KeyValue;
 use rustc_hash::FxHashMap as HashMap;
@@ -22,6 +22,7 @@ use crate::{
     error::init::InitError,
     logger::service::JawnClient,
     metrics::Metrics,
+    middleware::decision::shaping::TrafficShaper,
     router::service::Router,
     store::{minio::BaseMinioClient, router::RouterStore},
     types::{
@@ -49,7 +50,6 @@ impl AppState {
     }
 }
 
-#[derive(Debug)]
 pub struct InnerAppState {
     pub config: Config,
     pub minio: BaseMinioClient,
@@ -75,6 +75,16 @@ pub struct InnerAppState {
     pub provider_keys: ProviderKeys,
     pub helicone_api_keys: RwLock<Option<HashSet<Key>>>,
     pub router_organization_map: RwLock<HashMap<RouterId, OrgId>>,
+
+    pub traffic_shaper: Arc<TrafficShaper>,
+    pub state_store: Arc<dyn crate::middleware::decision::budget::StateStore>,
+    pub policy_store: Arc<dyn crate::middleware::decision::policy::PolicyStore>,
+}
+
+impl fmt::Debug for InnerAppState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("InnerAppState").finish_non_exhaustive()
+    }
 }
 
 impl AppState {

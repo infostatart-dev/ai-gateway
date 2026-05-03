@@ -53,6 +53,12 @@ pub enum RoutingStrategyService {
     /// 4. send request
     CapabilityAware(crate::router::capability::CapabilityAwareRouter),
     /// Strategy:
+    /// 1. receive request + deserialize body
+    /// 2. select capable provider/model candidates by configured budget rank
+    /// 3. wait briefly for a cheap candidate to leave cooldown
+    /// 4. fail over to the next viable provider on rate limits/provider errors
+    BudgetAware(crate::router::budget_aware::BudgetAwareRouter),
+    /// Strategy:
     /// 1. receive request
     /// 2. according to configured weighted distribution, randomly sample a
     ///    single provider from the set of providers.
@@ -124,6 +130,20 @@ impl RoutingStrategyService {
                 .await
                 .map(Self::CapabilityAware)
             }
+            BalanceConfigInner::BudgetAware {
+                providers,
+                provider_priorities,
+                max_cooldown_wait,
+            } => crate::router::budget_aware::BudgetAwareRouter::new(
+                app_state,
+                router_id,
+                router_config,
+                providers,
+                provider_priorities,
+                *max_cooldown_wait,
+            )
+            .await
+            .map(Self::BudgetAware),
             BalanceConfigInner::ModelWeighted { .. } => {
                 Self::model_weighted(app_state, router_id, router_config).await
             }
@@ -281,6 +301,9 @@ impl tower::Service<Request> for RoutingStrategyService {
             RoutingStrategyService::CapabilityAware(inner) => {
                 return inner.poll_ready(cx);
             }
+            RoutingStrategyService::BudgetAware(inner) => {
+                return inner.poll_ready(cx);
+            }
             RoutingStrategyService::WeightedProvider(inner) => {
                 inner.poll_ready(cx)
             }
@@ -309,6 +332,11 @@ impl tower::Service<Request> for RoutingStrategyService {
             }
             RoutingStrategyService::CapabilityAware(inner) => {
                 ResponseFuture::CapabilityAware {
+                    future: inner.call(req),
+                }
+            }
+            RoutingStrategyService::BudgetAware(inner) => {
+                ResponseFuture::BudgetAware {
                     future: inner.call(req),
                 }
             }
@@ -358,6 +386,10 @@ pin_project! {
             #[pin]
             future: <crate::router::capability::CapabilityAwareRouter as tower::Service<Request>>::Future,
         },
+        BudgetAware {
+            #[pin]
+            future: <crate::router::budget_aware::BudgetAwareRouter as tower::Service<Request>>::Future,
+        },
         ModelWeighted {
             #[pin]
             future: <
@@ -395,7 +427,8 @@ impl Future for ResponseFuture {
                     .map_err(Into::into)
             )),
             EnumProj::ProviderFailover { future }
-            | EnumProj::CapabilityAware { future } => {
+            | EnumProj::CapabilityAware { future }
+            | EnumProj::BudgetAware { future } => {
                 Poll::Ready(ready!(future.poll(cx)))
             }
             EnumProj::ModelLatency { future } => {

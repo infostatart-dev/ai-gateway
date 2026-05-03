@@ -105,7 +105,7 @@ pub fn extract_requirements(req_body: &Bytes) -> RequestRequirements {
     }
 }
 
-fn extract_source_model(req_body: &Bytes) -> Option<ModelId> {
+pub(crate) fn extract_source_model(req_body: &Bytes) -> Option<ModelId> {
     let value: serde_json::Value = serde_json::from_slice(req_body).ok()?;
     let model = value.get("model").and_then(|v| v.as_str())?;
 
@@ -138,7 +138,7 @@ pub fn supports(
     true
 }
 
-fn get_model_capability(
+pub(crate) fn get_model_capability(
     provider: &InferenceProvider,
     model: &ModelId,
 ) -> ModelCapability {

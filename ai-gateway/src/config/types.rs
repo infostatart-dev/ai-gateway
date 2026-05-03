@@ -65,6 +65,8 @@ pub struct Config {
     pub cache_store: Option<crate::config::cache::CacheStore>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rate_limit_store: Option<crate::config::rate_limit::RateLimitStore>,
+    #[serde(default)]
+    pub decision: crate::config::decision::DecisionEngineConfig,
     pub global: MiddlewareConfig,
     pub unified_api: MiddlewareConfig,
     pub routers: crate::config::router::RouterConfigs,
@@ -94,6 +96,7 @@ impl Default for Config {
                 crate::config::provider_limits::ProviderLimitCatalog::default(),
             cache_store: Some(crate::config::cache::CacheStore::default()),
             rate_limit_store: None,
+            decision: crate::config::decision::DecisionEngineConfig::default(),
             global: MiddlewareConfig::default(),
             unified_api: MiddlewareConfig::default(),
             routers: crate::config::router::RouterConfigs::default(),

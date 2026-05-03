@@ -82,4 +82,8 @@ pub enum InitError {
     InitHeliconeKeys(String),
     /// Failed to load initial routers from db: {0}
     InitRouters(String),
+    /// Distributed state store required for cloud deployment
+    DistributedStateStoreRequired,
+    /// Invalid decision engine config: {0}
+    InvalidDecisionConfig(&'static str),
 }

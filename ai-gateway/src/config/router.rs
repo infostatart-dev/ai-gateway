@@ -88,8 +88,9 @@ impl RouterConfig {
                 }
                 BalanceConfigInner::BalancedLatency { .. }
                 | BalanceConfigInner::ProviderFailover { .. }
-                | BalanceConfigInner::ModelLatency { .. }
-                | BalanceConfigInner::CapabilityAware { .. } => {}
+                | BalanceConfigInner::CapabilityAware { .. }
+                | BalanceConfigInner::BudgetAware { .. }
+                | BalanceConfigInner::ModelLatency { .. } => {}
             }
         }
 

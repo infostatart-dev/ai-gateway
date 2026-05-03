@@ -40,13 +40,16 @@ impl HarnessBuilder {
         self
     }
 
-    pub async fn build(self) -> Harness {
-        let config = self.config.expect("config is required");
-        let mock_args = self
-            .mock_args
-            .unwrap_or_else(|| MockArgs::builder().build());
-        let control_plane_state = self.control_plane_state;
-        Harness::new(mock_args, config, control_plane_state).await
+    #[must_use]
+    pub fn build(self) -> BoxFuture<'static, Harness> {
+        Box::pin(async move {
+            let config = self.config.expect("config is required");
+            let mock_args = self
+                .mock_args
+                .unwrap_or_else(|| MockArgs::builder().build());
+            let control_plane_state = self.control_plane_state;
+            Harness::new(mock_args, config, control_plane_state).await
+        })
     }
 
     #[must_use]

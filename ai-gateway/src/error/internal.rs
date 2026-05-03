@@ -83,6 +83,8 @@ pub enum InternalError {
     AuthDataNotReady,
     /// Database error: {0}
     DatabaseError(#[from] sqlx::Error),
+    /// Decision engine error: {0}
+    DecisionEngineError(String),
 }
 
 impl IntoResponse for InternalError {
@@ -191,6 +193,8 @@ pub enum InternalErrorMetric {
     AuthDataNotReady,
     /// Database error
     DatabaseError,
+    /// Decision engine error
+    DecisionEngineError,
 }
 
 impl From<&InternalError> for InternalErrorMetric {
@@ -235,6 +239,7 @@ impl From<&InternalError> for InternalErrorMetric {
             }
             InternalError::AuthDataNotReady => Self::AuthDataNotReady,
             InternalError::DatabaseError(_) => Self::DatabaseError,
+            InternalError::DecisionEngineError(_) => Self::DecisionEngineError,
         }
     }
 }

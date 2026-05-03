@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use derive_more::{AsRef, From};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use nonempty_collections::{NESet, nes};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -154,6 +154,20 @@ pub enum BalanceConfigInner {
     /// capabilities.
     #[serde(alias = "capability-aware")]
     CapabilityAware { providers: NESet<InferenceProvider> },
+    /// Selects capable provider/model candidates by budget priority first,
+    /// waits briefly for cheap candidates to recover, and fails over to the
+    /// next viable candidate on provider errors.
+    #[serde(alias = "budget-aware")]
+    BudgetAware {
+        providers: NESet<InferenceProvider>,
+        #[serde(default)]
+        provider_priorities: IndexMap<InferenceProvider, u16>,
+        #[serde(
+            with = "humantime_serde",
+            default = "default_budget_max_cooldown_wait"
+        )]
+        max_cooldown_wait: Duration,
+    },
     /// Distributes and load balances requests among a set of (providers,model).
     ModelWeighted { models: NESet<WeightedModel> },
     /// Distributes and load balances requests among a set of (providers,model).
@@ -169,7 +183,8 @@ impl BalanceConfigInner {
             }
             Self::BalancedLatency { providers }
             | Self::ProviderFailover { providers }
-            | Self::CapabilityAware { providers } => {
+            | Self::CapabilityAware { providers }
+            | Self::BudgetAware { providers, .. } => {
                 providers.iter().cloned().collect()
             }
             Self::ModelWeighted { models } => models
@@ -192,6 +207,10 @@ impl BalanceConfigInner {
                 .collect(),
         }
     }
+}
+
+pub(crate) const fn default_budget_max_cooldown_wait() -> Duration {
+    Duration::from_secs(3)
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Eq, Hash, PartialEq)]

@@ -1,6 +1,7 @@
 use crate::types::provider::InferenceProvider;
 
-/// Defines the minimum capabilities required by a request to be serviced by a model.
+/// Defines the minimum capabilities required by a request to be serviced by a
+/// model.
 #[derive(Debug, Clone, Default)]
 pub struct ModelCapabilities {
     pub max_context: usize,
@@ -9,10 +10,17 @@ pub struct ModelCapabilities {
 }
 
 impl ModelCapabilities {
-    /// Evaluates if the current capabilities meet the requirements of a specific request.
-    /// A robust implementation would compare requested features (tools used, JSON format requested,
-    /// context length estimated) against these capabilities.
-    pub fn can_handle(&self, request_context_length: usize, requires_tools: bool, requires_json: bool) -> bool {
+    /// Evaluates if the current capabilities meet the requirements of a
+    /// specific request. A robust implementation would compare requested
+    /// features (tools used, JSON format requested, context length
+    /// estimated) against these capabilities.
+    #[must_use]
+    pub fn can_handle(
+        &self,
+        request_context_length: usize,
+        requires_tools: bool,
+        requires_json: bool,
+    ) -> bool {
         if request_context_length > self.max_context {
             return false;
         }
@@ -26,7 +34,8 @@ impl ModelCapabilities {
     }
 }
 
-/// Capability filter that ensures we do not route a request to a provider that lacks necessary capabilities.
+/// Capability filter that ensures we do not route a request to a provider that
+/// lacks necessary capabilities.
 pub struct CapabilityFilter;
 
 impl CapabilityFilter {
@@ -35,11 +44,17 @@ impl CapabilityFilter {
         request_context_length: usize,
         requires_tools: bool,
         requires_json: bool,
-        candidates: impl Iterator<Item = (&'a InferenceProvider, &'a ModelCapabilities)>,
+        candidates: impl Iterator<
+            Item = (&'a InferenceProvider, &'a ModelCapabilities),
+        >,
     ) -> Vec<&'a InferenceProvider> {
         candidates
             .filter_map(|(provider, caps)| {
-                if caps.can_handle(request_context_length, requires_tools, requires_json) {
+                if caps.can_handle(
+                    request_context_length,
+                    requires_tools,
+                    requires_json,
+                ) {
                     Some(provider)
                 } else {
                     None

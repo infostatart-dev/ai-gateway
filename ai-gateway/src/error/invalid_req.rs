@@ -55,6 +55,8 @@ pub enum InvalidRequestError {
     InvalidRequestHeader(http::header::ToStrError),
     /// Invalid prompt inputs: {0}
     InvalidPromptInputs(String),
+    /// Budget exceeded: {0}
+    BudgetExceeded(String),
 }
 
 impl IntoResponse for InvalidRequestError {
@@ -155,6 +157,8 @@ pub enum InvalidRequestErrorMetric {
     Provider4xxError,
     /// Too many requests
     TooManyRequests,
+    /// Budget exceeded
+    BudgetExceeded,
 }
 
 impl From<&InvalidRequestError> for InvalidRequestErrorMetric {
@@ -179,6 +183,7 @@ impl From<&InvalidRequestError> for InvalidRequestErrorMetric {
             }
             InvalidRequestError::Provider4xxError(_) => Self::Provider4xxError,
             InvalidRequestError::TooManyRequests(_) => Self::TooManyRequests,
+            InvalidRequestError::BudgetExceeded(_) => Self::BudgetExceeded,
         }
     }
 }

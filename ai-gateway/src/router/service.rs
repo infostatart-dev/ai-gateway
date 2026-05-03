@@ -73,11 +73,12 @@ impl Router {
                 balance_config,
             )
             .await?;
-            let decision_engine_layer = crate::middleware::decision::service::DecisionEngineLayer::new(
-                app_state.clone(),
-                id.clone(),
-                router_config.clone(),
-            );
+            let decision_engine_layer =
+                crate::middleware::decision::service::DecisionEngineLayer::new(
+                    app_state.clone(),
+                    id.clone(),
+                    router_config.clone(),
+                );
             let service_stack = ServiceBuilder::new()
                 .layer(ErrorHandlerLayer::new(app_state.clone()))
                 .layer(prompt_layer.clone())
