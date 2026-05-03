@@ -84,7 +84,7 @@ fn default_policy_cache_capacity() -> u64 {
     1000
 }
 fn default_policy_cache_ttl() -> Duration {
-    Duration::from_secs(300)
+    Duration::from_mins(5)
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]

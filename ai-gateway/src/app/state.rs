@@ -48,26 +48,17 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
 
     let cache_manager = setup_cache(&config, metrics.clone());
 
-    let helicone_api_keys = if config.deployment_target.is_cloud()
-        && let Some(router_store_ref) = router_store.as_ref()
-    {
-        let keys = router_store_ref
-            .get_all_helicone_api_keys()
-            .await
-            .map_err(|e| InitError::InitHeliconeKeys(e.to_string()))?;
-        tracing::info!("loaded initial {} helicone api keys", keys.len());
-        metrics
-            .routers
-            .helicone_api_keys
-            .add(i64::try_from(keys.len()).unwrap_or(i64::MAX), &[]);
-        Some(keys)
-    } else {
-        None
-    };
+    let helicone_api_keys =
+        super::helicone_init::load_initial_helicone_api_keys(
+            &config,
+            router_store.as_ref(),
+            &metrics,
+        )
+        .await?;
 
     let provider_keys = ProviderKeys::new(&config, &metrics);
 
-    let decision_state = build_decision_state(&config)?;
+    let decision_state = super::decision_state::build_decision_state(&config)?;
 
     Ok(AppState(Arc::new(InnerAppState {
         config,
@@ -94,79 +85,4 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
         state_store: decision_state.state_store,
         policy_store: decision_state.policy_store,
     })))
-}
-
-struct DecisionState {
-    traffic_shaper: Arc<crate::middleware::decision::shaping::TrafficShaper>,
-    state_store: Arc<dyn crate::middleware::decision::budget::StateStore>,
-    policy_store: Arc<dyn crate::middleware::decision::policy::PolicyStore>,
-}
-
-fn build_decision_state(config: &Config) -> Result<DecisionState, InitError> {
-    validate_decision_config(config)?;
-
-    Ok(DecisionState {
-        traffic_shaper: Arc::new(
-            crate::middleware::decision::shaping::TrafficShaper::new(
-                config.decision.shaper.global,
-                config.decision.shaper.free_tier,
-                config.decision.shaper.paid_tier,
-                config.decision.shaper.provider,
-            ),
-        ),
-        state_store: build_decision_state_store(config)?,
-        policy_store: Arc::new(
-            crate::middleware::decision::policy::MemoryPolicyStore::new(
-                config.decision.policy_store.cache_capacity,
-                config.decision.policy_store.cache_ttl,
-                config.decision.default_policy.clone(),
-            ),
-        ),
-    })
-}
-
-fn validate_decision_config(config: &Config) -> Result<(), InitError> {
-    if config.decision.enabled && config.decision.default_policy.is_none() {
-        return Err(InitError::InvalidDecisionConfig(
-            "default policy not configured",
-        ));
-    }
-    if config
-        .decision
-        .default_policy
-        .as_ref()
-        .is_some_and(|policy| policy.max_output_tokens == 0)
-    {
-        return Err(InitError::InvalidDecisionConfig(
-            "default policy max output tokens must be greater than zero",
-        ));
-    }
-    Ok(())
-}
-
-fn build_decision_state_store(
-    config: &Config,
-) -> Result<Arc<dyn crate::middleware::decision::budget::StateStore>, InitError>
-{
-    match &config.decision.state_store {
-        Some(crate::config::decision::StateStoreConfig::Redis(redis_cfg)) => {
-            let client =
-                redis::Client::open(redis_cfg.host_url.expose().clone())
-                    .map_err(InitError::CreateRedisClient)?;
-            let pool = r2d2::Pool::builder()
-                .build(client)
-                .map_err(InitError::CreateRedisPool)?;
-            Ok(Arc::new(
-                crate::middleware::decision::budget::RedisStateStore::new(pool),
-            ))
-        }
-        Some(crate::config::decision::StateStoreConfig::Memory) | None => {
-            if config.decision.enabled && config.deployment_target.is_cloud() {
-                return Err(InitError::DistributedStateStoreRequired);
-            }
-            Ok(Arc::new(
-                crate::middleware::decision::budget::MemoryStateStore::new(),
-            ))
-        }
-    }
 }

@@ -38,12 +38,14 @@ pub async fn sse_stream(
     metrics: EndpointMetricsRegistry,
 ) -> Result<SSEStream, StreamError> {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-    if let Some(Ok(Event::Message(msg))) = es.next().await
-        && msg.data != "[DONE]"
-    {
-        tx.send(Ok(Bytes::from(msg.data))).ok();
-    } else if let Some(Err(e)) = es.next().await {
-        handle_stream_error(e, endpoint.clone(), &metrics).await?;
+    match es.next().await {
+        Some(Ok(Event::Message(msg))) if msg.data != "[DONE]" => {
+            tx.send(Ok(Bytes::from(msg.data))).ok();
+        }
+        Some(Err(e)) => {
+            handle_stream_error(e, endpoint.clone(), &metrics).await?;
+        }
+        _ => {}
     }
     tokio::spawn(
         async move {
@@ -53,23 +55,26 @@ pub async fn sse_stream(
                         break;
                     }
                     Err(e) => {
-                        if handle_stream_error_with_tx(
+                        let result = handle_stream_error_with_tx(
                             e,
                             tx.clone(),
                             endpoint.clone(),
                             &metrics,
                         )
-                        .await
-                        .is_err()
-                        {
+                        .await;
+                        if result.is_err() {
                             break;
                         }
                     }
                     Ok(Event::Message(msg)) if msg.data == "[DONE]" => break,
-                    Ok(Event::Message(msg)) => {
-                        if tx.send(Ok(Bytes::from(msg.data))).is_err() {
-                            break;
-                        }
+                    Ok(Event::Message(msg))
+                        if tx
+                            .send(Ok(Bytes::copy_from_slice(
+                                msg.data.as_bytes(),
+                            )))
+                            .is_err() =>
+                    {
+                        break;
                     }
                     _ => {}
                 }

@@ -74,8 +74,8 @@ impl BaseMinioClient {
     }
 }
 
-const PUT_OBJECT_SIGN_DURATION: Duration = Duration::from_secs(120);
-const GET_OBJECT_SIGN_DURATION: Duration = Duration::from_secs(120);
+const PUT_OBJECT_SIGN_DURATION: Duration = Duration::from_mins(2);
+const GET_OBJECT_SIGN_DURATION: Duration = Duration::from_mins(2);
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

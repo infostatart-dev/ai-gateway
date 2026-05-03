@@ -85,5 +85,5 @@ fn default_db_poll_interval() -> Duration {
 
 fn default_listener_reconnect_interval() -> Duration {
     // 5 minutes
-    Duration::from_secs(300)
+    Duration::from_mins(5)
 }

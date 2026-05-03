@@ -57,12 +57,10 @@ pub fn map_assistant_content(
     match &message.content {
         Some(openai::ChatCompletionRequestAssistantMessageContent::Text(
             content,
-        )) => {
-            if !content.is_empty() {
-                content_blocks.push(anthropic::ContentBlock::Text {
-                    text: content.clone(),
-                });
-            }
+        )) if !content.is_empty() => {
+            content_blocks.push(anthropic::ContentBlock::Text {
+                text: content.clone(),
+            });
         }
         Some(openai::ChatCompletionRequestAssistantMessageContent::Array(
             content,
@@ -78,7 +76,8 @@ pub fn map_assistant_content(
                 }
             }
         }
-        None => {}
+        Some(openai::ChatCompletionRequestAssistantMessageContent::Text(_))
+        | None => {}
     }
 
     if let Some(tool_calls) = &message.tool_calls {

@@ -90,7 +90,7 @@ fn default_buckets() -> usize {
 }
 
 fn default_window() -> Duration {
-    Duration::from_secs(60)
+    Duration::from_mins(1)
 }
 
 fn default_ratio() -> Decimal {

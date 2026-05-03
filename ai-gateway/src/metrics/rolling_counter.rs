@@ -81,7 +81,7 @@ impl RollingCounter {
 
 impl Default for RollingCounter {
     fn default() -> Self {
-        Self::new(Duration::from_secs(60), 10)
+        Self::new(Duration::from_mins(1), 10)
     }
 }
 

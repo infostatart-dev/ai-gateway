@@ -27,7 +27,7 @@ impl crate::tests::TestDefault for DispatcherConfig {
 }
 
 fn default_timeout() -> Duration {
-    Duration::from_secs(60 * 15)
+    Duration::from_mins(15)
 }
 
 fn default_connection_timeout() -> Duration {

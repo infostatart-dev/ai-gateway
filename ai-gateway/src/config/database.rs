@@ -75,11 +75,11 @@ fn default_acquire_timeout() -> Duration {
 }
 
 fn default_idle_timeout() -> Duration {
-    Duration::from_secs(600) // 10 minutes
+    Duration::from_mins(10) // 10 minutes
 }
 
 fn default_max_lifetime() -> Duration {
-    Duration::from_secs(1800) // 30 minutes
+    Duration::from_mins(30) // 30 minutes
 }
 
 #[cfg(feature = "testing")]
@@ -93,8 +93,8 @@ impl crate::tests::TestDefault for DatabaseConfig {
             max_connections: 5,
             min_connections: 0,
             acquire_timeout: Duration::from_secs(10),
-            idle_timeout: Duration::from_secs(300),
-            max_lifetime: Duration::from_secs(900),
+            idle_timeout: Duration::from_mins(5),
+            max_lifetime: Duration::from_mins(15),
         }
     }
 }

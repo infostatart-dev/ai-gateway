@@ -16,7 +16,7 @@ impl Default for ControlPlaneConfig {
         Self {
             retry: RetryConfig::Exponential {
                 min_delay: Duration::from_secs(2),
-                max_delay: Duration::from_secs(60),
+                max_delay: Duration::from_mins(1),
                 max_retries: 15,
                 factor: Decimal::from(2),
             },
