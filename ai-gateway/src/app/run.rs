@@ -27,10 +27,7 @@ impl meltdown::Service for App {
             let app_factory = AppFactory::new_hyper_app(self);
 
             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-            cli::helpers::show_welcome_banner(
-                &addr,
-                config.has_autodefault_router(),
-            );
+            cli::helpers::show_welcome_banner(&addr, config);
 
             match &config.server.tls {
                 TlsConfig::Enabled { cert, key } => {
