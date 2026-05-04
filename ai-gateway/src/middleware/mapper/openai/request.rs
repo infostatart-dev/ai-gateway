@@ -231,6 +231,7 @@ impl
             .model_mapper
             .map_model(&source_model, &InferenceProvider::OpenAI)?;
         value.model = target_model.to_string();
+        super::reasoning::ReasoningAdapter::normalize(&mut value);
         Ok(value)
     }
 }

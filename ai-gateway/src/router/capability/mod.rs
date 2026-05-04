@@ -32,6 +32,8 @@ use crate::{
     },
 };
 
+mod providers;
+
 #[cfg(test)]
 mod tests;
 
@@ -144,7 +146,6 @@ pub(crate) fn get_model_capability(
 ) -> ModelCapability {
     let model_name = model.to_string().to_lowercase();
 
-    // Conservative defaults
     let mut cap = ModelCapability {
         provider: provider.clone(),
         model: model.clone(),
@@ -157,52 +158,7 @@ pub(crate) fn get_model_capability(
             .any(|&keyword| model_name.contains(keyword)),
     };
 
-    match provider {
-        InferenceProvider::OpenAI => {
-            cap.supports_tools = true;
-            cap.supports_json_schema = true;
-            cap.context_window = Some(128_000);
-            if model_name.contains("gpt-4")
-                || model_name.contains("gpt-3.5")
-                || model_name.contains("o1")
-            {
-                cap.supports_vision = model_name.contains("vision")
-                    || model_name.contains("-4o")
-                    || model_name.contains("o1");
-            }
-        }
-        InferenceProvider::Anthropic => {
-            cap.supports_tools = true;
-            cap.supports_json_schema = true;
-            cap.supports_vision = true;
-            cap.context_window = Some(200_000);
-        }
-        InferenceProvider::GoogleGemini => {
-            cap.supports_tools = true;
-            cap.supports_json_schema = true;
-            cap.supports_vision = true;
-            cap.context_window = Some(1_000_000);
-        }
-        InferenceProvider::OpenRouter if model_name.starts_with("openai/") => {
-            cap.supports_tools = true;
-            cap.supports_json_schema = true;
-            cap.context_window = Some(128_000);
-            cap.supports_vision =
-                model_name.contains("gpt-4") || model_name.contains("o1");
-        }
-        InferenceProvider::Named(n)
-            if n == "groq" || n == "deepseek" || n == "xai" =>
-        {
-            cap.supports_tools = true;
-            cap.supports_json_schema = true;
-            cap.context_window = Some(8_000);
-            if n == "xai" && model_name.contains("vision") {
-                cap.supports_vision = true;
-            }
-        }
-        _ => {}
-    }
-
+    providers::apply_provider_capabilities(&mut cap, provider, &model_name);
     cap
 }
 
@@ -421,7 +377,7 @@ impl Service<Request> for CapabilityAwareRouter {
                 this.ordered_candidates(&requirements, source_model.as_ref())?;
             let mut failed_providers = HashSet::new();
 
-            for (index, candidate) in candidates.iter().enumerate() {
+            for candidate in &candidates {
                 if failed_providers.contains(&candidate.capability.provider) {
                     continue;
                 }
@@ -438,14 +394,8 @@ impl Service<Request> for CapabilityAwareRouter {
 
                 let elapsed = start.elapsed();
                 let status = response.status();
-                let has_next_provider =
-                    candidates[index + 1..].iter().any(|c| {
-                        c.capability.provider != candidate.capability.provider
-                            && !failed_providers
-                                .contains(&c.capability.provider)
-                    });
 
-                if has_next_provider && is_failoverable_status(status) {
+                if is_failoverable_status(status) {
                     this.record_failure(
                         &candidate.capability.provider,
                         &response,
@@ -456,18 +406,7 @@ impl Service<Request> for CapabilityAwareRouter {
                     continue;
                 }
 
-                if status.is_success() {
-                    this.record_success(
-                        &candidate.capability.provider,
-                        elapsed,
-                    );
-                } else if is_failoverable_status(status) {
-                    this.record_failure(
-                        &candidate.capability.provider,
-                        &response,
-                        elapsed,
-                    );
-                }
+                this.record_success(&candidate.capability.provider, elapsed);
                 return Ok(response);
             }
 

@@ -30,6 +30,7 @@ gpt-4o:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 gpt-4o-mini:
+  - "openrouter/google/gemini-2.0-flash-exp:free"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-2.0-flash"
   - "ollama/llama3.2"
@@ -40,8 +41,10 @@ gpt-4o-mini:
   - "bedrock/us.anthropic.claude-3-5-haiku-20241022-v1:0"
   - "deepseek/deepseek-chat"
 gpt-5-mini:
+  - "openrouter/qwen/qwen3-32b:free"
+  - "openrouter/deepseek/deepseek-r1-distill-qwen-32b:free"
   - "anthropic/claude-sonnet-4-0"
-  - "gemini/gemini-3.1-flash-preview"
+  - "gemini/gemini-3-flash-preview"
   - "ollama/deepseek-r1"
   - "mistral/magistral-medium"
   - "xai/grok-3-mini"
@@ -50,6 +53,8 @@ gpt-5-mini:
   - "bedrock/deepseek.r1-v1:0"
   - "deepseek/deepseek-reasoner"
 gpt-5:
+  - "openrouter/qwen/qwen3-32b:free"
+  - "openrouter/deepseek/deepseek-r1-distill-qwen-32b:free"
   - "anthropic/claude-opus-4-0"
   - "gemini/gemini-3.1-pro-preview"
   - "ollama/deepseek-r1"

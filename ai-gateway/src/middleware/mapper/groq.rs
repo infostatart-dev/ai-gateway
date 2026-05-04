@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use async_openai::types::chat::{
-    CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
+    self, CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
 };
 use http::response::Parts;
 use serde_json::Value;
@@ -57,6 +57,7 @@ impl
         tracing::trace!(source_model = ?source_model, target_model = ?target_model, "mapped model");
 
         value.model = target_model.to_string();
+        value.reasoning_effort = map_reasoning_effort(value.reasoning_effort);
 
         Ok(OpenAICompatibleChatCompletionRequest {
             provider: InferenceProvider::Named("groq".into()),
@@ -117,5 +118,21 @@ impl TryConvertError<Value, async_openai::error::WrappedError>
         value: Value,
     ) -> Result<async_openai::error::WrappedError, Self::Error> {
         Ok(openai_error_from_value(resp_parts.status, &value))
+    }
+}
+
+/// Groq supports only `"none"` (disable thinking) or absent field (enable).
+/// Maps OpenAI-style reasoning_effort to Groq-compatible values.
+fn map_reasoning_effort(
+    effort: Option<chat::ReasoningEffort>,
+) -> Option<chat::ReasoningEffort> {
+    match effort {
+        None => None,
+        Some(chat::ReasoningEffort::None | chat::ReasoningEffort::Minimal | chat::ReasoningEffort::Low) => {
+            Some(chat::ReasoningEffort::None)
+        }
+        Some(chat::ReasoningEffort::Medium | chat::ReasoningEffort::High | chat::ReasoningEffort::Xhigh) => {
+            None
+        }
     }
 }

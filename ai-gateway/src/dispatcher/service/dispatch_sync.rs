@@ -33,10 +33,14 @@ impl Dispatcher {
         let mut resp_builder = http::Response::builder().status(status);
         *resp_builder.headers_mut().unwrap() = response.headers().clone();
 
-        #[cfg(debug_assertions)]
         if status.is_server_error() || status.is_client_error() {
             let body =
                 response.text().await.map_err(InternalError::ReqwestError)?;
+            tracing::warn!(
+                upstream_status = %status,
+                upstream_body = %body,
+                "upstream error response"
+            );
             let stream =
                 futures::stream::once(futures::future::ok::<_, ApiError>(
                     bytes::Bytes::from(body),

@@ -182,7 +182,7 @@ impl Service<Request> for ProviderFailoverRouter {
                 let status = response.status();
                 let has_next = index + 1 < candidates.len();
 
-                if has_next && is_failoverable_status(status) {
+                if is_failoverable_status(status) {
                     this.record_failure(
                         &candidate.provider,
                         &response,
@@ -191,20 +191,13 @@ impl Service<Request> for ProviderFailoverRouter {
                     tracing::warn!(
                         provider = %candidate.provider,
                         status = %status,
-                        "provider failed over to the next candidate"
+                        has_next = has_next,
+                        "provider failed, trying next candidate"
                     );
                     continue;
                 }
 
-                if status.is_success() {
-                    this.record_success(&candidate.provider, elapsed);
-                } else if is_failoverable_status(status) {
-                    this.record_failure(
-                        &candidate.provider,
-                        &response,
-                        elapsed,
-                    );
-                }
+                this.record_success(&candidate.provider, elapsed);
                 return Ok(response);
             }
 
