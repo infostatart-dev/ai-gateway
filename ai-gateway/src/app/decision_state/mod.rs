@@ -24,6 +24,7 @@ pub(crate) fn build_decision_state(
             crate::middleware::decision::shaping::TrafficShaper::new(
                 config.decision.shaper.global,
                 config.decision.shaper.free_tier,
+                config.decision.shaper.freemium_tier,
                 config.decision.shaper.paid_tier,
                 config.decision.shaper.provider,
             ),

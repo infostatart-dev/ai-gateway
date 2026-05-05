@@ -15,10 +15,16 @@ use tower::{Service, ServiceExt};
 
 use crate::{
     app_state::AppState,
-    config::router::RouterConfig,
+    config::{
+        decision::{DecisionTier, TierCascade},
+        router::RouterConfig,
+    },
     dispatcher::{Dispatcher, DispatcherService},
     error::{api::ApiError, internal::InternalError},
-    middleware::mapper::model::ModelMapper,
+    middleware::{
+        decision::policy::{KeyPolicy, Tier},
+        mapper::model::ModelMapper,
+    },
     router::provider_attempt::{
         ProviderState, cooldown_for_response, is_failoverable_status,
         lock_states, smoothed_latency,
@@ -36,6 +42,31 @@ mod providers;
 
 #[cfg(test)]
 mod tests;
+
+/// Возвращает упорядоченную цепочку тиров согласно cascade-режиму,
+/// начиная со `start`. Используется для tier-aware фильтрации
+/// модельных кандидатов (зеркалит логику `cascade_chain` в shaper'е).
+fn tier_chain_for_models(start: Tier, cascade: TierCascade) -> Vec<Tier> {
+    match cascade {
+        TierCascade::OnlyTier => vec![start],
+        TierCascade::PaidDown => {
+            let order = [Tier::Paid, Tier::Freemium, Tier::Free];
+            tier_slice_from(start, &order)
+        }
+        TierCascade::FreeUp => {
+            let order = [Tier::Free, Tier::Freemium, Tier::Paid];
+            tier_slice_from(start, &order)
+        }
+    }
+}
+
+fn tier_slice_from(start: Tier, order: &[Tier]) -> Vec<Tier> {
+    if let Some(idx) = order.iter().position(|t| *t == start) {
+        order[idx..].to_vec()
+    } else {
+        vec![start]
+    }
+}
 
 #[derive(Debug, Clone)]
 #[allow(clippy::struct_excessive_bools)]
@@ -166,6 +197,9 @@ pub(crate) fn get_model_capability(
 struct CapabilityCandidate {
     capability: ModelCapability,
     service: DispatcherService,
+    /// Pre-computed тир модели по `decision.model-tiers` из конфига.
+    /// `None` — модель не классифицирована (тир-фильтр её игнорирует).
+    tier: Option<DecisionTier>,
 }
 
 #[derive(Debug, Clone)]
@@ -174,6 +208,8 @@ pub struct CapabilityAwareRouter {
     model_mapper: ModelMapper,
     states: Arc<Mutex<HashMap<InferenceProvider, ProviderState>>>,
     default_latency: Duration,
+    cascade: TierCascade,
+    tiers_configured: bool,
 }
 
 impl CapabilityAwareRouter {
@@ -185,6 +221,7 @@ impl CapabilityAwareRouter {
     ) -> Result<Self, crate::error::init::InitError> {
         let mut candidates = Vec::new();
         let providers_config = &app_state.config().providers;
+        let model_tiers = &app_state.config().decision.model_tiers;
 
         for provider in providers {
             if let Some(config) = providers_config.get(provider) {
@@ -200,9 +237,12 @@ impl CapabilityAwareRouter {
                     )
                     .await?;
 
+                    let tier = model_tiers.tier_of(model);
+
                     candidates.push(CapabilityCandidate {
                         capability,
                         service,
+                        tier,
                     });
                 }
             }
@@ -216,6 +256,8 @@ impl CapabilityAwareRouter {
             ),
             states: Arc::new(Mutex::new(HashMap::new())),
             default_latency: app_state.config().discover.default_rtt,
+            cascade: app_state.config().decision.shaper.cascade,
+            tiers_configured: !model_tiers.is_empty(),
         })
     }
 
@@ -288,6 +330,7 @@ impl CapabilityAwareRouter {
         &self,
         requirements: &RequestRequirements,
         source_model: Option<&ModelId>,
+        policy_tier: Option<Tier>,
     ) -> Result<Vec<CapabilityCandidate>, InternalError> {
         let mut filtered: Vec<_> = self
             .candidates
@@ -319,11 +362,56 @@ impl CapabilityAwareRouter {
             // Fallback only if no hard requirements
             let mut all = self.candidates.as_ref().clone();
             self.rank_candidates(&mut all, requirements);
-            return Ok(all);
+            return Ok(self.apply_tier_cascade(all, policy_tier));
         }
 
         self.rank_candidates(&mut filtered, requirements);
-        Ok(filtered)
+        Ok(self.apply_tier_cascade(filtered, policy_tier))
+    }
+
+    /// Перестраивает список кандидатов согласно tier-cascade:
+    /// модели стартового тира идут первыми, затем по cascade-цепочке,
+    /// в конце — модели без классификации тира (failsafe).
+    /// Если tiers не сконфигурированы или у запроса нет policy.tier —
+    /// возвращает список как есть.
+    fn apply_tier_cascade(
+        &self,
+        candidates: Vec<CapabilityCandidate>,
+        policy_tier: Option<Tier>,
+    ) -> Vec<CapabilityCandidate> {
+        if !self.tiers_configured {
+            return candidates;
+        }
+        let Some(start_tier) = policy_tier else {
+            return candidates;
+        };
+        let chain = tier_chain_for_models(start_tier, self.cascade);
+
+        let mut buckets: Vec<Vec<CapabilityCandidate>> =
+            vec![Vec::new(); chain.len()];
+        let mut tail: Vec<CapabilityCandidate> = Vec::new();
+
+        for cand in candidates {
+            let cand_tier = cand.tier.map(Tier::from);
+            match cand_tier {
+                Some(tier) => {
+                    if let Some(idx) =
+                        chain.iter().position(|t| *t == tier)
+                    {
+                        buckets[idx].push(cand);
+                    } else {
+                        // Тир есть, но не в cascade-цепочке — fallback.
+                        tail.push(cand);
+                    }
+                }
+                None => tail.push(cand),
+            }
+        }
+
+        let mut ordered: Vec<CapabilityCandidate> =
+            buckets.into_iter().flatten().collect();
+        ordered.extend(tail);
+        ordered
     }
 
     fn record_success(&self, provider: &InferenceProvider, elapsed: Duration) {
@@ -364,6 +452,10 @@ impl Service<Request> for CapabilityAwareRouter {
     fn call(&mut self, req: Request) -> Self::Future {
         let this = self.clone();
         Box::pin(async move {
+            let policy_tier = req
+                .extensions()
+                .get::<KeyPolicy>()
+                .map(|p| p.tier);
             let (parts, body) = req.into_parts();
             let body_bytes = body
                 .collect()
@@ -373,8 +465,11 @@ impl Service<Request> for CapabilityAwareRouter {
 
             let requirements = extract_requirements(&body_bytes);
             let source_model = extract_source_model(&body_bytes);
-            let candidates =
-                this.ordered_candidates(&requirements, source_model.as_ref())?;
+            let candidates = this.ordered_candidates(
+                &requirements,
+                source_model.as_ref(),
+                policy_tier,
+            )?;
             let mut failed_providers = HashSet::new();
 
             for candidate in &candidates {

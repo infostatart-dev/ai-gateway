@@ -1,5 +1,8 @@
 use super::*;
-use crate::types::model_id::Version;
+use crate::{
+    config::decision::{DecisionTier, TierCascade},
+    types::model_id::Version,
+};
 
 fn test_model(provider: InferenceProvider, name: &str) -> ModelId {
     ModelId::ModelIdWithVersion {
@@ -217,4 +220,103 @@ mod async_tests {
             ]
         );
     }
+
+}
+
+// ─── tier-cascade chain helpers ─────────────────────────────────────────
+
+#[test]
+fn tier_chain_only_tier_returns_single_start() {
+    assert_eq!(
+        tier_chain_for_models(Tier::Paid, TierCascade::OnlyTier),
+        vec![Tier::Paid]
+    );
+    assert_eq!(
+        tier_chain_for_models(Tier::Freemium, TierCascade::OnlyTier),
+        vec![Tier::Freemium]
+    );
+}
+
+#[test]
+fn tier_chain_paid_down_starts_from_given() {
+    assert_eq!(
+        tier_chain_for_models(Tier::Paid, TierCascade::PaidDown),
+        vec![Tier::Paid, Tier::Freemium, Tier::Free]
+    );
+    assert_eq!(
+        tier_chain_for_models(Tier::Freemium, TierCascade::PaidDown),
+        vec![Tier::Freemium, Tier::Free]
+    );
+    assert_eq!(
+        tier_chain_for_models(Tier::Free, TierCascade::PaidDown),
+        vec![Tier::Free]
+    );
+}
+
+#[test]
+fn tier_chain_free_up_starts_from_given() {
+    assert_eq!(
+        tier_chain_for_models(Tier::Free, TierCascade::FreeUp),
+        vec![Tier::Free, Tier::Freemium, Tier::Paid]
+    );
+    assert_eq!(
+        tier_chain_for_models(Tier::Freemium, TierCascade::FreeUp),
+        vec![Tier::Freemium, Tier::Paid]
+    );
+    assert_eq!(
+        tier_chain_for_models(Tier::Paid, TierCascade::FreeUp),
+        vec![Tier::Paid]
+    );
+}
+
+// ─── ModelTiersConfig::tier_of ──────────────────────────────────────────
+
+#[test]
+fn model_tiers_resolves_full_qualified_id() {
+    let yaml = r#"
+free:
+  - "openai/gpt-oss-20b:free"
+freemium:
+  - "openai/gpt-4o-mini"
+paid:
+  - "openai/gpt-4o"
+"#;
+    let cfg: crate::config::decision::ModelTiersConfig =
+        serde_yml::from_str(yaml).unwrap();
+
+    let m_free = ModelId::from_str_and_provider(
+        InferenceProvider::OpenRouter,
+        "openai/gpt-oss-20b:free",
+    )
+    .unwrap();
+    let m_freemium = ModelId::from_str_and_provider(
+        InferenceProvider::OpenAI,
+        "gpt-4o-mini",
+    )
+    .unwrap();
+    let m_paid =
+        ModelId::from_str_and_provider(InferenceProvider::OpenAI, "gpt-4o")
+            .unwrap();
+    let m_unknown = ModelId::from_str_and_provider(
+        InferenceProvider::OpenAI,
+        "gpt-3.5-turbo",
+    )
+    .unwrap();
+
+    assert_eq!(cfg.tier_of(&m_free), Some(DecisionTier::Free));
+    assert_eq!(cfg.tier_of(&m_freemium), Some(DecisionTier::Freemium));
+    assert_eq!(cfg.tier_of(&m_paid), Some(DecisionTier::Paid));
+    assert_eq!(cfg.tier_of(&m_unknown), None);
+}
+
+#[test]
+fn model_tiers_empty_returns_none() {
+    let cfg = crate::config::decision::ModelTiersConfig::default();
+    let m = ModelId::from_str_and_provider(
+        InferenceProvider::OpenAI,
+        "gpt-4o",
+    )
+    .unwrap();
+    assert!(cfg.is_empty());
+    assert_eq!(cfg.tier_of(&m), None);
 }
