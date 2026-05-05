@@ -139,7 +139,13 @@ impl Dispatcher {
             .ok_or_else(|| {
                 InternalError::ProviderNotConfigured(target_provider.clone())
             })?;
-        Ok(base_url.join(path).expect("valid url"))
+        // Strip leading slash so `Url::join` appends to base_url's path
+        // instead of replacing it. With base "https://openrouter.ai/api/"
+        // and path "/chat/completions", join would produce
+        // "https://openrouter.ai/chat/completions" (overriding /api/).
+        // We want "https://openrouter.ai/api/chat/completions".
+        let relative = path.trim_start_matches('/');
+        Ok(base_url.join(relative).expect("valid url"))
     }
 }
 
