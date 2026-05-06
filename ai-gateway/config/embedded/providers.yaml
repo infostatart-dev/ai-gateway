@@ -23,6 +23,7 @@ openai:
 
 openrouter:
   models:
+    # OpenAI through OpenRouter
     - "openai/gpt-4"
     - "openai/gpt-4-turbo"
     - "openai/gpt-4o"
@@ -36,15 +37,198 @@ openrouter:
     - "openai/o3"
     - "openai/o3-mini"
     - "openai/o4-mini"
+    # Anthropic through OpenRouter (slugs aligned with native anthropic section)
+    - "anthropic/claude-opus-4-0"
+    - "anthropic/claude-sonnet-4-0"
+    - "anthropic/claude-3-7-sonnet"
+    - "anthropic/claude-3-5-sonnet"
+    - "anthropic/claude-3-5-haiku"
+    - "anthropic/claude-3-opus"
+    # Gemini through OpenRouter
+    - "google/gemini-2.5-pro"
+    - "google/gemini-2.5-flash"
+    - "google/gemini-2.0-flash"
+    - "google/gemini-2.0-flash-exp:free"
+    # Grok through OpenRouter (note: namespace 'x-ai' with dash, not 'xai')
+    - "x-ai/grok-4"
+    - "x-ai/grok-3"
+    - "x-ai/grok-3-mini"
+    # Free tier (suffix ':free' qualifies under provider-limits.yaml openrouter rules)
+    - "openai/gpt-oss-120b:free"
+    - "openai/gpt-oss-20b:free"
     - "qwen/qwen3-next-80b-a3b-instruct:free"
     - "qwen/qwen3-coder:free"
-    - "openai/gpt-oss-120b:free"
+    - "z-ai/glm-4.5-air:free"
+    - "google/gemma-3n-e2b-it:free"
+    - "meta-llama/llama-3.3-70b-instruct:free"
+    - "mistralai/mistral-small-3.2-24b-instruct:free"
+    - "deepseek/deepseek-r1-distill-llama-70b:free"
+    # Paid non-OpenAI through OpenRouter (common fallbacks)
+    - "meta-llama/llama-3.1-8b-instruct"
+    - "deepseek/deepseek-chat"
+    - "mistralai/mistral-large"
   base-url: https://openrouter.ai/api/v1/
   model-capabilities:
+    # OpenAI family — gpt-4 baseline (8K context for legacy gpt-4)
+    openai/gpt-4:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 8192
+    openai/gpt-4-turbo:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    openai/gpt-4o:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    openai/gpt-4o-mini:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    openai/gpt-4.1:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    openai/gpt-4.1-mini:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    openai/gpt-4.1-nano:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    # o1 family — reasoning, no tools/json-schema in original release
+    openai/o1:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 200000
+    openai/o1-mini:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 128000
+    openai/o1-pro:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 200000
+    # o3/o4 family — reasoning + tools/structured-outputs
+    openai/o3:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    openai/o3-mini:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    openai/o4-mini:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    # Anthropic Claude — все 3+ держат tool-use, schema через OpenAI-compat
+    anthropic/claude-opus-4-0:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    anthropic/claude-sonnet-4-0:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    anthropic/claude-3-7-sonnet:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    anthropic/claude-3-5-sonnet:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    anthropic/claude-3-5-haiku:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    anthropic/claude-3-opus:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    # Gemini
+    google/gemini-2.5-pro:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    google/gemini-2.5-flash:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    google/gemini-2.0-flash:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    google/gemini-2.0-flash-exp:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    # Grok
+    x-ai/grok-4:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 256000
+    x-ai/grok-3:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    x-ai/grok-3-mini:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    # Open-source / free
     qwen/qwen3-next-80b-a3b-instruct:free:
       supports-tools: true
       supports-json-schema: true
       context-window: 262144
+    qwen/qwen3-coder:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 262144
+    openai/gpt-oss-120b:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    openai/gpt-oss-20b:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    z-ai/glm-4.5-air:free:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 131072
+    google/gemma-3n-e2b-it:free:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 32768
+    meta-llama/llama-3.3-70b-instruct:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    mistralai/mistral-small-3.2-24b-instruct:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    deepseek/deepseek-r1-distill-llama-70b:free:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 131072
+    # Paid non-OpenAI through OpenRouter
+    meta-llama/llama-3.1-8b-instruct:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    deepseek/deepseek-chat:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 65536
+    mistralai/mistral-large:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
 
 anthropic:
   models:
