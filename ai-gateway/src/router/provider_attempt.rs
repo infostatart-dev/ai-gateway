@@ -54,6 +54,7 @@ pub fn is_failoverable_status(status: StatusCode) -> bool {
             | StatusCode::UNAUTHORIZED
             | StatusCode::FORBIDDEN
             | StatusCode::NOT_FOUND
+            | StatusCode::PAYLOAD_TOO_LARGE
             | StatusCode::REQUEST_TIMEOUT
             | StatusCode::CONFLICT
             | StatusCode::TOO_MANY_REQUESTS

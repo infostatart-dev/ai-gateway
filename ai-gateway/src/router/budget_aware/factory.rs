@@ -35,7 +35,11 @@ pub(super) async fn build(
     for provider in providers {
         if let Some(config) = providers_config.get(provider) {
             for model in &config.models {
-                let capability = get_model_capability(provider, model);
+                let capability = get_model_capability(
+                    provider,
+                    model,
+                    config.model_capabilities.get(model),
+                );
                 let service =
                     Dispatcher::new_with_model_id_without_rate_limit_events(
                         app_state.clone(),

@@ -8,7 +8,10 @@ use serde::{
 };
 use url::Url;
 
-use crate::types::{model_id::ModelId, provider::InferenceProvider};
+use crate::{
+    config::model_capability::ModelCapabilityConfig,
+    types::{model_id::ModelId, provider::InferenceProvider},
+};
 
 const PROVIDERS_YAML: &str =
     include_str!("../../config/embedded/providers.yaml");
@@ -30,6 +33,8 @@ pub struct GlobalProviderConfig {
     /// provider.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gzip_decompress_responses: Option<bool>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub model_capabilities: IndexMap<ModelId, ModelCapabilityConfig>,
 }
 
 /// Map of *ALL* supported providers.
@@ -54,6 +59,8 @@ impl<'de> Deserialize<'de> for ProvidersConfig {
             version: Option<String>,
             #[serde(default)]
             gzip_decompress_responses: Option<bool>,
+            #[serde(default)]
+            model_capabilities: IndexMap<String, ModelCapabilityConfig>,
         }
 
         impl<'de> Visitor<'de> for ProvidersConfigVisitor {
@@ -105,6 +112,11 @@ impl<'de> Deserialize<'de> for ProvidersConfig {
                         version: raw_config.version,
                         gzip_decompress_responses: raw_config
                             .gzip_decompress_responses,
+                        model_capabilities: parse_model_capabilities(
+                            &provider,
+                            raw_config.model_capabilities,
+                        )
+                        .map_err(de::Error::custom)?,
                     };
 
                     providers.insert(provider, config);
@@ -133,6 +145,8 @@ impl Serialize for ProvidersConfig {
             version: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
             gzip_decompress_responses: Option<bool>,
+            #[serde(skip_serializing_if = "IndexMap::is_empty")]
+            model_capabilities: IndexMap<String, ModelCapabilityConfig>,
         }
 
         let mut map = serializer.serialize_map(Some(self.0.len()))?;
@@ -147,6 +161,11 @@ impl Serialize for ProvidersConfig {
                 base_url: config.base_url.clone(),
                 version: config.version.clone(),
                 gzip_decompress_responses: config.gzip_decompress_responses,
+                model_capabilities: config
+                    .model_capabilities
+                    .iter()
+                    .map(|(model, cap)| (model.to_string(), cap.clone()))
+                    .collect(),
             };
 
             map.serialize_entry(provider, &serialized_config)?;
@@ -154,6 +173,24 @@ impl Serialize for ProvidersConfig {
 
         map.end()
     }
+}
+
+fn parse_model_capabilities(
+    provider: &InferenceProvider,
+    raw: IndexMap<String, ModelCapabilityConfig>,
+) -> Result<IndexMap<ModelId, ModelCapabilityConfig>, String> {
+    raw.into_iter()
+        .map(|(model, capabilities)| {
+            let id = ModelId::from_str_and_provider(provider.clone(), &model)
+                .map_err(|e| {
+                format!(
+                    "Invalid model capability key '{model}' for provider \
+                     {provider}: {e}"
+                )
+            })?;
+            Ok((id, capabilities))
+        })
+        .collect()
 }
 
 impl FromIterator<(InferenceProvider, GlobalProviderConfig)>
@@ -194,6 +231,9 @@ openai:
     - "gpt-4o"
     - "gpt-4o-mini"
   base-url: https://api.openai.com
+  model-capabilities:
+    gpt-4o-mini:
+      supports-tools: true
 anthropic:
   models:
     - "claude-3-opus-20240229"
@@ -222,6 +262,7 @@ anthropic:
                 },
             }
         );
+        assert_eq!(openai_config.model_capabilities.len(), 1);
         // Check Anthropic provider
         let anthropic_config =
             config.get(&InferenceProvider::Anthropic).unwrap();

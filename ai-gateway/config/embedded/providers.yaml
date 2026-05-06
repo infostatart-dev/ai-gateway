@@ -36,10 +36,15 @@ openrouter:
     - "openai/o3"
     - "openai/o3-mini"
     - "openai/o4-mini"
-    - "qwen/qwen3-32b:free"
-    - "deepseek/deepseek-r1-distill-qwen-32b:free"
-    - "google/gemini-2.0-flash-exp:free"
+    - "qwen/qwen3-next-80b-a3b-instruct:free"
+    - "qwen/qwen3-coder:free"
+    - "openai/gpt-oss-120b:free"
   base-url: https://openrouter.ai/api/v1/
+  model-capabilities:
+    qwen/qwen3-next-80b-a3b-instruct:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 262144
 
 anthropic:
   models:

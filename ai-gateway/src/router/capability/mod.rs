@@ -17,6 +17,7 @@ use crate::{
     app_state::AppState,
     config::{
         decision::{DecisionTier, TierCascade},
+        model_capability::ModelCapabilityConfig,
         router::RouterConfig,
     },
     dispatcher::{Dispatcher, DispatcherService},
@@ -173,6 +174,7 @@ pub fn supports(
 pub(crate) fn get_model_capability(
     provider: &InferenceProvider,
     model: &ModelId,
+    metadata: Option<&ModelCapabilityConfig>,
 ) -> ModelCapability {
     let model_name = model.to_string().to_lowercase();
 
@@ -189,7 +191,32 @@ pub(crate) fn get_model_capability(
     };
 
     providers::apply_provider_capabilities(&mut cap, provider, &model_name);
+    apply_model_metadata(&mut cap, metadata);
     cap
+}
+
+fn apply_model_metadata(
+    cap: &mut ModelCapability,
+    metadata: Option<&ModelCapabilityConfig>,
+) {
+    let Some(metadata) = metadata else {
+        return;
+    };
+    if let Some(context_window) = metadata.context_window {
+        cap.context_window = Some(context_window);
+    }
+    if let Some(supports_tools) = metadata.supports_tools {
+        cap.supports_tools = supports_tools;
+    }
+    if let Some(supports_json_schema) = metadata.supports_json_schema {
+        cap.supports_json_schema = supports_json_schema;
+    }
+    if let Some(supports_vision) = metadata.supports_vision {
+        cap.supports_vision = supports_vision;
+    }
+    if let Some(reasoning) = metadata.reasoning {
+        cap.reasoning = reasoning;
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -225,7 +252,11 @@ impl CapabilityAwareRouter {
         for provider in providers {
             if let Some(config) = providers_config.get(provider) {
                 for model in &config.models {
-                    let capability = get_model_capability(provider, model);
+                    let capability = get_model_capability(
+                        provider,
+                        model,
+                        config.model_capabilities.get(model),
+                    );
 
                     let service = Dispatcher::new_with_model_id_without_rate_limit_events(
                         app_state.clone(),

@@ -40,14 +40,13 @@ fn gemini(cap: &mut ModelCapability) {
 }
 
 fn openrouter(cap: &mut ModelCapability, model_name: &str) {
-    if !model_name.starts_with("openai/") {
-        return;
+    if model_name.starts_with("openai/") {
+        cap.supports_tools = true;
+        cap.supports_json_schema = true;
+        cap.context_window = Some(128_000);
+        cap.supports_vision =
+            model_name.contains("gpt-4") || model_name.contains("o1");
     }
-    cap.supports_tools = true;
-    cap.supports_json_schema = true;
-    cap.context_window = Some(128_000);
-    cap.supports_vision =
-        model_name.contains("gpt-4") || model_name.contains("o1");
 }
 
 fn named(cap: &mut ModelCapability, n: &str, model_name: &str) {

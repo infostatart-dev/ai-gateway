@@ -7,6 +7,7 @@ pub mod discover;
 pub mod dispatcher;
 pub mod helicone;
 pub mod minio;
+pub mod model_capability;
 pub mod model_mapping;
 pub mod monitor;
 pub mod provider_limits;

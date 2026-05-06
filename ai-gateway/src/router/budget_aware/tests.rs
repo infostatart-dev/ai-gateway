@@ -4,7 +4,9 @@ use super::rank::{
     default_budget_rank, default_provider_budget_rank, effective_budget_rank,
 };
 use crate::{
-    router::capability::ModelCapability,
+    router::{
+        capability::ModelCapability, provider_attempt::is_failoverable_status,
+    },
     types::{model_id::ModelId, provider::InferenceProvider},
 };
 
@@ -20,6 +22,11 @@ fn capability(provider: InferenceProvider, model: &str) -> ModelCapability {
         supports_vision: false,
         reasoning: false,
     }
+}
+
+#[test]
+fn payload_too_large_triggers_provider_failover() {
+    assert!(is_failoverable_status(http::StatusCode::PAYLOAD_TOO_LARGE));
 }
 
 #[test]
