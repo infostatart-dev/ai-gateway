@@ -4,9 +4,23 @@ use super::{prepare, resolve, wrap};
 use crate::{
     app_state::AppState,
     error::api::ApiError,
-    middleware::decision::policy::KeyPolicy,
+    middleware::decision::policy::{KeyPolicy, Tier},
     types::{extensions::AuthContext, request::Request, response::Response},
 };
+
+/// Request header for per-request tier override. Overrides `policy.tier` from
+/// the policy store for this request only. Values: `free`, `freemium`, `paid` (case-insensitive).
+const TIER_OVERRIDE_HEADER: &str = "x-decision-tier";
+
+fn parse_tier_override(req: &Request) -> Option<Tier> {
+    let raw = req.headers().get(TIER_OVERRIDE_HEADER)?.to_str().ok()?;
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "free" => Some(Tier::Free),
+        "freemium" => Some(Tier::Freemium),
+        "paid" => Some(Tier::Paid),
+        _ => None,
+    }
+}
 
 pub(super) async fn handle_decision_request<S>(
     inner: &mut S,
@@ -22,9 +36,22 @@ where
 {
     let auth = req.extensions().get::<AuthContext>().cloned();
     let existing_policy = req.extensions().get::<KeyPolicy>().cloned();
-    let policy =
+    let mut policy =
         resolve::resolve_policy(&app_state, existing_policy, auth.as_ref())
             .await?;
+
+    // Optional per-request tier via `x-decision-tier` (agents can set intent without per-key policy).
+    if let Some(override_tier) = parse_tier_override(&req) {
+        if override_tier != policy.tier {
+            tracing::info!(
+                from = ?policy.tier,
+                to = ?override_tier,
+                "decision tier overridden by X-Decision-Tier header",
+            );
+            policy.tier = override_tier;
+        }
+    }
+
     let permit = resolve::acquire_traffic_slot(&app_state, &policy).await?;
     let prepared = prepare::prepare_request(req, &policy).await?;
     let state_store = app_state.0.state_store.clone();
@@ -57,5 +84,51 @@ where
             drop(permit);
             Err(error)
         }
+    }
+}
+
+#[cfg(test)]
+mod tier_override_tests {
+    use axum_core::body::Body;
+    use http::Request as HttpRequest;
+
+    use super::{parse_tier_override, Tier};
+
+    fn req(header_value: Option<&str>) -> HttpRequest<Body> {
+        let mut builder = HttpRequest::builder();
+        if let Some(v) = header_value {
+            builder = builder.header("x-decision-tier", v);
+        }
+        builder.body(Body::empty()).unwrap()
+    }
+
+    #[test]
+    fn parses_free() {
+        assert_eq!(parse_tier_override(&req(Some("free"))), Some(Tier::Free));
+    }
+
+    #[test]
+    fn parses_freemium() {
+        assert_eq!(
+            parse_tier_override(&req(Some("freemium"))),
+            Some(Tier::Freemium)
+        );
+    }
+
+    #[test]
+    fn parses_paid_case_insensitive() {
+        assert_eq!(parse_tier_override(&req(Some("PAID"))), Some(Tier::Paid));
+        assert_eq!(parse_tier_override(&req(Some("Paid"))), Some(Tier::Paid));
+    }
+
+    #[test]
+    fn missing_header_returns_none() {
+        assert_eq!(parse_tier_override(&req(None)), None);
+    }
+
+    #[test]
+    fn unknown_value_returns_none() {
+        assert_eq!(parse_tier_override(&req(Some("premium"))), None);
+        assert_eq!(parse_tier_override(&req(Some(""))), None);
     }
 }
