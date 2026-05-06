@@ -3,12 +3,15 @@ use std::sync::Arc;
 use tower::Layer;
 
 use crate::{
-    app_state::AppState, config::router::RouterConfig, types::router::RouterId,
+    app_state::AppState,
+    config::{decision::TierCascade, router::RouterConfig},
+    types::router::RouterId,
 };
 
 #[derive(Clone)]
 pub struct DecisionEngineLayer {
     app_state: AppState,
+    tier_cascade_override: Option<TierCascade>,
 }
 
 impl DecisionEngineLayer {
@@ -16,9 +19,12 @@ impl DecisionEngineLayer {
     pub fn new(
         app_state: AppState,
         _router_id: RouterId,
-        _router_config: Arc<RouterConfig>,
+        router_config: Arc<RouterConfig>,
     ) -> Self {
-        Self { app_state }
+        Self {
+            app_state,
+            tier_cascade_override: router_config.decision_tier_cascade,
+        }
     }
 }
 
@@ -26,6 +32,7 @@ impl DecisionEngineLayer {
 pub struct DecisionEngineService<S> {
     pub(super) inner: S,
     pub(super) app_state: AppState,
+    pub(super) tier_cascade_override: Option<TierCascade>,
 }
 
 impl<S> Layer<S> for DecisionEngineLayer {
@@ -35,6 +42,7 @@ impl<S> Layer<S> for DecisionEngineLayer {
         DecisionEngineService {
             inner,
             app_state: self.app_state.clone(),
+            tier_cascade_override: self.tier_cascade_override,
         }
     }
 }

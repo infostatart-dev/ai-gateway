@@ -31,6 +31,7 @@ fn p2c_config_openai_anthropic_google() -> RouterConfigs {
                     ],
                 },
             )])),
+            decision_tier_cascade: None,
             model_mappings: None,
             cache: None,
             retries: None,

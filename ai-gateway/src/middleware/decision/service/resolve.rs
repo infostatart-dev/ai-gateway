@@ -1,5 +1,6 @@
 use crate::{
     app_state::AppState,
+    config::decision::TierCascade,
     error::{api::ApiError, auth::AuthError, internal::InternalError},
     middleware::decision::{policy::KeyPolicy, shaping::CombinedPermit},
     types::extensions::AuthContext,
@@ -24,14 +25,16 @@ pub(super) async fn resolve_policy(
 pub(super) async fn acquire_traffic_slot(
     app_state: &AppState,
     policy: &KeyPolicy,
+    tier_cascade_override: Option<TierCascade>,
 ) -> Result<CombinedPermit, ApiError> {
     let shaper_config = &app_state.config().decision.shaper;
+    let cascade = tier_cascade_override.unwrap_or(shaper_config.cascade);
     let outcome = app_state
         .0
         .traffic_shaper
         .acquire_with_cascade(
             policy.tier,
-            shaper_config.cascade,
+            cascade,
             shaper_config.acquire_timeout,
         )
         .await

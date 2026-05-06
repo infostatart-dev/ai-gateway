@@ -255,7 +255,9 @@ impl CapabilityAwareRouter {
             ),
             states: Arc::new(Mutex::new(HashMap::new())),
             default_latency: app_state.config().discover.default_rtt,
-            cascade: app_state.config().decision.shaper.cascade,
+            cascade: router_config
+                .decision_tier_cascade
+                .unwrap_or(app_state.config().decision.shaper.cascade),
             tiers_configured: !model_tiers.is_empty(),
         })
     }

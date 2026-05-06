@@ -3,6 +3,7 @@ use tower::Service;
 use super::{prepare, resolve, wrap};
 use crate::{
     app_state::AppState,
+    config::decision::TierCascade,
     error::api::ApiError,
     middleware::decision::policy::{KeyPolicy, Tier},
     types::{extensions::AuthContext, request::Request, response::Response},
@@ -26,6 +27,7 @@ pub(super) async fn handle_decision_request<S>(
     inner: &mut S,
     app_state: AppState,
     req: Request,
+    tier_cascade_override: Option<TierCascade>,
 ) -> Result<Response, ApiError>
 where
     S: Service<Request, Response = Response, Error = ApiError>
@@ -52,7 +54,12 @@ where
         }
     }
 
-    let permit = resolve::acquire_traffic_slot(&app_state, &policy).await?;
+    let permit = resolve::acquire_traffic_slot(
+        &app_state,
+        &policy,
+        tier_cascade_override,
+    )
+    .await?;
     let prepared = prepare::prepare_request(req, &policy).await?;
     let state_store = app_state.0.state_store.clone();
     let budget_key = policy.budget_namespace.clone();

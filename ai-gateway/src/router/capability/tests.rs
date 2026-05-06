@@ -146,13 +146,15 @@ mod async_tests {
         };
 
         // OpenAI catalog: gpt-4 supports vision — expect non-empty vision-capable candidates.
-        let candidates = router.ordered_candidates(&reqs, None).unwrap();
+        let candidates = router
+            .ordered_candidates(&reqs, None, None)
+            .unwrap();
         assert!(!candidates.is_empty());
         assert!(candidates.iter().all(|c| c.capability.supports_vision));
 
         // Impossible requirement: huge context window.
         reqs.min_context_tokens = Some(10_000_000);
-        let result = router.ordered_candidates(&reqs, None);
+        let result = router.ordered_candidates(&reqs, None, None);
         assert!(result.is_err());
     }
 
@@ -182,6 +184,7 @@ mod async_tests {
             .ordered_candidates(
                 &RequestRequirements::default(),
                 Some(&source_model),
+                None,
             )
             .unwrap();
 

@@ -13,6 +13,7 @@ use crate::{
         balance::{
             BalanceConfig, BalanceConfigInner, default_budget_max_cooldown_wait,
         },
+        decision::TierCascade,
         router::RouterConfig,
     },
     endpoints::EndpointType,
@@ -120,6 +121,7 @@ fn build_autodefault_router_config(
             EndpointType::Chat,
             strategy,
         )])),
+        decision_tier_cascade: Some(TierCascade::FreeUp),
         ..Default::default()
     }
 }
@@ -159,5 +161,9 @@ mod tests {
         let strategy = router.load_balance.0.get(&EndpointType::Chat).unwrap();
 
         assert!(matches!(strategy, BalanceConfigInner::BudgetAware { .. }));
+        assert_eq!(
+            router.decision_tier_cascade,
+            Some(TierCascade::FreeUp)
+        );
     }
 }

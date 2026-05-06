@@ -38,11 +38,18 @@ where
         std::mem::swap(&mut self.inner, &mut inner);
         let app_state = self.app_state.clone();
 
+        let tier_cascade_override = self.tier_cascade_override;
         Box::pin(async move {
             if !app_state.config().decision.enabled {
                 return inner.call(req).await;
             }
-            handle::handle_decision_request(&mut inner, app_state, req).await
+            handle::handle_decision_request(
+                &mut inner,
+                app_state,
+                req,
+                tier_cascade_override,
+            )
+            .await
         })
     }
 }
