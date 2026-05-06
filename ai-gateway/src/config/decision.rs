@@ -186,21 +186,20 @@ impl ModelTiersConfig {
         for (tier, models) in &self.0 {
             for raw in models {
                 // Prefer parsing with the request model's inference provider.
-                if let Some(provider) = provider_hint.as_ref() {
-                    if let Ok(parsed) = ModelId::from_str_and_provider(
+                if let Some(provider) = provider_hint.as_ref()
+                    && let Ok(parsed) = ModelId::from_str_and_provider(
                         provider.clone(),
                         raw,
-                    ) {
-                        if ModelIdWithoutVersion::from(parsed) == target {
-                            return Some(*tier);
-                        }
-                    }
+                    )
+                    && ModelIdWithoutVersion::from(parsed) == target
+                {
+                    return Some(*tier);
                 }
                 // Else parse as a full model id (e.g. `openai/gpt-4o` includes provider).
-                if let Ok(parsed) = ModelId::from_str(raw) {
-                    if ModelIdWithoutVersion::from(parsed) == target {
-                        return Some(*tier);
-                    }
+                if let Ok(parsed) = ModelId::from_str(raw)
+                    && ModelIdWithoutVersion::from(parsed) == target
+                {
+                    return Some(*tier);
                 }
             }
         }

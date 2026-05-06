@@ -39,9 +39,12 @@ impl Client {
         provider: InferenceProvider,
         api_key: Option<&ProviderKey>,
     ) -> Result<Self, InitError> {
+        let gzip = app_state.config().gzip_decompress_responses_for(&provider);
+        let d = &app_state.config().dispatcher;
         let base = reqwest::Client::builder()
-            .connect_timeout(app_state.0.config.dispatcher.connection_timeout)
-            .timeout(app_state.0.config.dispatcher.timeout)
+            .gzip(gzip)
+            .connect_timeout(d.connection_timeout)
+            .timeout(d.timeout)
             .tcp_nodelay(true);
         match provider {
             InferenceProvider::OpenAI

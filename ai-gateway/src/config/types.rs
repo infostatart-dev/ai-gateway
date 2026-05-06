@@ -4,6 +4,8 @@ use displaydoc::Display;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::types::provider::InferenceProvider;
+
 pub const ROUTER_ID_REGEX: &str = r"^[A-Za-z0-9_-]{1,12}$";
 pub const DEFAULT_CONFIG_PATH: &str = "/etc/ai-gateway/config.yaml";
 
@@ -114,5 +116,30 @@ impl Config {
     pub fn has_autodefault_router(&self) -> bool {
         self.deployment_target.is_sidecar()
             && self.routers.contains_key(&Self::autodefault_router_id())
+    }
+
+    /// `reqwest` gzip response decompression: per-provider override, else dispatcher default.
+    #[must_use]
+    pub fn gzip_decompress_responses_for(
+        &self,
+        provider: &InferenceProvider,
+    ) -> bool {
+        self.providers
+            .get(provider)
+            .and_then(|cfg| cfg.gzip_decompress_responses)
+            .unwrap_or(self.dispatcher.gzip_decompress_responses)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+    use crate::types::provider::InferenceProvider;
+
+    #[test]
+    fn gzip_for_provider_uses_dispatcher_when_no_override() {
+        let cfg = Config::default();
+        assert!(cfg.dispatcher.gzip_decompress_responses);
+        assert!(cfg.gzip_decompress_responses_for(&InferenceProvider::OpenAI));
     }
 }

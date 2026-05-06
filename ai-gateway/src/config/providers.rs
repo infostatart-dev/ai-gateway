@@ -26,6 +26,9 @@ pub struct GlobalProviderConfig {
     pub base_url: Url,
     #[serde(default)]
     pub version: Option<String>,
+    /// If set, overrides `dispatcher.gzip-decompress-responses` for this provider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gzip_decompress_responses: Option<bool>,
 }
 
 /// Map of *ALL* supported providers.
@@ -48,6 +51,8 @@ impl<'de> Deserialize<'de> for ProvidersConfig {
             base_url: Url,
             #[serde(default)]
             version: Option<String>,
+            #[serde(default)]
+            gzip_decompress_responses: Option<bool>,
         }
 
         impl<'de> Visitor<'de> for ProvidersConfigVisitor {
@@ -97,6 +102,8 @@ impl<'de> Deserialize<'de> for ProvidersConfig {
                         models,
                         base_url: raw_config.base_url,
                         version: raw_config.version,
+                        gzip_decompress_responses: raw_config
+                            .gzip_decompress_responses,
                     };
 
                     providers.insert(provider, config);
@@ -123,6 +130,8 @@ impl Serialize for ProvidersConfig {
             base_url: Url,
             #[serde(skip_serializing_if = "Option::is_none")]
             version: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            gzip_decompress_responses: Option<bool>,
         }
 
         let mut map = serializer.serialize_map(Some(self.0.len()))?;
@@ -136,6 +145,7 @@ impl Serialize for ProvidersConfig {
                 models: models_as_strings,
                 base_url: config.base_url.clone(),
                 version: config.version.clone(),
+                gzip_decompress_responses: config.gzip_decompress_responses,
             };
 
             map.serialize_entry(provider, &serialized_config)?;

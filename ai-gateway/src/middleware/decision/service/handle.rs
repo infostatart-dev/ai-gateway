@@ -43,15 +43,15 @@ where
             .await?;
 
     // Optional per-request tier via `x-decision-tier` (agents can set intent without per-key policy).
-    if let Some(override_tier) = parse_tier_override(&req) {
-        if override_tier != policy.tier {
-            tracing::info!(
-                from = ?policy.tier,
-                to = ?override_tier,
-                "decision tier overridden by X-Decision-Tier header",
-            );
-            policy.tier = override_tier;
-        }
+    if let Some(override_tier) = parse_tier_override(&req)
+        && override_tier != policy.tier
+    {
+        tracing::info!(
+            from = ?policy.tier,
+            to = ?override_tier,
+            "decision tier overridden by X-Decision-Tier header",
+        );
+        policy.tier = override_tier;
     }
 
     let permit = resolve::acquire_traffic_slot(

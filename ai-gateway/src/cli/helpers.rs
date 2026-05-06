@@ -96,7 +96,7 @@ fn print_strategy_and_providers(
     let strategy_name = balance.as_ref();
     let providers = balance.providers();
 
-    write!(out, "  Strategy : \x1b[33m{strategy_name}\x1b[0m\n")
+    writeln!(out, "  Strategy : \x1b[33m{strategy_name}\x1b[0m")
         .expect("write to String");
     write!(out, "  Providers: ").expect("write to String");
 
