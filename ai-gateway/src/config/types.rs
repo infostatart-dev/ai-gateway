@@ -118,7 +118,13 @@ impl Config {
             && self.routers.contains_key(&Self::autodefault_router_id())
     }
 
-    /// `reqwest` gzip response decompression: per-provider override, else dispatcher default.
+    #[must_use]
+    pub fn has_decision_enabled_router(&self) -> bool {
+        self.routers.values().any(|router| router.decision.enabled)
+    }
+
+    /// `reqwest` gzip response decompression: per-provider override, else
+    /// dispatcher default.
     #[must_use]
     pub fn gzip_decompress_responses_for(
         &self,

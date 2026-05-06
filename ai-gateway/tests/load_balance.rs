@@ -4,6 +4,7 @@ use ai_gateway::{
     config::{
         Config,
         balance::{BalanceConfig, BalanceConfigInner},
+        decision::RouterDecisionConfig,
         helicone::HeliconeFeatures,
         router::{RouterConfig, RouterConfigs},
     },
@@ -31,7 +32,7 @@ fn p2c_config_openai_anthropic_google() -> RouterConfigs {
                     ],
                 },
             )])),
-            decision_tier_cascade: None,
+            decision: RouterDecisionConfig::default(),
             model_mappings: None,
             cache: None,
             retries: None,

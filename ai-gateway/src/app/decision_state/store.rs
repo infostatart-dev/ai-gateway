@@ -19,7 +19,9 @@ pub(super) fn build_decision_state_store(
             ))
         }
         Some(crate::config::decision::StateStoreConfig::Memory) | None => {
-            if config.decision.enabled && config.deployment_target.is_cloud() {
+            if config.has_decision_enabled_router()
+                && config.deployment_target.is_cloud()
+            {
                 return Err(InitError::DistributedStateStoreRequired);
             }
             Ok(Arc::new(

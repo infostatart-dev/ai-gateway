@@ -3,12 +3,14 @@
 mod call;
 mod cooldown;
 mod dispatch;
+mod factory;
 mod failover_loop;
 mod health;
 mod new_router;
 mod rank;
 mod rank_score;
 mod selection;
+mod selection_mode;
 mod sort;
 mod tower;
 mod types;
@@ -16,4 +18,5 @@ mod types;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use rank::default_provider_budget_rank;
 pub use types::BudgetAwareRouter;

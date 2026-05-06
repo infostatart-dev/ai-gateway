@@ -1,44 +1,18 @@
 use std::{fmt::Write as _, net::SocketAddr};
 
-use crate::config::Config;
+use crate::{
+    cli::{banner, router_summary},
+    config::Config,
+};
 
 pub fn show_welcome_banner(addr: &SocketAddr, config: &Config) {
-    print_ascii_banner();
+    banner::print_ascii_banner();
     print_example_curl(addr);
 
     if let Some(router_config) = autodefault_router(config) {
         print_autodefault_section(addr, router_config);
     }
-}
-
-fn print_ascii_banner() {
-    let banner = format!(
-        "{}{}{}",
-        "\x1b[36m",
-        r"
-               -*******-               
-          :-***--------****=           
-      --***-----------------***--      
-   ****-------------------------****  
-   ******--------------------*****=*             _    ___       ____    _  _____ _______        ___ __   __
-   *-----****-------------*****-   *            / \  |_ _|     / ___|  / \|_   _| ____\ \      / / \\ \ / /
-   *---------*****---*****--**    **           / _ \  | |_____| |  _  / _ \ | | |  _|  \ \ /\ / / _ \\ V / 
-   *--------**=   -**------*=    *=*          / ___ \ | |_____| |_| |/ ___ \| | | |___  \ V  V / ___ \| |  
-   *-----**-     =*------**=   -*  *         /_/   \_\___|     \____/_/   \_\_| |_____|  \_/\_/_/   \_\_|  
-   *---**      **  *----**     *   *  
-   ***=     -*=    *---**    *     *                            By Helicone.ai
-   *      *        *--*     *-     * 
-   *   **          ***     *-      *                             
-   ***=            **     *      -**  
-      =**--        *:   *  --**=    
-          :***-    *   *****          
-              --*******--",
-        "\x1b[0m"
-    );
-
-    println!(
-        "{banner}\n\n\x1b[1m🚀 Welcome to AI Gateway! \x1b[0m\n"
-    );
+    router_summary::print_configured_router_sections(config);
 }
 
 fn print_example_curl(addr: &SocketAddr) {
@@ -77,36 +51,11 @@ fn print_autodefault_section(
          /router/autodefault/chat/completions\n",
     );
 
-    print_strategy_and_providers(&mut section, router_config);
+    router_summary::print_decision_status(&mut section, router_config);
+    router_summary::print_strategy_and_providers(&mut section, router_config);
     print_autodefault_curl(&mut section, addr);
 
     print!("{section}");
-}
-
-fn print_strategy_and_providers(
-    out: &mut String,
-    router_config: &crate::config::router::RouterConfig,
-) {
-    use crate::endpoints::EndpointType;
-
-    let Some(balance) = router_config.load_balance.as_ref().get(&EndpointType::Chat) else {
-        return;
-    };
-
-    let strategy_name = balance.as_ref();
-    let providers = balance.providers();
-
-    writeln!(out, "  Strategy : \x1b[33m{strategy_name}\x1b[0m")
-        .expect("write to String");
-    write!(out, "  Providers: ").expect("write to String");
-
-    for (i, provider) in providers.iter().enumerate() {
-        if i > 0 {
-            write!(out, ", ").expect("write to String");
-        }
-        write!(out, "\x1b[32m{provider}\x1b[0m").expect("write to String");
-    }
-    writeln!(out).expect("write to String");
 }
 
 fn print_autodefault_curl(out: &mut String, addr: &SocketAddr) {

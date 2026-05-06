@@ -26,7 +26,8 @@ pub struct GlobalProviderConfig {
     pub base_url: Url,
     #[serde(default)]
     pub version: Option<String>,
-    /// If set, overrides `dispatcher.gzip-decompress-responses` for this provider.
+    /// If set, overrides `dispatcher.gzip-decompress-responses` for this
+    /// provider.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gzip_decompress_responses: Option<bool>,
 }

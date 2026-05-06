@@ -44,7 +44,8 @@ impl TrafficShaper {
     }
 
     /// Acquire with tier cascade: on start-tier exhaustion, try the next tier
-    /// in cascade order. Each attempt uses the same `timeout`; returns the first success.
+    /// in cascade order. Each attempt uses the same `timeout`; returns the
+    /// first success.
     pub async fn acquire_with_cascade(
         &self,
         start_tier: Tier,
@@ -115,7 +116,8 @@ pub struct AcquireOutcome {
     pub permit: CombinedPermit,
 }
 
-/// Ordered tier list from `start` per cascade mode. `OnlyTier` yields a single element.
+/// Ordered tier list from `start` per cascade mode. `OnlyTier` yields a single
+/// element.
 fn cascade_chain(start: Tier, cascade: TierCascade) -> Vec<Tier> {
     match cascade {
         TierCascade::OnlyTier => vec![start],
@@ -145,9 +147,18 @@ mod tests {
 
     #[test]
     fn only_tier_returns_single_start() {
-        assert_eq!(cascade_chain(Tier::Paid, TierCascade::OnlyTier), vec![Tier::Paid]);
-        assert_eq!(cascade_chain(Tier::Freemium, TierCascade::OnlyTier), vec![Tier::Freemium]);
-        assert_eq!(cascade_chain(Tier::Free, TierCascade::OnlyTier), vec![Tier::Free]);
+        assert_eq!(
+            cascade_chain(Tier::Paid, TierCascade::OnlyTier),
+            vec![Tier::Paid]
+        );
+        assert_eq!(
+            cascade_chain(Tier::Freemium, TierCascade::OnlyTier),
+            vec![Tier::Freemium]
+        );
+        assert_eq!(
+            cascade_chain(Tier::Free, TierCascade::OnlyTier),
+            vec![Tier::Free]
+        );
     }
 
     #[test]

@@ -1,6 +1,5 @@
-use crate::types::provider::InferenceProvider;
-
 use super::ModelCapability;
+use crate::types::provider::InferenceProvider;
 
 pub fn apply_provider_capabilities(
     cap: &mut ModelCapability,
@@ -82,7 +81,7 @@ fn xai(cap: &mut ModelCapability, model_name: &str) {
 }
 
 mod groq {
-    /// Source: https://console.groq.com/docs/structured-outputs#supported-models
+    /// Source: <https://console.groq.com/docs/structured-outputs#supported-models>
     const JSON_SCHEMA_MODELS: &[&str] = &[
         "openai/gpt-oss-120b",
         "openai/gpt-oss-safeguard-20b",

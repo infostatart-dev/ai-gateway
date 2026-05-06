@@ -10,7 +10,6 @@ cache-store:
   max-size: 268435456
 
 decision:
-  enabled: true
   state-store:
     type: memory
   default-policy:
@@ -26,6 +25,8 @@ decision:
 
 routers:
   decision:
+    decision:
+      enabled: true
     load-balance:
       chat:
         strategy: budget-aware

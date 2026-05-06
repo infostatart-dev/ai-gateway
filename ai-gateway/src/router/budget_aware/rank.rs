@@ -21,19 +21,24 @@ pub(super) fn effective_budget_rank(
 }
 
 pub(super) fn default_budget_rank(capability: &ModelCapability) -> u16 {
-    match &capability.provider {
-        InferenceProvider::Ollama => 0,
-        InferenceProvider::Named(name) if name == "groq" => 0,
-        InferenceProvider::GoogleGemini => 1,
+    if capability.provider == InferenceProvider::OpenRouter
+        && capability.model.to_string().ends_with(":free")
+    {
+        return 0;
+    }
+    default_provider_budget_rank(&capability.provider)
+}
+
+pub(crate) fn default_provider_budget_rank(
+    provider: &InferenceProvider,
+) -> u16 {
+    match provider {
+        InferenceProvider::Ollama | InferenceProvider::OpenRouter => 0,
+        InferenceProvider::Named(name) if name == "groq" => 1,
+        InferenceProvider::GoogleGemini => 10,
         InferenceProvider::Named(name) if name == "deepseek" => 10,
-        InferenceProvider::OpenRouter
-            if capability.model.to_string().ends_with(":free") =>
-        {
-            0
-        }
-        InferenceProvider::OpenRouter => 20,
+        InferenceProvider::Anthropic => 20,
         InferenceProvider::OpenAI => 30,
-        InferenceProvider::Anthropic => 40,
         InferenceProvider::Bedrock => 50,
         InferenceProvider::Named(_) => 25,
     }

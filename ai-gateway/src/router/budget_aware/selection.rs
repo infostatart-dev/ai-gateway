@@ -1,4 +1,7 @@
-use super::types::{BudgetAwareRouter, BudgetCandidate};
+use super::{
+    selection_mode,
+    types::{BudgetAwareRouter, BudgetCandidate, CandidateSelectionMode},
+};
 use crate::{
     error::internal::InternalError,
     router::capability::{RequestRequirements, supports},
@@ -7,6 +10,24 @@ use crate::{
 
 impl BudgetAwareRouter {
     pub(super) fn ordered_candidates(
+        &self,
+        requirements: &RequestRequirements,
+        source_model: Option<&ModelId>,
+    ) -> Result<Vec<BudgetCandidate>, InternalError> {
+        match self.selection_mode {
+            CandidateSelectionMode::CapabilityThenBudget => self
+                .capability_then_budget_candidates(requirements, source_model),
+            CandidateSelectionMode::BudgetThenCapability => {
+                selection_mode::budget_then_capability_candidates(
+                    self,
+                    requirements,
+                    source_model,
+                )
+            }
+        }
+    }
+
+    fn capability_then_budget_candidates(
         &self,
         requirements: &RequestRequirements,
         source_model: Option<&ModelId>,
@@ -36,7 +57,7 @@ impl BudgetAwareRouter {
         Ok(candidates)
     }
 
-    fn matches_source_model(
+    pub(super) fn matches_source_model(
         &self,
         source_model: &ModelId,
         candidate: &BudgetCandidate,

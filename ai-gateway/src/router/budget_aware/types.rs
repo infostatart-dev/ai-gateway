@@ -19,6 +19,12 @@ pub(crate) struct BudgetCandidate {
     pub service: DispatcherService,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(super) enum CandidateSelectionMode {
+    CapabilityThenBudget,
+    BudgetThenCapability,
+}
+
 #[derive(Debug, Clone)]
 pub struct BudgetAwareRouter {
     pub(super) candidates: Arc<Vec<BudgetCandidate>>,
@@ -27,4 +33,5 @@ pub struct BudgetAwareRouter {
     pub(super) provider_priorities: Arc<IndexMap<InferenceProvider, u16>>,
     pub(super) default_latency: Duration,
     pub(super) max_cooldown_wait: Duration,
+    pub(super) selection_mode: CandidateSelectionMode,
 }

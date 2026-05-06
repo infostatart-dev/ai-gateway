@@ -9,7 +9,10 @@ pub struct DispatcherConfig {
     #[serde(default = "default_connection_timeout", with = "humantime_serde")]
     pub connection_timeout: Duration,
     /// Pass-through to `reqwest::ClientBuilder::gzip`; default true.
-    #[serde(default = "default_gzip_decompress_responses", rename = "gzip-decompress-responses")]
+    #[serde(
+        default = "default_gzip_decompress_responses",
+        rename = "gzip-decompress-responses"
+    )]
     pub gzip_decompress_responses: bool,
 }
 
@@ -53,11 +56,11 @@ mod tests {
 
     #[test]
     fn gzip_decompress_yaml_alias() {
-        let yaml = r#"
+        let yaml = r"
 timeout: 1m
 connection-timeout: 10s
 gzip-decompress-responses: false
-"#;
+";
         let cfg: DispatcherConfig = serde_yml::from_str(yaml).unwrap();
         assert!(!cfg.gzip_decompress_responses);
     }

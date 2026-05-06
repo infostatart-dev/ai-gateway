@@ -34,7 +34,7 @@ pub(crate) fn build_decision_state(
             crate::middleware::decision::policy::MemoryPolicyStore::new(
                 config.decision.policy_store.cache_capacity,
                 config.decision.policy_store.cache_ttl,
-                config.decision.default_policy.clone(),
+                Some(config.decision.default_policy.clone()),
             ),
         ),
     })

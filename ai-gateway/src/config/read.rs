@@ -13,7 +13,7 @@ use crate::{
         balance::{
             BalanceConfig, BalanceConfigInner, default_budget_max_cooldown_wait,
         },
-        decision::TierCascade,
+        decision::{RouterDecisionConfig, TierCascade},
         router::RouterConfig,
     },
     endpoints::EndpointType,
@@ -96,24 +96,16 @@ fn build_autodefault_router(config: &Config) -> Option<RouterConfig> {
         .cloned()
         .collect();
     let providers = nonempty_collections::NESet::try_from_set(providers)?;
-    Some(build_autodefault_router_config(
-        providers,
-        config.decision.enabled,
-    ))
+    Some(build_autodefault_router_config(providers))
 }
 
 fn build_autodefault_router_config(
     providers: nonempty_collections::NESet<InferenceProvider>,
-    decision_enabled: bool,
 ) -> RouterConfig {
-    let strategy = if decision_enabled {
-        BalanceConfigInner::BudgetAware {
-            providers,
-            provider_priorities: IndexMap::new(),
-            max_cooldown_wait: default_budget_max_cooldown_wait(),
-        }
-    } else {
-        BalanceConfigInner::CapabilityAware { providers }
+    let strategy = BalanceConfigInner::BudgetAwareCapabilityAfter {
+        providers,
+        provider_priorities: IndexMap::new(),
+        max_cooldown_wait: default_budget_max_cooldown_wait(),
     };
 
     RouterConfig {
@@ -121,7 +113,10 @@ fn build_autodefault_router_config(
             EndpointType::Chat,
             strategy,
         )])),
-        decision_tier_cascade: Some(TierCascade::FreeUp),
+        decision: RouterDecisionConfig {
+            enabled: true,
+            tier_cascade: Some(TierCascade::FreeUp),
+        },
         ..Default::default()
     }
 }
@@ -148,22 +143,23 @@ mod tests {
         let router = config.routers.get(&router_id).unwrap();
         let strategy = router.load_balance.0.get(&EndpointType::Chat).unwrap();
 
-        assert!(config.decision.enabled);
+        assert!(router.decision.enabled);
         assert!(matches!(strategy, BalanceConfigInner::BudgetAware { .. }));
     }
 
     #[test]
-    fn autodefault_uses_budget_aware_when_decision_is_enabled() {
-        let router = build_autodefault_router_config(
-            nonempty_collections::nes![InferenceProvider::Named("groq".into())],
-            true,
-        );
+    fn autodefault_uses_budget_then_capability() {
+        let router =
+            build_autodefault_router_config(nonempty_collections::nes![
+                InferenceProvider::Named("groq".into())
+            ]);
         let strategy = router.load_balance.0.get(&EndpointType::Chat).unwrap();
 
-        assert!(matches!(strategy, BalanceConfigInner::BudgetAware { .. }));
-        assert_eq!(
-            router.decision_tier_cascade,
-            Some(TierCascade::FreeUp)
-        );
+        assert!(matches!(
+            strategy,
+            BalanceConfigInner::BudgetAwareCapabilityAfter { .. }
+        ));
+        assert!(router.decision.enabled);
+        assert_eq!(router.decision.tier_cascade, Some(TierCascade::FreeUp));
     }
 }

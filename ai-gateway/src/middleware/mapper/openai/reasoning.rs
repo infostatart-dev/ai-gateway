@@ -1,6 +1,6 @@
 use async_openai::types::chat::CreateChatCompletionRequest;
 
-/// Source: https://platform.openai.com/docs/guides/reasoning
+/// Source: <https://platform.openai.com/docs/guides/reasoning>
 const PREFIXES: &[&str] = &["o1", "o3", "o4", "gpt-5"];
 
 pub struct ReasoningAdapter;

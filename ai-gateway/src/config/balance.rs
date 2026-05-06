@@ -168,6 +168,19 @@ pub enum BalanceConfigInner {
         )]
         max_cooldown_wait: Duration,
     },
+    /// Orders candidates by budget priority, then applies capability
+    /// requirements, health, cooldown, and failover within that ordered set.
+    #[serde(alias = "budget-then-capability")]
+    BudgetAwareCapabilityAfter {
+        providers: NESet<InferenceProvider>,
+        #[serde(default)]
+        provider_priorities: IndexMap<InferenceProvider, u16>,
+        #[serde(
+            with = "humantime_serde",
+            default = "default_budget_max_cooldown_wait"
+        )]
+        max_cooldown_wait: Duration,
+    },
     /// Distributes and load balances requests among a set of (providers,model).
     ModelWeighted { models: NESet<WeightedModel> },
     /// Distributes and load balances requests among a set of (providers,model).
@@ -184,7 +197,8 @@ impl BalanceConfigInner {
             Self::BalancedLatency { providers }
             | Self::ProviderFailover { providers }
             | Self::CapabilityAware { providers }
-            | Self::BudgetAware { providers, .. } => {
+            | Self::BudgetAware { providers, .. }
+            | Self::BudgetAwareCapabilityAfter { providers, .. } => {
                 providers.iter().cloned().collect()
             }
             Self::ModelWeighted { models } => models
@@ -225,4 +239,30 @@ pub struct WeightedProvider {
 pub struct WeightedModel {
     pub model: ModelId,
     pub weight: Decimal,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BalanceConfigInner;
+
+    #[test]
+    fn budget_aware_capability_after_deserializes() {
+        let yaml = r"
+strategy: budget-aware-capability-after
+providers:
+  - groq
+  - openrouter
+provider-priorities:
+  groq: 0
+  openrouter: 20
+max-cooldown-wait: 3s
+";
+
+        let strategy = serde_yml::from_str::<BalanceConfigInner>(yaml).unwrap();
+
+        assert!(matches!(
+            strategy,
+            BalanceConfigInner::BudgetAwareCapabilityAfter { .. }
+        ));
+    }
 }

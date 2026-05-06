@@ -10,7 +10,8 @@ use crate::{
 };
 
 /// Request header for per-request tier override. Overrides `policy.tier` from
-/// the policy store for this request only. Values: `free`, `freemium`, `paid` (case-insensitive).
+/// the policy store for this request only. Values: `free`, `freemium`, `paid`
+/// (case-insensitive).
 const TIER_OVERRIDE_HEADER: &str = "x-decision-tier";
 
 fn parse_tier_override(req: &Request) -> Option<Tier> {
@@ -42,7 +43,8 @@ where
         resolve::resolve_policy(&app_state, existing_policy, auth.as_ref())
             .await?;
 
-    // Optional per-request tier via `x-decision-tier` (agents can set intent without per-key policy).
+    // Optional per-request tier via `x-decision-tier` (agents can set intent
+    // without per-key policy).
     if let Some(override_tier) = parse_tier_override(&req)
         && override_tier != policy.tier
     {
@@ -99,7 +101,7 @@ mod tier_override_tests {
     use axum_core::body::Body;
     use http::Request as HttpRequest;
 
-    use super::{parse_tier_override, Tier};
+    use super::{Tier, parse_tier_override};
 
     fn req(header_value: Option<&str>) -> HttpRequest<Body> {
         let mut builder = HttpRequest::builder();

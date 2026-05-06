@@ -144,6 +144,20 @@ impl RoutingStrategyService {
             )
             .await
             .map(Self::BudgetAware),
+            BalanceConfigInner::BudgetAwareCapabilityAfter {
+                providers,
+                provider_priorities,
+                max_cooldown_wait,
+            } => crate::router::budget_aware::BudgetAwareRouter::new_budget_then_capability(
+                app_state,
+                router_id,
+                router_config,
+                providers,
+                provider_priorities,
+                *max_cooldown_wait,
+            )
+            .await
+            .map(Self::BudgetAware),
             BalanceConfigInner::ModelWeighted { .. } => {
                 Self::model_weighted(app_state, router_id, router_config).await
             }

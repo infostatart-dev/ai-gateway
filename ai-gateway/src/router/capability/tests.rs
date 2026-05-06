@@ -145,10 +145,9 @@ mod async_tests {
             ..RequestRequirements::default()
         };
 
-        // OpenAI catalog: gpt-4 supports vision — expect non-empty vision-capable candidates.
-        let candidates = router
-            .ordered_candidates(&reqs, None, None)
-            .unwrap();
+        // OpenAI catalog: gpt-4 supports vision — expect non-empty
+        // vision-capable candidates.
+        let candidates = router.ordered_candidates(&reqs, None, None).unwrap();
         assert!(!candidates.is_empty());
         assert!(candidates.iter().all(|c| c.capability.supports_vision));
 
@@ -222,7 +221,6 @@ mod async_tests {
             ]
         );
     }
-
 }
 
 // ─── tier-cascade chain helpers ─────────────────────────────────────────
@@ -314,11 +312,8 @@ paid:
 #[test]
 fn model_tiers_empty_returns_none() {
     let cfg = crate::config::decision::ModelTiersConfig::default();
-    let m = ModelId::from_str_and_provider(
-        InferenceProvider::OpenAI,
-        "gpt-4o",
-    )
-    .unwrap();
+    let m = ModelId::from_str_and_provider(InferenceProvider::OpenAI, "gpt-4o")
+        .unwrap();
     assert!(cfg.is_empty());
     assert_eq!(cfg.tier_of(&m), None);
 }

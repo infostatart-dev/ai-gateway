@@ -20,8 +20,8 @@ use crate::{
 };
 
 /// Upper bound for honoring `Retry-After`. If the provider asks to wait longer,
-/// stop inline retries, return the response as-is, and let the router's failover
-/// path pick another model (cooldown / next candidate).
+/// stop inline retries, return the response as-is, and let the router's
+/// failover path pick another model (cooldown / next candidate).
 const RETRY_AFTER_CAP: Duration = Duration::from_secs(30);
 
 impl Dispatcher {
@@ -46,17 +46,16 @@ impl Dispatcher {
         };
 
         // Custom loop on top of backon-style delays: backon supplies default
-        // wait steps; we layer `Retry-After` when the response is 429 or 503 with
-        // that header (fixes 429 not retrying and `Retry-After` being ignored).
+        // wait steps; we layer `Retry-After` when the response is 429 or 503
+        // with that header (fixes 429 not retrying and `Retry-After`
+        // being ignored).
         let max_retries = retry_config.max_retries();
         let mut backoff_iter = backoff_iter_for(retry_config);
         let mut attempt: u16 = 0;
         loop {
-            let result = Self::dispatch_sync(
-                &request_builder,
-                req_body_bytes.clone(),
-            )
-            .await;
+            let result =
+                Self::dispatch_sync(&request_builder, req_body_bytes.clone())
+                    .await;
 
             // Not eligible for retry: return immediately.
             if !is_retryable_result(&result) {
@@ -69,7 +68,8 @@ impl Dispatcher {
             }
 
             // `Retry-After` from 429 / 503 beats plain backoff. Above cap,
-            // further inline retries are pointless: return and let router failover run.
+            // further inline retries are pointless: return and let router
+            // failover run.
             let retry_after = result
                 .as_ref()
                 .ok()
@@ -110,9 +110,11 @@ fn backoff_iter_for(
                 .with_max_delay(*max_delay)
                 .with_min_delay(*min_delay)
                 .with_max_times(usize::from(*max_retries))
-                .with_factor(factor.to_f32().unwrap_or(
-                    crate::config::retry::DEFAULT_RETRY_FACTOR,
-                ))
+                .with_factor(
+                    factor
+                        .to_f32()
+                        .unwrap_or(crate::config::retry::DEFAULT_RETRY_FACTOR),
+                )
                 .with_jitter()
                 .build(),
         ),
@@ -139,7 +141,9 @@ impl RetryConfigExt for RetryConfig {
     }
 }
 
-fn retry_after_from_response(response: &http::Response<Body>) -> Option<Duration> {
+fn retry_after_from_response(
+    response: &http::Response<Body>,
+) -> Option<Duration> {
     let status = response.status();
     if status != StatusCode::TOO_MANY_REQUESTS
         && status != StatusCode::SERVICE_UNAVAILABLE
@@ -245,8 +249,7 @@ fn is_retryable_result(
     match result {
         Ok(res) => is_retryable_status(res.0.status()),
         Err(ApiError::Internal(InternalError::ReqwestError(e))) => {
-            e.is_connect()
-                || e.status().is_some_and(is_retryable_status)
+            e.is_connect() || e.status().is_some_and(is_retryable_status)
         }
         _ => false,
     }
@@ -376,10 +379,7 @@ mod retry_tests {
     #[test]
     fn retry_after_extracted_from_503() {
         let r = resp_with(StatusCode::SERVICE_UNAVAILABLE, Some("3"));
-        assert_eq!(
-            retry_after_from_response(&r),
-            Some(Duration::from_secs(3))
-        );
+        assert_eq!(retry_after_from_response(&r), Some(Duration::from_secs(3)));
     }
 
     #[test]

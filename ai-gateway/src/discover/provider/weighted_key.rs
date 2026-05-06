@@ -93,7 +93,8 @@ impl DispatcherDiscovery<WeightedKey> {
                             .to_string(),
                     ));
                 }
-                BalanceConfigInner::BudgetAware { .. } => {
+                BalanceConfigInner::BudgetAware { .. }
+                | BalanceConfigInner::BudgetAwareCapabilityAfter { .. } => {
                     return Err(InitError::InvalidBalancer(
                         "Budget aware balancer not supported for provider \
                          weighted discovery"

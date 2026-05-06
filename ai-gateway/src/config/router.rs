@@ -7,7 +7,7 @@ use url::Url;
 
 use super::{
     balance::{BalanceConfig, BalanceConfigInner},
-    decision::TierCascade,
+    decision::RouterDecisionConfig,
     model_mapping::ModelMappingConfig,
     retry::RetryConfig,
 };
@@ -40,10 +40,8 @@ impl std::ops::Deref for RouterConfigs {
 #[serde(default, rename_all = "kebab-case")]
 pub struct RouterConfig {
     pub load_balance: BalanceConfig,
-    /// When set, overrides `decision.shaper.cascade` for this router's decision
-    /// middleware traffic acquire and for capability-aware tier ordering.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub decision_tier_cascade: Option<TierCascade>,
+    #[serde(default)]
+    pub decision: RouterDecisionConfig,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_mappings: Option<ModelMappingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -60,7 +58,7 @@ impl Default for RouterConfig {
     fn default() -> Self {
         Self {
             load_balance: BalanceConfig::default(),
-            decision_tier_cascade: None,
+            decision: RouterDecisionConfig::default(),
             model_mappings: None,
             cache: Some(CacheConfig::default()),
             retries: None,
@@ -72,6 +70,12 @@ impl Default for RouterConfig {
 
 impl RouterConfig {
     pub fn validate(&self) -> Result<(), InitError> {
+        if !self.decision.enabled && self.decision.tier_cascade.is_some() {
+            return Err(InitError::InvalidDecisionConfig(
+                "router decision tier cascade requires decision.enabled",
+            ));
+        }
+
         for balance_config in self.load_balance.0.values() {
             match balance_config {
                 BalanceConfigInner::ProviderWeighted { providers } => {
@@ -96,6 +100,7 @@ impl RouterConfig {
                 | BalanceConfigInner::ProviderFailover { .. }
                 | BalanceConfigInner::CapabilityAware { .. }
                 | BalanceConfigInner::BudgetAware { .. }
+                | BalanceConfigInner::BudgetAwareCapabilityAfter { .. }
                 | BalanceConfigInner::ModelLatency { .. } => {}
             }
         }
@@ -116,7 +121,7 @@ impl crate::tests::TestDefault for RouterConfigs {
             RouterId::Named(compact_str::CompactString::new("my-router")),
             RouterConfig {
                 model_mappings: None,
-                decision_tier_cascade: None,
+                decision: RouterDecisionConfig::default(),
                 cache: None,
                 load_balance: BalanceConfig(HashMap::from([(
                     crate::endpoints::EndpointType::Chat,
@@ -166,7 +171,7 @@ mod tests {
 
         RouterConfig {
             model_mappings: None,
-            decision_tier_cascade: None,
+            decision: RouterDecisionConfig::default(),
             cache: Some(cache),
             load_balance: balance,
             retries: Some(retries),
@@ -191,5 +196,17 @@ mod tests {
         let deserialized =
             serde_json::from_str::<RouterConfigs>(&serialized).unwrap();
         assert_eq!(config, deserialized);
+    }
+
+    #[test]
+    fn tier_cascade_requires_router_decision_enabled() {
+        let mut config = RouterConfig::default();
+        config.decision.tier_cascade =
+            Some(crate::config::decision::TierCascade::FreeUp);
+
+        assert!(matches!(
+            config.validate(),
+            Err(InitError::InvalidDecisionConfig(_))
+        ));
     }
 }

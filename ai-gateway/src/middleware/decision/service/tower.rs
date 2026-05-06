@@ -37,10 +37,11 @@ where
         let mut inner = self.inner.clone();
         std::mem::swap(&mut self.inner, &mut inner);
         let app_state = self.app_state.clone();
+        let decision_enabled = self.decision_enabled;
 
         let tier_cascade_override = self.tier_cascade_override;
         Box::pin(async move {
-            if !app_state.config().decision.enabled {
+            if !decision_enabled {
                 return inner.call(req).await;
             }
             handle::handle_decision_request(

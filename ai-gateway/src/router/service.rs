@@ -77,7 +77,7 @@ impl Router {
                 crate::middleware::decision::service::DecisionEngineLayer::new(
                     app_state.clone(),
                     id.clone(),
-                    router_config.clone(),
+                    router_config.as_ref(),
                 );
             let service_stack = ServiceBuilder::new()
                 .layer(ErrorHandlerLayer::new(app_state.clone()))

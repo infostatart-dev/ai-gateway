@@ -5,19 +5,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::model_id::{ModelId, ModelIdWithoutVersion};
 
-#[derive(
-    Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq,
-)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct DecisionEngineConfig {
-    #[serde(default)]
-    pub enabled: bool,
     #[serde(default)]
     pub shaper: TrafficShaperConfig,
     #[serde(default)]
     pub policy_store: PolicyStoreConfig,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_policy: Option<DecisionPolicyConfig>,
+    #[serde(default)]
+    pub default_policy: DecisionPolicyConfig,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub state_store: Option<StateStoreConfig>,
     /// Optional model-id → tier map. When non-empty, the capability-aware
@@ -25,6 +21,17 @@ pub struct DecisionEngineConfig {
     /// When empty, tier-based ordering is disabled (legacy behaviour).
     #[serde(default)]
     pub model_tiers: ModelTiersConfig,
+}
+
+#[derive(
+    Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq, Hash,
+)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct RouterDecisionConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tier_cascade: Option<TierCascade>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
@@ -81,8 +88,10 @@ fn default_acquire_timeout() -> Duration {
 
 /// Traffic shaper behaviour when the start tier slot is exhausted:
 /// - `OnlyTier`: no cascade; acquire times out.
-/// - `PaidDown`: try tiers in `paid → freemium → free`, sliced from policy tier downward.
-/// - `FreeUp`: try tiers in `free → freemium → paid`, sliced from policy tier upward.
+/// - `PaidDown`: try tiers in `paid → freemium → free`, sliced from policy tier
+///   downward.
+/// - `FreeUp`: try tiers in `free → freemium → paid`, sliced from policy tier
+///   upward.
 #[derive(
     Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq, Hash,
 )]
@@ -168,17 +177,16 @@ pub enum StateStoreConfig {
     Redis(crate::config::redis::RedisConfig),
 }
 
-/// Tier → model id list. YAML: `model-tiers: { free: [...], freemium: [...], paid: [...] }`.
-/// Matching uses `ModelIdWithoutVersion` so version suffixes do not break lookups.
-#[derive(
-    Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq,
-)]
+/// Tier → model id list. YAML: `model-tiers: { free: [...], freemium: [...],
+/// paid: [...] }`. Matching uses `ModelIdWithoutVersion` so version suffixes do
+/// not break lookups.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct ModelTiersConfig(pub IndexMap<DecisionTier, IndexSet<String>>);
 
 impl ModelTiersConfig {
-    /// Resolves tier for a `ModelId` via `ModelIdWithoutVersion` (e.g. config `gpt-4o`
-    /// matches runtime `gpt-4o-2024-08-06`).
+    /// Resolves tier for a `ModelId` via `ModelIdWithoutVersion` (e.g. config
+    /// `gpt-4o` matches runtime `gpt-4o-2024-08-06`).
     #[must_use]
     pub fn tier_of(&self, model: &ModelId) -> Option<DecisionTier> {
         let target = ModelIdWithoutVersion::from(model.clone());
@@ -187,15 +195,14 @@ impl ModelTiersConfig {
             for raw in models {
                 // Prefer parsing with the request model's inference provider.
                 if let Some(provider) = provider_hint.as_ref()
-                    && let Ok(parsed) = ModelId::from_str_and_provider(
-                        provider.clone(),
-                        raw,
-                    )
+                    && let Ok(parsed) =
+                        ModelId::from_str_and_provider(provider.clone(), raw)
                     && ModelIdWithoutVersion::from(parsed) == target
                 {
                     return Some(*tier);
                 }
-                // Else parse as a full model id (e.g. `openai/gpt-4o` includes provider).
+                // Else parse as a full model id (e.g. `openai/gpt-4o` includes
+                // provider).
                 if let Ok(parsed) = ModelId::from_str(raw)
                     && ModelIdWithoutVersion::from(parsed) == target
                 {
@@ -214,5 +221,17 @@ impl ModelTiersConfig {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DecisionEngineConfig;
+
+    #[test]
+    fn global_enabled_is_not_accepted() {
+        let yaml = "enabled: true";
+
+        assert!(serde_yml::from_str::<DecisionEngineConfig>(yaml).is_err());
     }
 }

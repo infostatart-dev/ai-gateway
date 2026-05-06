@@ -43,8 +43,8 @@ mod providers;
 #[cfg(test)]
 mod tests;
 
-/// Tier chain for cascade mode from `start`. Used for tier-aware candidate ordering
-/// (same ordering idea as `cascade_chain` in the traffic shaper).
+/// Tier chain for cascade mode from `start`. Used for tier-aware candidate
+/// ordering (same ordering idea as `cascade_chain` in the traffic shaper).
 fn tier_chain_for_models(start: Tier, cascade: TierCascade) -> Vec<Tier> {
     match cascade {
         TierCascade::OnlyTier => vec![start],
@@ -256,7 +256,8 @@ impl CapabilityAwareRouter {
             states: Arc::new(Mutex::new(HashMap::new())),
             default_latency: app_state.config().discover.default_rtt,
             cascade: router_config
-                .decision_tier_cascade
+                .decision
+                .tier_cascade
                 .unwrap_or(app_state.config().decision.shaper.cascade),
             tiers_configured: !model_tiers.is_empty(),
         })
@@ -370,8 +371,9 @@ impl CapabilityAwareRouter {
         Ok(self.apply_tier_cascade(filtered, policy_tier))
     }
 
-    /// Reorders candidates by tier cascade: start tier first, then cascade order,
-    /// then unclassified models (tail). No-op if `model_tiers` is empty or `policy_tier` is missing.
+    /// Reorders candidates by tier cascade: start tier first, then cascade
+    /// order, then unclassified models (tail). No-op if `model_tiers` is
+    /// empty or `policy_tier` is missing.
     fn apply_tier_cascade(
         &self,
         candidates: Vec<CapabilityCandidate>,
@@ -393,12 +395,11 @@ impl CapabilityAwareRouter {
             let cand_tier = cand.tier.map(Tier::from);
             match cand_tier {
                 Some(tier) => {
-                    if let Some(idx) =
-                        chain.iter().position(|t| *t == tier)
-                    {
+                    if let Some(idx) = chain.iter().position(|t| *t == tier) {
                         buckets[idx].push(cand);
                     } else {
-                        // Tier set but outside current cascade chain — append to tail.
+                        // Tier set but outside current cascade chain — append
+                        // to tail.
                         tail.push(cand);
                     }
                 }
@@ -450,10 +451,8 @@ impl Service<Request> for CapabilityAwareRouter {
     fn call(&mut self, req: Request) -> Self::Future {
         let this = self.clone();
         Box::pin(async move {
-            let policy_tier = req
-                .extensions()
-                .get::<KeyPolicy>()
-                .map(|p| p.tier);
+            let policy_tier =
+                req.extensions().get::<KeyPolicy>().map(|p| p.tier);
             let (parts, body) = req.into_parts();
             let body_bytes = body
                 .collect()

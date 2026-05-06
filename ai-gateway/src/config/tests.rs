@@ -23,8 +23,8 @@ fn deployment_target_round_trip() {
     assert_eq!(config, serde_json::from_str(&ser).unwrap());
 
     let cloud = DeploymentTarget::Cloud {
-        db_poll_interval: Duration::from_secs(60),
-        listener_reconnect_interval: Duration::from_secs(300),
+        db_poll_interval: Duration::from_mins(1),
+        listener_reconnect_interval: Duration::from_mins(5),
     };
     let ser = serde_json::to_string(&cloud).unwrap();
     assert_eq!(cloud, serde_json::from_str(&ser).unwrap());
