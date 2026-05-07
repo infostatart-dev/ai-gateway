@@ -60,9 +60,11 @@ impl Display for BedrockModelId {
             .as_ref()
             .map(|g| format!("{g}."))
             .unwrap_or_default();
-        let version_str = match &self.version {
+        // `model` ends with a digit for dated IDs (e.g. claude-opus-4). Version
+        // must be prefixed with `-` so we don't merge into `...420250514`.
+        let version_suffix = match &self.version {
             Version::ImplicitLatest => String::new(),
-            v => format!("{v}-"),
+            v => format!("-{v}"),
         };
         write!(
             f,
@@ -70,7 +72,7 @@ impl Display for BedrockModelId {
             geo_str,
             self.provider,
             self.model,
-            version_str,
+            version_suffix,
             self.bedrock_internal_version
         )
     }

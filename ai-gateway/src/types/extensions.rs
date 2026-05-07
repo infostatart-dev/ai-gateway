@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use derive_more::{AsRef, From, Into};
 
-use super::{model_id::ModelId, org::OrgId, user::UserId};
+use super::{model_id::ModelId, org::OrgId, router::RouterId, user::UserId};
 use crate::{config::router::RouterConfig, types::secret::Secret};
 
 #[derive(Debug, Clone, AsRef, From, Into)]
@@ -46,4 +46,12 @@ pub enum RequestKind {
     Router,
     UnifiedApi,
     DirectProxy,
+}
+
+/// Per-request routing labels for router runtime OTEL metrics (`router_*`).
+#[derive(Debug, Clone)]
+pub struct RouterRuntimeLabels {
+    pub router_id: RouterId,
+    pub endpoint_type: String,
+    pub strategy: &'static str,
 }

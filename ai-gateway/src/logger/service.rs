@@ -20,7 +20,10 @@ use crate::{
     store::minio::MinioClient,
     types::{
         body::BodyReader,
-        extensions::{AuthContext, MapperContext, PromptContext, RequestKind},
+        extensions::{
+            AuthContext, MapperContext, PromptContext, RequestKind,
+            RouterRuntimeLabels,
+        },
         logger::{
             HeliconeLogMetadata, Log, LogMessage, RequestLog, ResponseLog,
         },
@@ -77,6 +80,8 @@ pub struct LoggerService {
     cache_reference_id: Option<String>,
     #[builder(default)]
     prompt_ctx: Option<PromptContext>,
+    #[builder(default)]
+    router_runtime_labels: Option<RouterRuntimeLabels>,
 }
 
 impl LoggerService {
@@ -99,6 +104,11 @@ impl LoggerService {
         tracing::trace!(tfft_duration = ?tfft_duration, "tfft_duration");
         let req_body_len = self.request_body.len();
         let resp_body_len = response_body.len();
+
+        let usage = crate::metrics::llm::extract_usage_from_response_body(
+            &response_body,
+            self.mapper_ctx.is_stream,
+        );
 
         let model = self
             .mapper_ctx
@@ -144,10 +154,6 @@ impl LoggerService {
                     self.start_instant.elapsed().as_secs_f64() * 1000.0,
                     &provider_metric_attrs,
                 );
-            let usage = crate::metrics::llm::extract_usage_from_response_body(
-                &response_body,
-                self.mapper_ctx.is_stream,
-            );
             if !usage.is_empty() {
                 self.app_state
                     .0
@@ -155,6 +161,21 @@ impl LoggerService {
                     .llm
                     .record_provider_tokens(usage, &provider_metric_attrs);
             }
+        }
+
+        if let Some(ref rtl) = self.router_runtime_labels {
+            self.app_state.runtime_metrics().record_router_complete(
+                rtl,
+                &self.provider,
+                self.mapper_ctx.model.as_ref(),
+                self.response_status,
+                req_body_len,
+                resp_body_len,
+                self.start_instant.elapsed().as_secs_f64() * 1000.0,
+                Some(tfft_duration.as_secs_f64() * 1000.0),
+                usage,
+                self.cache_reference_id.is_some(),
+            );
         }
 
         let s3_client = if self.app_state.config().deployment_target.is_cloud()

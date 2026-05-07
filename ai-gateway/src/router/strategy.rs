@@ -16,7 +16,9 @@ use crate::{
         dispatcher::{DispatcherDiscovery, factory::DispatcherDiscoverFactory},
         model, provider,
     },
+    endpoints::EndpointType,
     error::{api::ApiError, init::InitError, internal::InternalError},
+    metrics::router::strategy_label,
     router::{failover::ProviderFailoverRouter, latency::LatencyRouter},
     types::{request::Request, response::Response, router::RouterId},
 };
@@ -99,6 +101,7 @@ impl RoutingStrategyService {
         app_state: AppState,
         router_id: RouterId,
         router_config: Arc<RouterConfig>,
+        endpoint_type: EndpointType,
         balance_config: &BalanceConfigInner,
     ) -> Result<RoutingStrategyService, InitError> {
         match balance_config {
@@ -116,6 +119,8 @@ impl RoutingStrategyService {
                     router_id,
                     router_config,
                     providers,
+                    endpoint_type,
+                    strategy_label(balance_config),
                 )
                 .await
                 .map(Self::ProviderFailover)
@@ -141,6 +146,8 @@ impl RoutingStrategyService {
                 providers,
                 provider_priorities,
                 *max_cooldown_wait,
+                endpoint_type,
+                strategy_label(balance_config),
             )
             .await
             .map(Self::BudgetAware),
@@ -155,6 +162,8 @@ impl RoutingStrategyService {
                 providers,
                 provider_priorities,
                 *max_cooldown_wait,
+                endpoint_type,
+                strategy_label(balance_config),
             )
             .await
             .map(Self::BudgetAware),

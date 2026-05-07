@@ -10,11 +10,13 @@ use super::{
 use crate::{
     app_state::AppState,
     config::router::RouterConfig,
+    endpoints::EndpointType,
     error::init::InitError,
     types::{provider::InferenceProvider, router::RouterId},
 };
 
 impl BudgetAwareRouter {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         app_state: AppState,
         router_id: RouterId,
@@ -22,6 +24,8 @@ impl BudgetAwareRouter {
         providers: &NESet<InferenceProvider>,
         provider_priorities: &IndexMap<InferenceProvider, u16>,
         max_cooldown_wait: Duration,
+        endpoint_type: EndpointType,
+        strategy: &'static str,
     ) -> Result<Self, InitError> {
         factory::build(
             app_state,
@@ -31,10 +35,13 @@ impl BudgetAwareRouter {
             provider_priorities,
             max_cooldown_wait,
             CandidateSelectionMode::CapabilityThenBudget,
+            endpoint_type,
+            strategy,
         )
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn new_budget_then_capability(
         app_state: AppState,
         router_id: RouterId,
@@ -42,6 +49,8 @@ impl BudgetAwareRouter {
         providers: &NESet<InferenceProvider>,
         provider_priorities: &IndexMap<InferenceProvider, u16>,
         max_cooldown_wait: Duration,
+        endpoint_type: EndpointType,
+        strategy: &'static str,
     ) -> Result<Self, InitError> {
         factory::build(
             app_state,
@@ -51,6 +60,8 @@ impl BudgetAwareRouter {
             provider_priorities,
             max_cooldown_wait,
             CandidateSelectionMode::BudgetThenCapability,
+            endpoint_type,
+            strategy,
         )
         .await
     }

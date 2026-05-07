@@ -14,12 +14,14 @@ use crate::{
     app_state::AppState,
     config::router::RouterConfig,
     dispatcher::Dispatcher,
+    endpoints::EndpointType,
     error::init::InitError,
     middleware::mapper::model::ModelMapper,
     router::capability::get_model_capability,
     types::{provider::InferenceProvider, router::RouterId},
 };
 
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn build(
     app_state: AppState,
     router_id: RouterId,
@@ -28,6 +30,8 @@ pub(super) async fn build(
     provider_priorities: &IndexMap<InferenceProvider, u16>,
     max_cooldown_wait: Duration,
     selection_mode: CandidateSelectionMode,
+    endpoint_type: EndpointType,
+    strategy: &'static str,
 ) -> Result<BudgetAwareRouter, InitError> {
     let mut candidates = Vec::new();
     let providers_config = &app_state.config().providers;
@@ -57,15 +61,19 @@ pub(super) async fn build(
         }
     }
 
+    let model_mapper =
+        ModelMapper::new_for_router(app_state.clone(), router_config);
+    let default_latency = app_state.config().discover.default_rtt;
     Ok(BudgetAwareRouter {
+        app_state,
+        router_id,
+        endpoint_type,
+        strategy,
         candidates: Arc::new(candidates),
-        model_mapper: ModelMapper::new_for_router(
-            app_state.clone(),
-            router_config,
-        ),
+        model_mapper,
         states: Arc::new(Mutex::new(HashMap::new())),
         provider_priorities: Arc::new(provider_priorities.clone()),
-        default_latency: app_state.config().discover.default_rtt,
+        default_latency,
         max_cooldown_wait,
         selection_mode,
     })

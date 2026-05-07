@@ -48,6 +48,11 @@ impl AppState {
     pub fn config(&self) -> &Config {
         &self.0.config
     }
+
+    #[must_use]
+    pub fn runtime_metrics(&self) -> &crate::metrics::RouterRuntimeMetrics {
+        &self.0.metrics.runtime
+    }
 }
 
 pub struct InnerAppState {

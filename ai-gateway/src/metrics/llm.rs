@@ -218,7 +218,7 @@ impl TokenUsage {
         self.reasoning = max_option(self.reasoning, other.reasoning);
     }
 
-    fn reported_values(self) -> Vec<(&'static str, u64)> {
+    pub(crate) fn reported_values(self) -> Vec<(&'static str, u64)> {
         let mut values = Vec::new();
         if let Some(value) = self.input {
             values.push(("input", value));

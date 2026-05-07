@@ -15,6 +15,7 @@ use crate::{
         body::{Body, BodyReader},
         extensions::{
             MapperContext, PromptContext, RequestContext, RequestKind,
+            RouterRuntimeLabels,
         },
         router::RouterId,
     },
@@ -38,6 +39,7 @@ impl Dispatcher {
         helicone_request_id: Uuid,
         prompt_ctx: Option<PromptContext>,
         request_kind: RequestKind,
+        router_runtime_labels: Option<RouterRuntimeLabels>,
     ) {
         let deployment_target =
             self.app_state.config().deployment_target.clone();
@@ -62,6 +64,7 @@ impl Dispatcher {
                 .request_id(helicone_request_id)
                 .prompt_ctx(prompt_ctx)
                 .request_kind(request_kind)
+                .router_runtime_labels(router_runtime_labels.clone())
                 .build();
             let app_state = self.app_state.clone();
             tokio::spawn(
@@ -85,6 +88,9 @@ impl Dispatcher {
                 target_url: &target_url,
                 router_id: router_id.as_ref(),
                 request_kind,
+                router_runtime_labels,
+                req_body_len: req_body_bytes.len(),
+                provider: self.provider.clone(),
             });
         }
     }
@@ -99,7 +105,11 @@ impl Dispatcher {
             target_url,
             router_id,
             request_kind,
+            router_runtime_labels,
+            req_body_len,
+            provider,
         } = context;
+        let mapper_ctx = mapper_ctx.clone();
         let app_state = self.app_state.clone();
         let provider_metric_attrs = crate::metrics::llm::provider_attrs(
             &self.provider,
@@ -143,7 +153,11 @@ impl Dispatcher {
                         .llm
                         .record_provider_tokens(usage, &provider_metric_attrs);
                 }
-                if let Ok(dur) = tfft_duration {
+                let tfft_ok_ms = tfft_duration
+                    .as_ref()
+                    .ok()
+                    .map(|d| d.as_secs_f64() * 1000.0);
+                if let Ok(dur) = &tfft_duration {
                     let mut attrs = tfft_attrs;
                     attrs.push(KeyValue::new("path", path));
                     app_state
@@ -151,6 +165,20 @@ impl Dispatcher {
                         .metrics
                         .tfft_duration
                         .record(dur.as_secs_f64() * 1000.0, &attrs);
+                }
+                if let Some(ref rtl) = router_runtime_labels {
+                    app_state.runtime_metrics().record_router_complete(
+                        rtl,
+                        &provider,
+                        mapper_ctx.model.as_ref(),
+                        response_status,
+                        req_body_len,
+                        response_body.len(),
+                        start_instant.elapsed().as_secs_f64() * 1000.0,
+                        tfft_ok_ms,
+                        usage,
+                        false,
+                    );
                 }
             }
             .instrument(tracing::Span::current()),
@@ -167,4 +195,7 @@ struct MetricsLoggingContext<'a> {
     target_url: &'a url::Url,
     router_id: Option<&'a RouterId>,
     request_kind: RequestKind,
+    router_runtime_labels: Option<RouterRuntimeLabels>,
+    req_body_len: usize,
+    provider: crate::types::provider::InferenceProvider,
 }

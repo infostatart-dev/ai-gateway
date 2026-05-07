@@ -15,7 +15,8 @@ use crate::{
     error::{api::ApiError, internal::InternalError},
     types::{
         body::{Body, BodyReader},
-        extensions::{RequestContext, RequestKind},
+        extensions::{RequestContext, RequestKind, RouterRuntimeLabels},
+        provider::InferenceProvider,
     },
 };
 
@@ -31,6 +32,7 @@ impl Dispatcher {
         req_body_bytes: Bytes,
         req_ctx: &RequestContext,
         request_kind: RequestKind,
+        router_runtime_labels: Option<RouterRuntimeLabels>,
     ) -> Result<
         (
             http::Response<Body>,
@@ -89,6 +91,24 @@ impl Dispatcher {
                 Some(dur) => dur.max(backoff_dur),
                 None => backoff_dur,
             };
+            let reason: &'static str = match &result {
+                Ok((res, _, _)) if retry_after_from_response(res).is_some() => {
+                    "retry_after"
+                }
+                Err(ApiError::Internal(InternalError::ReqwestError(e)))
+                    if e.is_connect() =>
+                {
+                    "connect"
+                }
+                _ => "backoff",
+            };
+            if let Some(ref rtl) = router_runtime_labels {
+                self.app_state.runtime_metrics().record_retry_attempt(
+                    rtl,
+                    &self.provider,
+                    reason,
+                );
+            }
             notify_retry(&result, delay);
             tokio::time::sleep(delay).await;
         }
@@ -153,8 +173,11 @@ fn retry_after_from_response(
     extract_retry_after(response.headers()).map(Duration::from_secs)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn dispatch_stream_with_retry(
     app_state: &AppState,
+    provider: InferenceProvider,
+    router_runtime_labels: Option<RouterRuntimeLabels>,
     request_builder: RequestBuilder,
     req_body_bytes: Bytes,
     api_endpoint: Option<ApiEndpoint>,
@@ -188,6 +211,9 @@ pub async fn dispatch_stream_with_retry(
                         ))
                         .with_jitter()
                         .build();
+                let rtl = router_runtime_labels.clone();
+                let prov = provider.clone();
+                let st = app_state.clone();
                 (|| async {
                     Dispatcher::dispatch_stream(
                         &request_builder,
@@ -200,7 +226,13 @@ pub async fn dispatch_stream_with_retry(
                 .retry(retry_strategy)
                 .sleep(tokio::time::sleep)
                 .when(is_stream_retryable)
-                .notify(notify_stream_retry)
+                .notify(move |err: &ApiError, dur: Duration| {
+                    notify_stream_retry(err, dur);
+                    if let Some(ref l) = rtl {
+                        st.runtime_metrics()
+                            .record_retry_attempt(l, &prov, "backoff");
+                    }
+                })
                 .await
             }
             RetryConfig::Constant { delay, max_retries } => {
@@ -209,6 +241,9 @@ pub async fn dispatch_stream_with_retry(
                     .with_max_times(usize::from(*max_retries))
                     .with_jitter()
                     .build();
+                let rtl = router_runtime_labels.clone();
+                let prov = provider.clone();
+                let st = app_state.clone();
                 (|| async {
                     Dispatcher::dispatch_stream(
                         &request_builder,
@@ -221,7 +256,13 @@ pub async fn dispatch_stream_with_retry(
                 .retry(retry_strategy)
                 .sleep(tokio::time::sleep)
                 .when(is_stream_retryable)
-                .notify(notify_stream_retry)
+                .notify(move |err: &ApiError, dur: Duration| {
+                    notify_stream_retry(err, dur);
+                    if let Some(ref l) = rtl {
+                        st.runtime_metrics()
+                            .record_retry_attempt(l, &prov, "backoff");
+                    }
+                })
                 .await
             }
         }

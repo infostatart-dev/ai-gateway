@@ -7,10 +7,12 @@ use std::{
 use indexmap::IndexMap;
 
 use crate::{
+    app_state::AppState,
     dispatcher::DispatcherService,
+    endpoints::EndpointType,
     middleware::mapper::model::ModelMapper,
     router::{capability::ModelCapability, provider_attempt::ProviderState},
-    types::provider::InferenceProvider,
+    types::{provider::InferenceProvider, router::RouterId},
 };
 
 #[derive(Debug, Clone)]
@@ -27,6 +29,10 @@ pub(super) enum CandidateSelectionMode {
 
 #[derive(Debug, Clone)]
 pub struct BudgetAwareRouter {
+    pub(super) app_state: AppState,
+    pub(super) router_id: RouterId,
+    pub(super) endpoint_type: EndpointType,
+    pub(super) strategy: &'static str,
     pub(super) candidates: Arc<Vec<BudgetCandidate>>,
     pub(super) model_mapper: ModelMapper,
     pub(super) states: Arc<Mutex<HashMap<InferenceProvider, ProviderState>>>,

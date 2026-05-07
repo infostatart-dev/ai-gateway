@@ -58,7 +58,7 @@ mime = { workspace = true }
 moka = { workspace = true }
 nonempty-collections = { workspace = true, features = ["serde"] }
 opentelemetry = { workspace = true }
-opentelemetry_sdk = { workspace = true, features = ["rt-tokio"] }
+opentelemetry_sdk = { workspace = true, features = ["rt-tokio", "testing"] }
 opentelemetry-system-metrics = { workspace = true }
 pin-project-lite = { workspace = true }
 r2d2 = { workspace = true }
@@ -179,4 +179,8 @@ required-features = ["testing"]
 
 [[test]]
 name = "retries"
+required-features = ["testing"]
+
+[[test]]
+name = "router_metrics"
 required-features = ["testing"]

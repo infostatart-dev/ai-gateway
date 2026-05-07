@@ -11,6 +11,7 @@ use crate::{
     types::{
         extensions::{
             MapperContext, PromptContext, RequestContext, RequestKind,
+            RouterRuntimeLabels,
         },
         model_id::ModelId,
         provider::InferenceProvider,
@@ -21,7 +22,7 @@ use crate::{
 };
 
 impl Dispatcher {
-    #[allow(clippy::type_complexity)]
+    #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     pub fn extract_request_context(
         req: &mut Request,
     ) -> Result<
@@ -36,9 +37,12 @@ impl Dispatcher {
             DateTime<Utc>,
             RequestKind,
             Option<PromptContext>,
+            Option<RouterRuntimeLabels>,
         ),
         ApiError,
     > {
+        let router_runtime_labels =
+            req.extensions().get::<RouterRuntimeLabels>().cloned();
         let mapper_ctx = req
             .extensions_mut()
             .remove::<MapperContext>()
@@ -87,6 +91,7 @@ impl Dispatcher {
             start_time,
             request_kind,
             prompt_ctx,
+            router_runtime_labels,
         ))
     }
 

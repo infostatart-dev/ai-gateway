@@ -2,12 +2,13 @@ pub mod attribute_extractor;
 pub mod llm;
 pub mod request_count;
 pub mod rolling_counter;
+pub mod router;
 pub mod system;
 pub mod tfft;
 
 use opentelemetry::metrics::{Counter, Gauge, Histogram, Meter, UpDownCounter};
 
-pub use self::rolling_counter::RollingCounter;
+pub use self::{rolling_counter::RollingCounter, router::RouterRuntimeMetrics};
 
 /// The top level struct that contains all metrics
 /// which are exported to OpenTelemetry.
@@ -23,6 +24,7 @@ pub struct Metrics {
     pub llm: llm::LlmMetrics,
     pub cache: CacheMetrics,
     pub routers: RouterMetrics,
+    pub runtime: router::RouterRuntimeMetrics,
 }
 
 impl Metrics {
@@ -60,6 +62,7 @@ impl Metrics {
         let llm = llm::LlmMetrics::new(meter);
         let cache = CacheMetrics::new(meter);
         let routers = RouterMetrics::new(meter);
+        let runtime = router::RouterRuntimeMetrics::new(meter);
         Self {
             error_count,
             provider_health,
@@ -71,6 +74,7 @@ impl Metrics {
             llm,
             cache,
             routers,
+            runtime,
         }
     }
 }

@@ -29,6 +29,7 @@ impl Dispatcher {
             start_time,
             request_kind,
             prompt_ctx,
+            router_runtime_labels,
         ) = Self::extract_request_context(&mut req)?;
         let auth_ctx = req_ctx.auth_context.as_ref();
         let target_provider = &self.provider;
@@ -89,6 +90,8 @@ impl Dispatcher {
             if mapper_ctx.is_stream {
                 dispatch_stream_with_retry(
                     &self.app_state,
+                    self.provider.clone(),
+                    router_runtime_labels.clone(),
                     request_builder,
                     req_body_bytes.clone(),
                     api_endpoint.clone(),
@@ -103,6 +106,7 @@ impl Dispatcher {
                     req_body_bytes.clone(),
                     &req_ctx,
                     request_kind,
+                    router_runtime_labels.clone(),
                 )
                 .instrument(info_span!("dispatch_sync"))
                 .await?
@@ -190,6 +194,7 @@ impl Dispatcher {
             helicone_request_id,
             prompt_ctx,
             request_kind,
+            router_runtime_labels,
         );
 
         Ok(client_response)

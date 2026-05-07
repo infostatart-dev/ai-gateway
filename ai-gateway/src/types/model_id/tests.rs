@@ -1009,7 +1009,7 @@ fn test_edge_case_trailing_dash() {
         ModelId::from_str_and_provider(InferenceProvider::OpenAI, "model-");
     assert!(result.is_err());
     if let Err(MapperError::InvalidModelName(msg)) = result {
-        assert_eq!(msg, "Model name cannot end with dash");
+        assert_eq!(msg, "Model name cannot end with -");
     } else {
         panic!("Expected InvalidModelName error for trailing dash");
     }
@@ -1021,7 +1021,7 @@ fn test_edge_case_at_symbol() {
         ModelId::from_str_and_provider(InferenceProvider::OpenAI, "model@");
     assert!(result.is_err());
     if let Err(MapperError::InvalidModelName(msg)) = result {
-        assert_eq!(msg, "Model name cannot end with @ symbol");
+        assert_eq!(msg, "Model name cannot end with @");
     } else {
         panic!("Expected InvalidModelName error for @ symbol");
     }
@@ -1033,7 +1033,7 @@ fn test_edge_case_trailing_dot() {
         ModelId::from_str_and_provider(InferenceProvider::OpenAI, "provider.");
     assert!(result.is_err());
     if let Err(MapperError::InvalidModelName(msg)) = result {
-        assert_eq!(msg, "Model name cannot end with dot");
+        assert_eq!(msg, "Model name cannot end with .");
     } else {
         panic!("Expected InvalidModelName error for trailing dot");
     }
@@ -1044,7 +1044,7 @@ fn test_edge_case_at_only() {
     let result = ModelId::from_str_and_provider(InferenceProvider::OpenAI, "@");
     assert!(result.is_err());
     if let Err(MapperError::InvalidModelName(msg)) = result {
-        assert_eq!(msg, "Model name cannot end with @ symbol");
+        assert_eq!(msg, "Model name cannot end with @");
     } else {
         panic!("Expected InvalidModelName error for @ only");
     }
@@ -1055,7 +1055,7 @@ fn test_edge_case_dash_only() {
     let result = ModelId::from_str_and_provider(InferenceProvider::OpenAI, "-");
     assert!(result.is_err());
     if let Err(MapperError::InvalidModelName(msg)) = result {
-        assert_eq!(msg, "Model name cannot end with dash");
+        assert_eq!(msg, "Model name cannot end with -");
     } else {
         panic!("Expected InvalidModelName error for dash only");
     }

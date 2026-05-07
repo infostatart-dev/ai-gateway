@@ -20,6 +20,7 @@ use crate::{
         api::ApiError, init::InitError, internal::InternalError,
         invalid_req::InvalidRequestError,
     },
+    metrics::router::{RouterMetricsLayer, strategy_label},
     middleware::{prompts::PromptLayer, rate_limit, request_context},
     router::{meta::MIDDLEWARE_BUFFER_SIZE, strategy::RoutingStrategyService},
     types::router::RouterId,
@@ -70,9 +71,16 @@ impl Router {
                 app_state.clone(),
                 id.clone(),
                 router_config.clone(),
+                *endpoint_type,
                 balance_config,
             )
             .await?;
+            let router_metrics_layer = RouterMetricsLayer::new(
+                app_state.clone(),
+                id.clone(),
+                *endpoint_type,
+                strategy_label(balance_config),
+            );
             let decision_engine_layer =
                 crate::middleware::decision::service::DecisionEngineLayer::new(
                     app_state.clone(),
@@ -89,6 +97,7 @@ impl Router {
                 .map_err(|e| ApiError::from(InternalError::BufferError(e)))
                 .layer(buffer::BufferLayer::new(MIDDLEWARE_BUFFER_SIZE))
                 .layer(request_context_layer.clone())
+                .layer(router_metrics_layer)
                 .service(routing_strategy);
 
             inner.insert(*endpoint_type, BoxCloneService::new(service_stack));

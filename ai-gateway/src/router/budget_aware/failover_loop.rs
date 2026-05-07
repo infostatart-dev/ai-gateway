@@ -44,6 +44,21 @@ pub(super) async fn run_failover_candidates(
         let status = response.status();
 
         if has_next_provider && is_failoverable_status(status) {
+            let next_provider = candidates[index + 1..]
+                .iter()
+                .find(|next| {
+                    next.capability.provider != candidate.capability.provider
+                        && !failed_providers.contains(&next.capability.provider)
+                })
+                .map(|c| &c.capability.provider);
+            this.app_state.runtime_metrics().record_failover(
+                &this.router_id,
+                this.endpoint_type.as_ref(),
+                this.strategy,
+                &candidate.capability.provider,
+                next_provider,
+                crate::metrics::router::status_class(status),
+            );
             this.record_failure(
                 &candidate.capability.provider,
                 &response,

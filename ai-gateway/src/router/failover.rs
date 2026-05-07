@@ -15,6 +15,7 @@ use crate::{
     app_state::AppState,
     config::router::RouterConfig,
     dispatcher::{Dispatcher, DispatcherService},
+    endpoints::EndpointType,
     error::{api::ApiError, internal::InternalError},
     router::provider_attempt::{
         ProviderState, cooldown_for_response, is_failoverable_status,
@@ -34,17 +35,24 @@ struct ProviderCandidate {
 
 #[derive(Debug, Clone)]
 pub struct ProviderFailoverRouter {
+    app_state: AppState,
+    router_id: RouterId,
+    endpoint_type: EndpointType,
+    strategy: &'static str,
     candidates: Arc<Vec<ProviderCandidate>>,
     states: Arc<Mutex<HashMap<InferenceProvider, ProviderState>>>,
     default_latency: Duration,
 }
 
 impl ProviderFailoverRouter {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         app_state: AppState,
         router_id: RouterId,
         router_config: Arc<RouterConfig>,
         providers: &NESet<InferenceProvider>,
+        endpoint_type: EndpointType,
+        strategy: &'static str,
     ) -> Result<Self, crate::error::init::InitError> {
         let mut providers = providers.iter().cloned().collect::<Vec<_>>();
         providers.sort_by_key(ToString::to_string);
@@ -61,10 +69,15 @@ impl ProviderFailoverRouter {
             candidates.push(ProviderCandidate { provider, service });
         }
 
+        let default_latency = app_state.config().discover.default_rtt;
         Ok(Self {
+            app_state,
+            router_id,
+            endpoint_type,
+            strategy,
             candidates: Arc::new(candidates),
             states: Arc::new(Mutex::new(HashMap::new())),
-            default_latency: app_state.config().discover.default_rtt,
+            default_latency,
         })
     }
 
@@ -183,6 +196,18 @@ impl Service<Request> for ProviderFailoverRouter {
                 let has_next = index + 1 < candidates.len();
 
                 if is_failoverable_status(status) {
+                    if has_next {
+                        let next_provider =
+                            candidates.get(index + 1).map(|c| &c.provider);
+                        this.app_state.runtime_metrics().record_failover(
+                            &this.router_id,
+                            this.endpoint_type.as_ref(),
+                            this.strategy,
+                            &candidate.provider,
+                            next_provider,
+                            crate::metrics::router::status_class(status),
+                        );
+                    }
                     this.record_failure(
                         &candidate.provider,
                         &response,
