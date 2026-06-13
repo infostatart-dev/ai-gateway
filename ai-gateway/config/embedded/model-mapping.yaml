@@ -30,7 +30,7 @@ gpt-4o:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 gpt-4o-mini:
-  - "openrouter/google/gemini-2.0-flash-exp:free"
+  - "openrouter/google/gemini-2.0-flash-lite-001"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-2.0-flash"
   - "ollama/llama3.2"

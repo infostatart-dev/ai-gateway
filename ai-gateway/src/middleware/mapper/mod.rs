@@ -7,6 +7,7 @@ pub mod ollama;
 pub mod openai;
 pub mod openai_compatible;
 pub mod openrouter;
+pub mod openrouter_upstream;
 pub mod registry;
 pub mod service;
 

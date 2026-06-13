@@ -119,12 +119,11 @@ impl ModelMapper {
             return Ok(source_model.clone());
         }
 
-        if let Some(openrouter_model) =
-            Self::openrouter_upstream_model(source_model, target_provider)
-            && models_offered_by_target_provider.contains(
-                &ModelIdWithoutVersion::from(openrouter_model.clone()),
-            )
-        {
+        if let Some(openrouter_model) = self.try_openrouter_upstream(
+            source_model,
+            target_provider,
+            models_offered_by_target_provider,
+        ) {
             return Ok(openrouter_model);
         }
 
@@ -196,12 +195,11 @@ impl ModelMapper {
             }
         }
 
-        if let Some(openrouter_model) =
-            Self::openrouter_upstream_model(source_model, target_provider)
-            && models_offered_by_target_provider.contains(
-                &ModelIdWithoutVersion::from(openrouter_model.clone()),
-            )
-        {
+        if let Some(openrouter_model) = self.try_openrouter_upstream(
+            source_model,
+            target_provider,
+            models_offered_by_target_provider,
+        ) {
             let capability =
                 self.model_capability(target_provider, &openrouter_model);
             if supports(requirements, &capability) {
@@ -269,21 +267,15 @@ impl ModelMapper {
         get_model_capability(provider, model, metadata)
     }
 
-    fn openrouter_upstream_model(
+    fn try_openrouter_upstream(
+        &self,
         source_model: &ModelId,
         target_provider: &InferenceProvider,
+        offered: &HashSet<ModelIdWithoutVersion>,
     ) -> Option<ModelId> {
-        if target_provider != &InferenceProvider::OpenRouter
-            || source_model.inference_provider()
-                != Some(InferenceProvider::OpenAI)
-        {
+        if target_provider != &InferenceProvider::OpenRouter {
             return None;
         }
-
-        ModelId::from_str_and_provider(
-            InferenceProvider::OpenRouter,
-            &format!("openai/{source_model}"),
-        )
-        .ok()
+        super::openrouter_upstream::resolve_upstream_model(source_model, offered)
     }
 }

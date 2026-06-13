@@ -82,6 +82,8 @@ impl CacheableResponse {
     ) -> Self {
         let mut resp_headers = resp.clone();
         resp_headers.remove(http::header::SET_COOKIE);
+        resp_headers.remove(&super::utils::CACHE_HIT_HEADER);
+        resp_headers.remove(&super::utils::CACHE_BUCKET_IDX);
         if let Some(directive) = ctx.directive.as_ref()
             && let Some(value) =
                 cache_control::CacheControl::from_value(directive)

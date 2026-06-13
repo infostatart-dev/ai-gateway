@@ -58,7 +58,12 @@ fn make_request(
 #[serial_test::serial(default_mock)]
 async fn cache_enabled_globally() {
     let mut config = Config::test_default();
-    config.global.cache = Some(CacheConfig::test_default());
+    let cache = CacheConfig {
+        seed: Some("redis-cache-enabled-globally".to_string()),
+        ..CacheConfig::test_default()
+    };
+    config.global.cache = Some(cache);
+    config.unified_api.cache = None;
 
     config.cache_store = Some(CacheStore::Redis {
         host_url: "redis://localhost:6340".parse().unwrap(),
@@ -181,8 +186,8 @@ async fn cache_enabled_globally() {
 async fn cache_disabled_globally() {
     let mut config = Config::test_default();
     config.helicone.features = HeliconeFeatures::None;
-    // Ensure cache is NOT set globally (None by default)
     config.global.cache = None;
+    config.unified_api.cache = None;
 
     let mock_args = MockArgs::builder()
         .stubs(HashMap::from([

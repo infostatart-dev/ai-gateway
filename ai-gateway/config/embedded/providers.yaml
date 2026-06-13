@@ -24,7 +24,10 @@ openai:
   base-url: https://api.openai.com/
 
 openrouter:
+  # Slugs must match the live catalog at https://openrouter.ai/api/v1/models.
+  # A slug missing from the catalog yields 500 'No model mapping found'.
   models:
+    # OpenAI through OpenRouter
     - "openai/gpt-4"
     - "openai/gpt-4-turbo"
     - "openai/gpt-4o"
@@ -33,25 +36,221 @@ openrouter:
     - "openai/gpt-4.1-mini"
     - "openai/gpt-4.1-nano"
     - "openai/o1"
-    - "openai/o1-mini"
     - "openai/o1-pro"
     - "openai/o3"
     - "openai/o3-mini"
     - "openai/o4-mini"
+    # Anthropic (OpenRouter uses dotted versions: claude-3.5-haiku)
+    - "anthropic/claude-3-haiku"
+    - "anthropic/claude-3.5-haiku"
+    - "anthropic/claude-3.7-sonnet"
+    - "anthropic/claude-opus-4"
+    - "anthropic/claude-sonnet-4"
+    - "anthropic/claude-haiku-4.5"
+    - "anthropic/claude-opus-4.5"
+    - "anthropic/claude-sonnet-4.5"
+    # Gemini (bare gemini-2.0-flash is not a live slug; use -001 snapshots)
+    - "google/gemini-2.0-flash-001"
+    - "google/gemini-2.0-flash-lite-001"
+    - "google/gemini-2.5-pro"
+    - "google/gemini-2.5-flash"
+    - "google/gemini-2.5-flash-lite"
+    # Grok (namespace x-ai, not xai)
+    - "x-ai/grok-3"
+    - "x-ai/grok-3-mini"
+    - "x-ai/grok-4"
+    - "x-ai/grok-4-fast"
+    # Free tier
+    - "openai/gpt-oss-120b:free"
+    - "openai/gpt-oss-20b:free"
     - "qwen/qwen3-next-80b-a3b-instruct:free"
     - "qwen/qwen3-coder:free"
-    - "openai/gpt-oss-120b:free"
+    - "z-ai/glm-4.5-air:free"
+    - "google/gemma-4-26b-a4b-it:free"
+    - "google/gemma-4-31b-it:free"
+    - "meta-llama/llama-3.3-70b-instruct:free"
+    - "meta-llama/llama-3.2-3b-instruct:free"
+    # Paid non-OpenAI fallbacks
+    - "meta-llama/llama-3.1-8b-instruct"
+    - "deepseek/deepseek-chat"
+    - "deepseek/deepseek-r1-distill-llama-70b"
+    - "mistralai/mistral-large"
+    - "mistralai/mistral-small-3.2-24b-instruct"
   base-url: https://openrouter.ai/api/v1/
   model-capabilities:
+    openai/gpt-4:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 8192
+    openai/gpt-4-turbo:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    openai/gpt-4o:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    openai/gpt-4o-mini:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    openai/gpt-4.1:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    openai/gpt-4.1-mini:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    openai/gpt-4.1-nano:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    openai/o1:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 200000
+    openai/o1-pro:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 200000
+    openai/o3:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    openai/o3-mini:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    openai/o4-mini:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    anthropic/claude-3-haiku:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    anthropic/claude-3.5-haiku:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    anthropic/claude-3.7-sonnet:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    anthropic/claude-opus-4:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    anthropic/claude-sonnet-4:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    anthropic/claude-haiku-4.5:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    anthropic/claude-opus-4.5:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+    anthropic/claude-sonnet-4.5:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    google/gemini-2.0-flash-001:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    google/gemini-2.0-flash-lite-001:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    google/gemini-2.5-pro:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    google/gemini-2.5-flash:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    google/gemini-2.5-flash-lite:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    x-ai/grok-3:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    x-ai/grok-3-mini:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    x-ai/grok-4:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 256000
+    x-ai/grok-4-fast:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 256000
+    qwen/qwen3-next-80b-a3b-instruct:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 262144
+    qwen/qwen3-coder:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 262144
     openai/gpt-oss-120b:free:
       supports-tools: true
       supports-json-schema: true
       context-window: 131072
       reasoning: true
-    qwen/qwen3-next-80b-a3b-instruct:free:
+    openai/gpt-oss-20b:free:
       supports-tools: true
       supports-json-schema: true
-      context-window: 262144
+      context-window: 131072
+    z-ai/glm-4.5-air:free:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 131072
+    google/gemma-4-26b-a4b-it:free:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 32768
+    google/gemma-4-31b-it:free:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 32768
+    meta-llama/llama-3.3-70b-instruct:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    meta-llama/llama-3.2-3b-instruct:free:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 131072
+    meta-llama/llama-3.1-8b-instruct:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    deepseek/deepseek-chat:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 65536
+    deepseek/deepseek-r1-distill-llama-70b:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 131072
+    mistralai/mistral-large:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    mistralai/mistral-small-3.2-24b-instruct:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
 
 anthropic:
   models:

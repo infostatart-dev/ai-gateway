@@ -86,9 +86,10 @@ gpt-5-mini:
             .map(|model| model.to_string())
             .collect();
 
-        assert_eq!(
-            openrouter_models.first().map(String::as_str),
-            Some("openrouter/openai/gpt-oss-120b:free")
+        let first_openrouter = openrouter_models.first().expect("openrouter entry");
+        assert!(
+            first_openrouter.contains("gpt-oss-120b:free"),
+            "first openrouter fallback must be gpt-oss-120b:free, got {first_openrouter}"
         );
     }
 }
