@@ -40,7 +40,7 @@ fn gemini(cap: &mut ModelCapability) {
 }
 
 fn openrouter(cap: &mut ModelCapability, model_name: &str) {
-    if model_name.starts_with("openai/") {
+    if model_name.starts_with("openai/") || model_name.starts_with("qwen/") {
         cap.supports_tools = true;
         cap.supports_json_schema = true;
         cap.context_window = Some(128_000);
@@ -54,6 +54,7 @@ fn named(cap: &mut ModelCapability, n: &str, model_name: &str) {
         "groq" => groq(cap, model_name),
         "deepseek" => deepseek(cap),
         "xai" => xai(cap, model_name),
+        "opencode" => opencode(cap, model_name),
         _ => {}
     }
 }
@@ -79,6 +80,15 @@ fn xai(cap: &mut ModelCapability, model_name: &str) {
     }
 }
 
+fn opencode(cap: &mut ModelCapability, model_name: &str) {
+    cap.supports_tools = true;
+    cap.context_window = Some(200_000);
+    cap.supports_json_schema = opencode::supports_json_schema(model_name);
+    if opencode::supports_reasoning(model_name) {
+        cap.reasoning = true;
+    }
+}
+
 mod groq {
     /// Source: <https://console.groq.com/docs/structured-outputs#supported-models>
     const JSON_SCHEMA_MODELS: &[&str] = &[
@@ -89,5 +99,25 @@ mod groq {
 
     pub fn supports_json_schema(model_name: &str) -> bool {
         JSON_SCHEMA_MODELS.iter().any(|m| model_name.contains(m))
+    }
+}
+
+mod opencode {
+    /// Verified against https://opencode.ai/zen/v1 on 2026-06-13.
+    const JSON_SCHEMA_MODELS: &[&str] =
+        &["mimo-v2.5-free", "nemotron-3-ultra-free"];
+
+    /// Models that return `reasoning` / `reasoning_details` on OpenCode Zen.
+    const REASONING_MODELS: &[&str] =
+        &["nemotron-3-ultra-free", "big-pickle"];
+
+    pub fn supports_json_schema(model_name: &str) -> bool {
+        JSON_SCHEMA_MODELS
+            .iter()
+            .any(|m| model_name.contains(m))
+    }
+
+    pub fn supports_reasoning(model_name: &str) -> bool {
+        REASONING_MODELS.iter().any(|m| model_name.contains(m))
     }
 }

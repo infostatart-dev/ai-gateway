@@ -31,8 +31,13 @@ fn payload_too_large_triggers_provider_failover() {
 
 #[test]
 fn default_provider_budget_order_matches_autodefault_policy() {
+    let opencode = InferenceProvider::Named("opencode".into());
     let groq = InferenceProvider::Named("groq".into());
 
+    assert!(
+        default_provider_budget_rank(&opencode)
+            < default_provider_budget_rank(&InferenceProvider::OpenRouter)
+    );
     assert!(
         default_provider_budget_rank(&InferenceProvider::OpenRouter)
             < default_provider_budget_rank(&groq)

@@ -142,8 +142,17 @@ impl ApiEndpoint {
         match self {
             Self::OpenAI(openai) => Ok(openai.path().to_string()),
             Self::OpenAICompatible {
-                openai_endpoint, ..
-            } => Ok(openai_endpoint.path().to_string()),
+                provider,
+                openai_endpoint,
+            } => {
+                // OpenCode base-url already ends with `/v1/`; direct proxy uses
+                // `chat/completions`, mapper must not prepend another `v1/`.
+                if provider == &InferenceProvider::Named("opencode".into()) {
+                    Ok(EndpointRoute::ChatCompletions.path().to_string())
+                } else {
+                    Ok(openai_endpoint.path().to_string())
+                }
+            }
             Self::Anthropic(anthropic) => Ok(anthropic.path().to_string()),
             Self::Google(google) => Ok(google.path().to_string()),
             Self::Ollama(ollama) => Ok(ollama.path().to_string()),

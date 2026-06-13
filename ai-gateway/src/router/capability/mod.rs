@@ -125,16 +125,61 @@ pub fn extract_requirements(req_body: &Bytes) -> RequestRequirements {
         });
 
     let model_name = value.get("model").and_then(|v| v.as_str()).unwrap_or("");
-    let reasoning_preferred = ["o1", "o3", "o4", "reasoner", "thinking"]
-        .iter()
-        .any(|&keyword| model_name.contains(keyword));
 
     RequestRequirements {
         min_context_tokens: None,
         tools_required,
         json_schema_required,
         vision_required,
-        reasoning_preferred,
+        reasoning_preferred: reasoning_preferred_for_model_name(model_name),
+    }
+}
+
+fn reasoning_preferred_for_model_name(model_name: &str) -> bool {
+    let model_name = model_name.to_ascii_lowercase();
+    ["o1", "o3", "o4", "reasoner", "thinking"]
+        .iter()
+        .any(|keyword| model_name.contains(keyword))
+        || ["gpt-5-mini", "gpt-5-nano", "gpt-5"]
+            .iter()
+            .any(|keyword| model_name.contains(keyword))
+}
+
+/// Secondary ranking score for `budget-aware-capability-after`: higher means
+/// a closer match to the request profile. Budget rank stays primary.
+pub(crate) fn capability_fit_score(
+    requirements: &RequestRequirements,
+    model: &ModelCapability,
+) -> u16 {
+    let mut score = 0;
+    if requirements.json_schema_required && model.supports_json_schema {
+        score += 8;
+    } else if model.supports_json_schema {
+        score += 1;
+    }
+    if requirements.reasoning_preferred && model.reasoning {
+        score += 8;
+    } else if model.reasoning {
+        score += 1;
+    }
+    if requirements.tools_required && model.supports_tools {
+        score += 2;
+    }
+    if requirements.vision_required && model.supports_vision {
+        score += 2;
+    }
+    score
+}
+
+pub(crate) fn enrich_requirements_from_source_model(
+    requirements: &mut RequestRequirements,
+    source_model: Option<&ModelId>,
+) {
+    let Some(source_model) = source_model else {
+        return;
+    };
+    if reasoning_preferred_for_model_name(&source_model.to_string()) {
+        requirements.reasoning_preferred = true;
     }
 }
 

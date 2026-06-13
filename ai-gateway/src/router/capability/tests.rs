@@ -63,6 +63,10 @@ fn test_extract_requirements_reasoning() {
     let body = Bytes::from(r#"{"model": "gpt-4o"}"#);
     let reqs = extract_requirements(&body);
     assert!(!reqs.reasoning_preferred);
+
+    let body = Bytes::from(r#"{"model": "openai/gpt-5-mini"}"#);
+    let reqs = extract_requirements(&body);
+    assert!(reqs.reasoning_preferred);
 }
 
 #[test]
@@ -77,6 +81,32 @@ fn test_extract_source_model_accepts_prefixed_and_plain_openai_models() {
     assert_eq!(
         extract_source_model(&prefixed).unwrap().to_string(),
         "gpt-4o-mini"
+    );
+}
+
+#[test]
+fn capability_fit_score_prefers_reasoning_and_json_schema_matches() {
+    let reqs = RequestRequirements {
+        json_schema_required: true,
+        reasoning_preferred: true,
+        ..RequestRequirements::default()
+    };
+    let full = ModelCapability {
+        provider: InferenceProvider::OpenRouter,
+        model: test_model(InferenceProvider::OpenRouter, "openai/gpt-oss-120b:free"),
+        context_window: Some(131_072),
+        supports_tools: true,
+        supports_json_schema: true,
+        supports_vision: false,
+        reasoning: true,
+    };
+    let json_only = ModelCapability {
+        reasoning: false,
+        ..full.clone()
+    };
+
+    assert!(
+        capability_fit_score(&reqs, &full) > capability_fit_score(&reqs, &json_only)
     );
 }
 

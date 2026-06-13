@@ -7,6 +7,10 @@ use crate::{
     app_state::AppState,
     config::{model_mapping::ModelMappingConfig, router::RouterConfig},
     error::mapper::MapperError,
+    router::capability::{
+        RequestRequirements, capability_fit_score, get_model_capability,
+        supports,
+    },
     types::{
         model_id::{ModelId, ModelIdWithoutVersion, ModelName},
         provider::InferenceProvider,
@@ -161,6 +165,108 @@ impl ModelMapper {
             .clone();
 
         Ok(target_model)
+    }
+
+    /// Pick the best mapping entry for the target provider that satisfies hard
+    /// requirements, preferring higher capability fit within YAML order ties.
+    pub fn map_model_with_requirements(
+        &self,
+        source_model: &ModelId,
+        target_provider: &InferenceProvider,
+        requirements: &RequestRequirements,
+    ) -> Result<ModelId, MapperError> {
+        if let Some(model_id) = self.model_id.clone() {
+            return Ok(model_id);
+        }
+
+        let models_offered_by_target_provider =
+            self.provider_models.0.get(target_provider).ok_or_else(|| {
+                MapperError::NoProviderConfig(target_provider.clone())
+            })?;
+
+        let source_model_w_out_version =
+            ModelIdWithoutVersion::from(source_model.clone());
+
+        if models_offered_by_target_provider
+            .contains(&source_model_w_out_version)
+        {
+            let capability = self.model_capability(target_provider, source_model);
+            if supports(requirements, &capability) {
+                return Ok(source_model.clone());
+            }
+        }
+
+        if let Some(openrouter_model) =
+            Self::openrouter_upstream_model(source_model, target_provider)
+            && models_offered_by_target_provider.contains(
+                &ModelIdWithoutVersion::from(openrouter_model.clone()),
+            )
+        {
+            let capability =
+                self.model_capability(target_provider, &openrouter_model);
+            if supports(requirements, &capability) {
+                return Ok(openrouter_model);
+            }
+        }
+
+        let model_mapping_config = if let Some(router_model_mapping) =
+            self.router_config.as_ref().and_then(|c| c.model_mappings())
+        {
+            router_model_mapping
+        } else {
+            self.default_model_mapping()
+        };
+
+        let source_model_name = ModelName::from_model(source_model);
+        let possible_mappings = model_mapping_config
+            .as_ref()
+            .get(&source_model_name)
+            .ok_or_else(|| {
+                MapperError::NoModelMapping(
+                    target_provider.clone(),
+                    source_model_name.as_ref().to_string(),
+                )
+            })?;
+
+        let mut best: Option<(u16, usize, ModelId)> = None;
+        for (index, candidate) in possible_mappings.iter().enumerate() {
+            if candidate.inference_provider() != Some(target_provider.clone()) {
+                continue;
+            }
+            let possible_mapping = ModelIdWithoutVersion::from(candidate.clone());
+            if !models_offered_by_target_provider.contains(&possible_mapping) {
+                continue;
+            }
+            let capability = self.model_capability(target_provider, candidate);
+            if !supports(requirements, &capability) {
+                continue;
+            }
+            let fit = capability_fit_score(requirements, &capability);
+            let replace = best.as_ref().is_none_or(|(best_fit, best_idx, _)| {
+                fit > *best_fit || (fit == *best_fit && index < *best_idx)
+            });
+            if replace {
+                best = Some((fit, index, candidate.clone()));
+            }
+        }
+
+        best.map(|(_, _, model)| model).ok_or_else(|| {
+            MapperError::NoModelMapping(
+                target_provider.clone(),
+                source_model_name.as_ref().to_string(),
+            )
+        })
+    }
+
+    fn model_capability(
+        &self,
+        provider: &InferenceProvider,
+        model: &ModelId,
+    ) -> crate::router::capability::ModelCapability {
+        let provider_config = self.app_state.config().providers.get(provider);
+        let metadata = provider_config
+            .and_then(|config| config.model_capabilities.get(model));
+        get_model_capability(provider, model, metadata)
     }
 
     fn openrouter_upstream_model(

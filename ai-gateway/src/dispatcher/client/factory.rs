@@ -16,7 +16,7 @@ impl Client {
         app_state: &AppState,
         provider: InferenceProvider,
     ) -> Result<Self, InitError> {
-        let api_key = if provider == InferenceProvider::Ollama {
+        let api_key = if provider.is_keyless() {
             None
         } else {
             Some(

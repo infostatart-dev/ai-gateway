@@ -85,6 +85,12 @@ pub enum InferenceProvider {
 
 impl InferenceProvider {
     #[must_use]
+    pub fn is_keyless(&self) -> bool {
+        matches!(self, Self::Ollama)
+            || matches!(self, Self::Named(name) if name == "opencode")
+    }
+
+    #[must_use]
     pub fn endpoints(&self) -> Vec<ApiEndpoint> {
         match self {
             InferenceProvider::OpenAI => {
@@ -146,6 +152,9 @@ impl InferenceProvider {
             "Hyperbolic" => Ok(InferenceProvider::Named("hyperbolic".into())),
             "Deepseek" => Ok(InferenceProvider::Named("deepseek".into())),
             "X.AI (Grok)" => Ok(InferenceProvider::Named("xai".into())),
+            "OpenCode" | "OpenCode Free" | "opencode" => {
+                Ok(InferenceProvider::Named("opencode".into()))
+            }
             _ => Err(ProviderError::InvalidProviderName(provider_name.into())),
         }
     }
@@ -342,8 +351,7 @@ impl ProviderKeyMap {
         let mut keys = HashMap::default();
 
         for (provider, _config) in providers_config.iter() {
-            if provider == &InferenceProvider::Ollama {
-                // ollama doesn't require an API key
+            if provider.is_keyless() {
                 continue;
             }
             if let Some(key) = ProviderKey::from_env(provider) {

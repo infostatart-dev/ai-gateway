@@ -43,6 +43,11 @@ openrouter:
     - "openai/gpt-oss-120b:free"
   base-url: https://openrouter.ai/api/v1/
   model-capabilities:
+    openai/gpt-oss-120b:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+      reasoning: true
     qwen/qwen3-next-80b-a3b-instruct:free:
       supports-tools: true
       supports-json-schema: true
@@ -143,6 +148,38 @@ hyperbolic:
     - "meta-llama/Meta-Llama-3.1-405B"
     - "NousResearch/Hermes-3-Llama-3.1-70B"
   base-url: https://api.hyperbolic.xyz/
+
+opencode:
+  models:
+    - "mimo-v2.5-free"
+    - "nemotron-3-ultra-free"
+    - "deepseek-v4-flash-free"
+    - "north-mini-code-free"
+    - "big-pickle"
+  base-url: https://opencode.ai/zen/v1/
+  model-capabilities:
+    mimo-v2.5-free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 262144
+    nemotron-3-ultra-free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+      reasoning: true
+    deepseek-v4-flash-free:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 200000
+    north-mini-code-free:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 131072
+    big-pickle:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 200000
+      reasoning: true
 
 ollama:
   models:

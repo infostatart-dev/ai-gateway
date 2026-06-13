@@ -33,8 +33,9 @@ pub(crate) fn default_provider_budget_rank(
     provider: &InferenceProvider,
 ) -> u16 {
     match provider {
-        InferenceProvider::Ollama | InferenceProvider::OpenRouter => 0,
-        InferenceProvider::Named(name) if name == "groq" => 1,
+        InferenceProvider::Named(name) if name == "opencode" => 0,
+        InferenceProvider::Ollama | InferenceProvider::OpenRouter => 1,
+        InferenceProvider::Named(name) if name == "groq" => 2,
         InferenceProvider::GoogleGemini => 10,
         InferenceProvider::Named(name) if name == "deepseek" => 10,
         InferenceProvider::Anthropic => 20,

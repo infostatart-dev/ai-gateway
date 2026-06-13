@@ -14,6 +14,7 @@ use crate::{
             BalanceConfig, BalanceConfigInner, default_budget_max_cooldown_wait,
         },
         decision::{RouterDecisionConfig, TierCascade},
+        providers::ProvidersConfig,
         router::RouterConfig,
     },
     endpoints::EndpointType,
@@ -89,22 +90,43 @@ impl Config {
 }
 
 fn build_autodefault_router(config: &Config) -> Option<RouterConfig> {
-    let providers: HashSet<_> = config
-        .providers
-        .keys()
-        .filter(|provider| is_available_for_autodefault(provider))
-        .cloned()
-        .collect();
-    let providers = nonempty_collections::NESet::try_from_set(providers)?;
-    Some(build_autodefault_router_config(providers))
+    let mut providers = Vec::new();
+    let mut provider_priorities = IndexMap::new();
+
+    for (rank, provider) in autodefault_provider_order().into_iter().enumerate()
+    {
+        if is_available_for_autodefault(&provider, &config.providers) {
+            provider_priorities.insert(
+                provider.clone(),
+                u16::try_from(rank).unwrap_or(u16::MAX),
+            );
+            providers.push(provider);
+        }
+    }
+
+    let providers = nonempty_collections::NESet::try_from_set(
+        providers.into_iter().collect::<HashSet<_>>(),
+    )?;
+    Some(build_autodefault_router_config(providers, provider_priorities))
+}
+
+fn autodefault_provider_order() -> Vec<InferenceProvider> {
+    vec![
+        InferenceProvider::Named("opencode".into()),
+        InferenceProvider::OpenRouter,
+        InferenceProvider::Named("groq".into()),
+        InferenceProvider::GoogleGemini,
+        InferenceProvider::Anthropic,
+    ]
 }
 
 fn build_autodefault_router_config(
     providers: nonempty_collections::NESet<InferenceProvider>,
+    provider_priorities: IndexMap<InferenceProvider, u16>,
 ) -> RouterConfig {
     let strategy = BalanceConfigInner::BudgetAwareCapabilityAfter {
         providers,
-        provider_priorities: IndexMap::new(),
+        provider_priorities,
         max_cooldown_wait: default_budget_max_cooldown_wait(),
     };
 
@@ -121,8 +143,12 @@ fn build_autodefault_router_config(
     }
 }
 
-fn is_available_for_autodefault(provider: &InferenceProvider) -> bool {
-    ProviderKey::from_env(provider).is_some()
+fn is_available_for_autodefault(
+    provider: &InferenceProvider,
+    providers_config: &ProvidersConfig,
+) -> bool {
+    providers_config.contains_key(provider)
+        && (provider.is_keyless() || ProviderKey::from_env(provider).is_some())
 }
 
 #[cfg(test)]
@@ -149,10 +175,10 @@ mod tests {
 
     #[test]
     fn autodefault_uses_budget_then_capability() {
-        let router =
-            build_autodefault_router_config(nonempty_collections::nes![
-                InferenceProvider::Named("groq".into())
-            ]);
+        let router = build_autodefault_router_config(
+            nonempty_collections::nes![InferenceProvider::Named("groq".into())],
+            IndexMap::new(),
+        );
         let strategy = router.load_balance.0.get(&EndpointType::Chat).unwrap();
 
         assert!(matches!(

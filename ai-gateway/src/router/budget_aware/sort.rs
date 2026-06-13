@@ -2,7 +2,8 @@ use std::time::Instant;
 
 use super::types::BudgetAwareRouter;
 use crate::router::{
-    capability::RequestRequirements, provider_attempt::lock_states,
+    capability::{RequestRequirements, capability_fit_score},
+    provider_attempt::lock_states,
 };
 
 impl BudgetAwareRouter {
@@ -21,11 +22,11 @@ impl BudgetAwareRouter {
             self.effective_budget_rank(left, left_state, now)
                 .cmp(&self.effective_budget_rank(right, right_state, now))
                 .then_with(|| {
-                    let left_reasoning = left.capability.reasoning
-                        == requirements.reasoning_preferred;
-                    let right_reasoning = right.capability.reasoning
-                        == requirements.reasoning_preferred;
-                    right_reasoning.cmp(&left_reasoning)
+                    capability_fit_score(requirements, &right.capability)
+                        .cmp(&capability_fit_score(
+                            requirements,
+                            &left.capability,
+                        ))
                 })
                 .then_with(|| {
                     let left_failures = left_state.map_or(0, |s| s.failures);

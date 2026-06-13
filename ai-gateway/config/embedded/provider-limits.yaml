@@ -233,6 +233,23 @@ groq:
                 tpm: 1200
                 tpd: 3600
 
+opencode:
+  observed-at: "2026-06-13"
+  scope: ip
+  source: opencode-zen-public
+  notes:
+    - Public no-auth endpoint at https://opencode.ai/zen/v1.
+    - Rate limits are undocumented; values below are conservative estimates.
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                rpm: 20
+                rpd: 200
+
 openrouter:
   observed-at: "2026-05-02"
   scope: api-key
