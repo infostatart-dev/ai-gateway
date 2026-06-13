@@ -250,6 +250,22 @@ opencode:
                 rpm: 20
                 rpd: 200
 
+cloudflare:
+  observed-at: "2026-06-13"
+  scope: account
+  source: cloudflare-workers-ai-pricing
+  notes:
+    - Free tier is 10,000 Neurons/day (resets 00:00 UTC).
+    - Requires CLOUDFLARE_API_KEY and CLOUDFLARE_ACCOUNT_ID.
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                rpd: 300
+
 openrouter:
   observed-at: "2026-05-02"
   scope: api-key

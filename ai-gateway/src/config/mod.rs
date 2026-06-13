@@ -1,5 +1,6 @@
 pub mod balance;
 pub mod cache;
+pub mod cloudflare;
 pub mod control_plane;
 pub mod database;
 pub mod deployment_target;

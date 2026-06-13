@@ -115,6 +115,7 @@ fn autodefault_provider_order() -> Vec<InferenceProvider> {
         InferenceProvider::Named("opencode".into()),
         InferenceProvider::OpenRouter,
         InferenceProvider::Named("groq".into()),
+        InferenceProvider::Named("cloudflare".into()),
         InferenceProvider::GoogleGemini,
         InferenceProvider::Anthropic,
     ]

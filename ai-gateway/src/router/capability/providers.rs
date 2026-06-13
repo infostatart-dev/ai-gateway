@@ -55,6 +55,7 @@ fn named(cap: &mut ModelCapability, n: &str, model_name: &str) {
         "deepseek" => deepseek(cap),
         "xai" => xai(cap, model_name),
         "opencode" => opencode(cap, model_name),
+        "cloudflare" => cloudflare(cap, model_name),
         _ => {}
     }
 }
@@ -89,6 +90,15 @@ fn opencode(cap: &mut ModelCapability, model_name: &str) {
     }
 }
 
+fn cloudflare(cap: &mut ModelCapability, model_name: &str) {
+    cap.supports_tools = true;
+    cap.context_window = Some(131_072);
+    cap.supports_json_schema = cloudflare::supports_json_schema(model_name);
+    if cloudflare::supports_reasoning(model_name) {
+        cap.reasoning = true;
+    }
+}
+
 mod groq {
     /// Source: <https://console.groq.com/docs/structured-outputs#supported-models>
     const JSON_SCHEMA_MODELS: &[&str] = &[
@@ -110,6 +120,28 @@ mod opencode {
     /// Models that return `reasoning` / `reasoning_details` on OpenCode Zen.
     const REASONING_MODELS: &[&str] =
         &["nemotron-3-ultra-free", "big-pickle"];
+
+    pub fn supports_json_schema(model_name: &str) -> bool {
+        JSON_SCHEMA_MODELS
+            .iter()
+            .any(|m| model_name.contains(m))
+    }
+
+    pub fn supports_reasoning(model_name: &str) -> bool {
+        REASONING_MODELS.iter().any(|m| model_name.contains(m))
+    }
+}
+
+mod cloudflare {
+    /// Live-probed on Workers AI OpenAI-compatible API (2026-06-13).
+    const JSON_SCHEMA_MODELS: &[&str] = &[
+        "llama-3.1-70b-instruct",
+        "llama-4-scout-17b-16e-instruct",
+        "deepseek-r1-distill-qwen-32b",
+        "llama-3.2-3b-instruct",
+    ];
+
+    const REASONING_MODELS: &[&str] = &["deepseek-r1-distill-qwen-32b"];
 
     pub fn supports_json_schema(model_name: &str) -> bool {
         JSON_SCHEMA_MODELS

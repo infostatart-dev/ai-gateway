@@ -155,6 +155,9 @@ impl InferenceProvider {
             "OpenCode" | "OpenCode Free" | "opencode" => {
                 Ok(InferenceProvider::Named("opencode".into()))
             }
+            "Cloudflare" | "Cloudflare Workers AI" | "cloudflare" => {
+                Ok(InferenceProvider::Named("cloudflare".into()))
+            }
             _ => Err(ProviderError::InvalidProviderName(provider_name.into())),
         }
     }
@@ -247,6 +250,12 @@ impl ProviderKey {
             } else {
                 None
             }
+        } else if matches!(
+            provider,
+            InferenceProvider::Named(name) if name == "cloudflare"
+        ) {
+            crate::config::cloudflare::credentials_from_env()
+                .map(|(_, api_token)| ProviderKey::Secret(Secret::from(api_token)))
         } else {
             let provider_str = provider.to_string().to_uppercase();
             let env_var = format!("{provider_str}_API_KEY");

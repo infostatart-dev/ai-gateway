@@ -111,6 +111,7 @@ mod autodefault_scenario_tests {
             InferenceProvider::Named("opencode".into()),
             InferenceProvider::OpenRouter,
             InferenceProvider::Named("groq".into()),
+            InferenceProvider::Named("cloudflare".into()),
             InferenceProvider::GoogleGemini,
             InferenceProvider::Anthropic,
         ]
@@ -123,6 +124,8 @@ mod autodefault_scenario_tests {
             .insert(InferenceProvider::Named("opencode".into()), 0);
         provider_priorities.insert(InferenceProvider::OpenRouter, 1);
         provider_priorities.insert(InferenceProvider::Named("groq".into()), 2);
+        provider_priorities
+            .insert(InferenceProvider::Named("cloudflare".into()), 3);
         provider_priorities.insert(InferenceProvider::GoogleGemini, 10);
         provider_priorities.insert(InferenceProvider::Anthropic, 20);
 
@@ -194,6 +197,18 @@ mod autodefault_scenario_tests {
             groq.1.contains("llama-4-scout"),
             "groq must map to structured-output model, got {}",
             groq.1
+        );
+
+        let cloudflare = ordered
+            .iter()
+            .find(|(provider, _)| {
+                *provider == InferenceProvider::Named("cloudflare".into())
+            })
+            .expect("cloudflare json_schema candidate");
+        assert!(
+            cloudflare.1.contains("deepseek-r1-distill-qwen-32b"),
+            "cloudflare must map to reasoning+json_schema model for gpt-5-mini, got {}",
+            cloudflare.1
         );
 
         assert!(

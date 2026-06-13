@@ -33,6 +33,7 @@ fn payload_too_large_triggers_provider_failover() {
 fn default_provider_budget_order_matches_autodefault_policy() {
     let opencode = InferenceProvider::Named("opencode".into());
     let groq = InferenceProvider::Named("groq".into());
+    let cloudflare = InferenceProvider::Named("cloudflare".into());
 
     assert!(
         default_provider_budget_rank(&opencode)
@@ -44,6 +45,10 @@ fn default_provider_budget_order_matches_autodefault_policy() {
     );
     assert!(
         default_provider_budget_rank(&groq)
+            < default_provider_budget_rank(&cloudflare)
+    );
+    assert!(
+        default_provider_budget_rank(&cloudflare)
             < default_provider_budget_rank(&InferenceProvider::GoogleGemini)
     );
     assert!(

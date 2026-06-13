@@ -36,6 +36,7 @@ pub(crate) fn default_provider_budget_rank(
         InferenceProvider::Named(name) if name == "opencode" => 0,
         InferenceProvider::Ollama | InferenceProvider::OpenRouter => 1,
         InferenceProvider::Named(name) if name == "groq" => 2,
+        InferenceProvider::Named(name) if name == "cloudflare" => 3,
         InferenceProvider::GoogleGemini => 10,
         InferenceProvider::Named(name) if name == "deepseek" => 10,
         InferenceProvider::Anthropic => 20,

@@ -144,7 +144,11 @@ impl Dispatcher {
             .ok_or_else(|| {
                 InternalError::ProviderNotConfigured(target_provider.clone())
             })?;
-        Ok(base_url.join(path).expect("valid url"))
+        Ok(crate::dispatcher::cloudflare_url::join_provider_path(
+            target_provider,
+            base_url,
+            path,
+        )?)
     }
 }
 

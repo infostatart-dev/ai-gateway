@@ -181,6 +181,37 @@ opencode:
       context-window: 200000
       reasoning: true
 
+cloudflare:
+  models:
+    - "@cf/meta/llama-3.1-70b-instruct"
+    - "@cf/meta/llama-4-scout-17b-16e-instruct"
+    - "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"
+    - "@cf/qwen/qwen2.5-coder-32b-instruct"
+    - "@cf/meta/llama-3.2-3b-instruct"
+  base-url: https://api.cloudflare.com/client/v4/accounts/
+  model-capabilities:
+    "@cf/meta/llama-3.1-70b-instruct":
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    "@cf/meta/llama-4-scout-17b-16e-instruct":
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b":
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+      reasoning: true
+    "@cf/qwen/qwen2.5-coder-32b-instruct":
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 32768
+    "@cf/meta/llama-3.2-3b-instruct":
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+
 ollama:
   models:
     - "deepseek-r1"
