@@ -1,7 +1,5 @@
-use async_openai::types::chat::{
-    CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
-};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{
     endpoints::AiRequest,
@@ -15,8 +13,8 @@ pub struct ChatCompletions;
 impl crate::endpoints::Endpoint for ChatCompletions {
     const PATH: &'static str = "chat/completions";
     type RequestBody = CreateChatCompletionRequestOpenRouter;
-    type ResponseBody = CreateChatCompletionResponse;
-    type StreamResponseBody = CreateChatCompletionStreamResponse;
+    type ResponseBody = Value;
+    type StreamResponseBody = Value;
     type ErrorResponseBody = serde_json::Value;
 }
 

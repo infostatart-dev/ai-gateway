@@ -32,19 +32,29 @@ fn payload_too_large_triggers_provider_failover() {
 #[test]
 fn default_provider_budget_order_matches_autodefault_policy() {
     let opencode = InferenceProvider::Named("opencode".into());
+    let mistral = InferenceProvider::Named("mistral".into());
     let groq = InferenceProvider::Named("groq".into());
+    let cerebras = InferenceProvider::Named("cerebras".into());
     let cloudflare = InferenceProvider::Named("cloudflare".into());
 
     assert!(
         default_provider_budget_rank(&opencode)
             < default_provider_budget_rank(&InferenceProvider::OpenRouter)
     );
+    assert_eq!(
+        default_provider_budget_rank(&InferenceProvider::OpenRouter),
+        default_provider_budget_rank(&mistral)
+    );
     assert!(
-        default_provider_budget_rank(&InferenceProvider::OpenRouter)
+        default_provider_budget_rank(&mistral)
             < default_provider_budget_rank(&groq)
     );
     assert!(
         default_provider_budget_rank(&groq)
+            < default_provider_budget_rank(&cerebras)
+    );
+    assert!(
+        default_provider_budget_rank(&cerebras)
             < default_provider_budget_rank(&cloudflare)
     );
     assert!(

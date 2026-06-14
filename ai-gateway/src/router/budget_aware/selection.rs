@@ -110,7 +110,9 @@ mod autodefault_scenario_tests {
         nonempty_collections::nes![
             InferenceProvider::Named("opencode".into()),
             InferenceProvider::OpenRouter,
+            InferenceProvider::Named("mistral".into()),
             InferenceProvider::Named("groq".into()),
+            InferenceProvider::Named("cerebras".into()),
             InferenceProvider::Named("cloudflare".into()),
             InferenceProvider::GoogleGemini,
             InferenceProvider::Anthropic,
@@ -123,9 +125,13 @@ mod autodefault_scenario_tests {
         provider_priorities
             .insert(InferenceProvider::Named("opencode".into()), 0);
         provider_priorities.insert(InferenceProvider::OpenRouter, 1);
-        provider_priorities.insert(InferenceProvider::Named("groq".into()), 2);
         provider_priorities
-            .insert(InferenceProvider::Named("cloudflare".into()), 3);
+            .insert(InferenceProvider::Named("mistral".into()), 2);
+        provider_priorities.insert(InferenceProvider::Named("groq".into()), 3);
+        provider_priorities
+            .insert(InferenceProvider::Named("cerebras".into()), 4);
+        provider_priorities
+            .insert(InferenceProvider::Named("cloudflare".into()), 5);
         provider_priorities.insert(InferenceProvider::GoogleGemini, 10);
         provider_priorities.insert(InferenceProvider::Anthropic, 20);
 
@@ -197,6 +203,31 @@ mod autodefault_scenario_tests {
             groq.1.contains("llama-4-scout"),
             "groq must map to structured-output model, got {}",
             groq.1
+        );
+
+        let cerebras = ordered
+            .iter()
+            .find(|(provider, _)| {
+                *provider == InferenceProvider::Named("cerebras".into())
+            })
+            .expect("cerebras json_schema candidate");
+        assert!(
+            cerebras.1.contains("gpt-oss-120b"),
+            "cerebras must map to gpt-oss-120b for gpt-5-mini json_schema, got {}",
+            cerebras.1
+        );
+
+        let mistral = ordered
+            .iter()
+            .find(|(provider, model)| {
+                *provider == InferenceProvider::Named("mistral".into())
+                    && model.contains("magistral-medium-latest")
+            })
+            .expect("mistral json_schema candidate");
+        assert!(
+            mistral.1.contains("magistral-medium-latest"),
+            "mistral must map to magistral-medium-latest for gpt-5-mini json_schema+reasoning, got {}",
+            mistral.1
         );
 
         let cloudflare = ordered

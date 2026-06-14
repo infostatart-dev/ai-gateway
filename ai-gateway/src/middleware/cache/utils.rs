@@ -8,7 +8,7 @@ use url::Url;
 
 use crate::{
     app_state::AppState, error::internal::InternalError,
-    types::response::Response,
+    types::{response::Response, router::RouterId},
 };
 
 pub const CACHE_HIT_HEADER: HeaderName =
@@ -58,10 +58,14 @@ pub fn get_hasher(
     parts: &Parts,
     body: &bytes::Bytes,
     seed: Option<&str>,
+    router_id: Option<&RouterId>,
 ) -> FxHasher {
     let mut hasher = FxHasher::default();
     if let Some(s) = seed {
         s.hash(&mut hasher);
+    }
+    if let Some(router_id) = router_id {
+        router_id.to_string().hash(&mut hasher);
     }
     if let Some(pq) = parts.uri.path_and_query() {
         pq.hash(&mut hasher);
@@ -105,4 +109,49 @@ pub fn header_map_to_hash_map(headers: HeaderMap) -> HashMap<String, String> {
             Some((name?.to_string(), value.to_str().ok()?.to_string()))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::hash::Hasher;
+
+    use compact_str::CompactString;
+    use http::Request;
+
+    use super::*;
+    use crate::types::router::RouterId;
+
+    fn cache_key(parts: &Parts, body: &bytes::Bytes) -> u64 {
+        let router_id = parts.extensions.get::<RouterId>();
+        let mut hasher = get_hasher(parts, body, None, router_id);
+        hasher.finish()
+    }
+
+    #[test]
+    fn cache_key_includes_router_id() {
+        let body = bytes::Bytes::from_static(br#"{"model":"gpt-4"}"#);
+        let mut req_a = Request::builder()
+            .uri("http://localhost/chat/completions")
+            .body(())
+            .unwrap();
+        req_a
+            .extensions_mut()
+            .insert(RouterId::Named(CompactString::from("autodefault")));
+        let parts_a = req_a.into_parts().0;
+
+        let mut req_b = Request::builder()
+            .uri("http://localhost/chat/completions")
+            .body(())
+            .unwrap();
+        req_b
+            .extensions_mut()
+            .insert(RouterId::Named(CompactString::from("other-router")));
+        let parts_b = req_b.into_parts().0;
+
+        assert_ne!(
+            cache_key(&parts_a, &body),
+            cache_key(&parts_b, &body),
+            "same path/body on different routers must not share cache entries"
+        );
+    }
 }

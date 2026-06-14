@@ -280,6 +280,15 @@ gemini:
 
 mistral:
   models:
+    - "mistral-small-latest"
+    - "mistral-medium-3-5"
+    - "mistral-large-latest"
+    - "magistral-medium-latest"
+    - "magistral-small-latest"
+    - "codestral-latest"
+    - "devstral-latest"
+    - "ministral-8b-latest"
+    - "ministral-3b-latest"
     - "ministral-8b"
     - "ministral-3b"
     - "mistral-small"
@@ -287,13 +296,67 @@ mistral:
     - "mistral-large"
     - "mistral-saba"
     - "magistral-small"
-    - "magistral-medium"
     - "ministral-small"
     - "devstral-small"
     - "codestral"
     - "open-mistral-nemo"
     - "mistral-ocr"
   base-url: https://api.mistral.ai/
+  model-capabilities:
+    mistral-small-latest:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    mistral-medium-3-5:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    mistral-large-latest:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    magistral-medium-latest:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+      reasoning: true
+    magistral-small-latest:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+      reasoning: true
+    codestral-latest:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 256000
+    devstral-latest:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    ministral-8b-latest:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    ministral-3b-latest:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+
+cerebras:
+  models:
+    - "gpt-oss-120b"
+    - "zai-glm-4.7"
+  base-url: https://api.cerebras.ai/
+  model-capabilities:
+    gpt-oss-120b:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+      reasoning: true
+    zai-glm-4.7:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
 
 groq:
   models:

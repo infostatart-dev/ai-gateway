@@ -114,7 +114,9 @@ fn autodefault_provider_order() -> Vec<InferenceProvider> {
     vec![
         InferenceProvider::Named("opencode".into()),
         InferenceProvider::OpenRouter,
+        InferenceProvider::Named("mistral".into()),
         InferenceProvider::Named("groq".into()),
+        InferenceProvider::Named("cerebras".into()),
         InferenceProvider::Named("cloudflare".into()),
         InferenceProvider::GoogleGemini,
         InferenceProvider::Anthropic,
@@ -188,5 +190,36 @@ mod tests {
         ));
         assert!(router.decision.enabled);
         assert_eq!(router.decision.tier_cascade, Some(TierCascade::FreeUp));
+    }
+
+    #[serial_test::serial(env)]
+    #[test]
+    fn autodefault_excludes_opencode_without_api_key() {
+        // SAFETY: serialized test; restores env before exit.
+        unsafe {
+            std::env::remove_var("OPENCODE_API_KEY");
+        }
+        let config = Config::default();
+        let opencode = InferenceProvider::Named("opencode".into());
+
+        assert!(
+            config.providers.contains_key(&opencode),
+            "embedded providers must include opencode"
+        );
+        assert!(
+            !is_available_for_autodefault(&opencode, &config.providers),
+            "opencode must be omitted from autodefault without OPENCODE_API_KEY"
+        );
+
+        unsafe {
+            std::env::set_var("OPENCODE_API_KEY", "test-key");
+        }
+        assert!(
+            is_available_for_autodefault(&opencode, &config.providers),
+            "opencode must join autodefault when OPENCODE_API_KEY is set"
+        );
+        unsafe {
+            std::env::remove_var("OPENCODE_API_KEY");
+        }
     }
 }

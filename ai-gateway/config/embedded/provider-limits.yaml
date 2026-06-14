@@ -233,12 +233,49 @@ groq:
                 tpm: 1200
                 tpd: 3600
 
+cerebras:
+  observed-at: "2026-06-13"
+  scope: api-key
+  source: cerebras-inference-docs
+  notes:
+    - Free tier is 30 RPM, 60k input TPM, 1M tokens/day (resets 00:00 UTC).
+    - Requires CEREBRAS_API_KEY.
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                rpm: 30
+                tpm: 60000
+                tpd: 1000000
+
+mistral:
+  observed-at: "2026-06-13"
+  scope: api-key
+  source: mistral-la-plateforme
+  notes:
+    - Free Experiment tier includes about 1B tokens/month.
+    - Requires MISTRAL_API_KEY.
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                rpm: 60
+                tpm: 500000
+                tpd: 33333333
+
 opencode:
   observed-at: "2026-06-13"
-  scope: ip
-  source: opencode-zen-public
+  scope: api-key
+  source: opencode-zen
   notes:
-    - Public no-auth endpoint at https://opencode.ai/zen/v1.
+    - Requires OPENCODE_API_KEY (Bearer on https://opencode.ai/zen/v1).
+    - Omitted from autodefault when the key is not set.
     - Rate limits are undocumented; values below are conservative estimates.
   tiers:
     free:

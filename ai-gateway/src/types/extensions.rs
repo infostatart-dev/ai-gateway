@@ -8,6 +8,10 @@ use crate::{config::router::RouterConfig, types::secret::Secret};
 #[derive(Debug, Clone, AsRef, From, Into)]
 pub struct ProviderRequestId(pub(crate) http::HeaderValue);
 
+/// Winning provider/model after router selection or failover.
+#[derive(Debug, Clone)]
+pub struct RoutedModelAndProvider(pub String);
+
 #[derive(Debug, Clone)]
 pub struct AuthContext {
     pub api_key: Secret<String>,

@@ -39,7 +39,7 @@ dependencies = [
 
 [[package]]
 name = "ai-gateway"
-version = "0.2.0-beta.32"
+version = "0.3.0-beta.1"
 dependencies = [
  "anthropic-ai-sdk",
  "async-openai",
@@ -1747,7 +1747,7 @@ checksum = "1c7a8fb8a9fbf66c1f703fe16184d10ca0ee9d23be5b4436400408ba54a95005"
 
 [[package]]
 name = "dynamic-router"
-version = "0.2.0-beta.32"
+version = "0.3.0-beta.1"
 dependencies = [
  "futures",
  "http 1.4.0",
@@ -3134,7 +3134,7 @@ dependencies = [
 
 [[package]]
 name = "latency-router"
-version = "0.2.0-beta.32"
+version = "0.3.0-beta.1"
 dependencies = [
  "futures",
  "http 1.4.0",
@@ -3344,7 +3344,7 @@ dependencies = [
 
 [[package]]
 name = "mock-server"
-version = "0.2.0-beta.32"
+version = "0.3.0-beta.1"
 dependencies = [
  "ai-gateway",
  "axum",
@@ -5876,7 +5876,7 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "telemetry"
-version = "0.2.0-beta.32"
+version = "0.3.0-beta.1"
 dependencies = [
  "http 1.4.0",
  "log-panics",
@@ -6951,7 +6951,7 @@ dependencies = [
 
 [[package]]
 name = "weighted-balance"
-version = "0.2.0-beta.32"
+version = "0.3.0-beta.1"
 dependencies = [
  "futures",
  "pin-project-lite",

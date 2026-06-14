@@ -87,7 +87,6 @@ impl InferenceProvider {
     #[must_use]
     pub fn is_keyless(&self) -> bool {
         matches!(self, Self::Ollama)
-            || matches!(self, Self::Named(name) if name == "opencode")
     }
 
     #[must_use]
@@ -157,6 +156,9 @@ impl InferenceProvider {
             }
             "Cloudflare" | "Cloudflare Workers AI" | "cloudflare" => {
                 Ok(InferenceProvider::Named("cloudflare".into()))
+            }
+            "Cerebras" | "cerebras" => {
+                Ok(InferenceProvider::Named("cerebras".into()))
             }
             _ => Err(ProviderError::InvalidProviderName(provider_name.into())),
         }
@@ -402,5 +404,23 @@ mod tests {
         let provider: InferenceProvider =
             serde_json::from_str("\"open-router\"").unwrap();
         assert_eq!(provider, InferenceProvider::OpenRouter);
+    }
+
+    #[test]
+    fn opencode_is_not_keyless() {
+        let provider = InferenceProvider::Named("opencode".into());
+        assert!(!provider.is_keyless());
+    }
+
+    #[test]
+    fn opencode_api_key_env_var_name() {
+        unsafe {
+            std::env::set_var("OPENCODE_API_KEY", "test-key");
+        }
+        let provider = InferenceProvider::Named("opencode".into());
+        assert!(ProviderKey::from_env(&provider).is_some());
+        unsafe {
+            std::env::remove_var("OPENCODE_API_KEY");
+        }
     }
 }

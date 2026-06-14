@@ -15,7 +15,7 @@ use crate::{
     cache::CacheClient,
     config::cache::DEFAULT_BUCKETS,
     error::{api::ApiError, internal::InternalError},
-    types::{request::Request, response::Response},
+    types::{request::Request, response::Response, router::RouterId},
 };
 
 #[allow(clippy::too_many_lines)]
@@ -58,7 +58,8 @@ where
     let now = std::time::SystemTime::now();
 
     let mut futures = FuturesUnordered::new();
-    let hasher = get_hasher(&parts, &body_bytes, ctx.seed.as_deref());
+    let router_id = parts.extensions.get::<RouterId>();
+    let hasher = get_hasher(&parts, &body_bytes, ctx.seed.as_deref(), router_id);
     let mut bucket_indices: Vec<u8> = (0..buckets).collect();
     {
         use rand::seq::SliceRandom;

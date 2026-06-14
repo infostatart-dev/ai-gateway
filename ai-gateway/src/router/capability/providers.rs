@@ -52,6 +52,8 @@ fn openrouter(cap: &mut ModelCapability, model_name: &str) {
 fn named(cap: &mut ModelCapability, n: &str, model_name: &str) {
     match n {
         "groq" => groq(cap, model_name),
+        "mistral" => mistral(cap, model_name),
+        "cerebras" => cerebras(cap, model_name),
         "deepseek" => deepseek(cap),
         "xai" => xai(cap, model_name),
         "opencode" => opencode(cap, model_name),
@@ -64,6 +66,24 @@ fn groq(cap: &mut ModelCapability, model_name: &str) {
     cap.supports_tools = true;
     cap.supports_json_schema = groq::supports_json_schema(model_name);
     cap.context_window = Some(8_000);
+}
+
+fn mistral(cap: &mut ModelCapability, model_name: &str) {
+    cap.supports_tools = true;
+    cap.supports_json_schema = mistral::supports_json_schema(model_name);
+    cap.context_window = Some(131_072);
+    if mistral::supports_reasoning(model_name) {
+        cap.reasoning = true;
+    }
+}
+
+fn cerebras(cap: &mut ModelCapability, model_name: &str) {
+    cap.supports_tools = true;
+    cap.supports_json_schema = cerebras::supports_json_schema(model_name);
+    cap.context_window = Some(131_072);
+    if cerebras::supports_reasoning(model_name) {
+        cap.reasoning = true;
+    }
 }
 
 fn deepseek(cap: &mut ModelCapability) {
@@ -112,6 +132,44 @@ mod groq {
     }
 }
 
+mod mistral {
+    /// Live-probed on La Plateforme (2026-06-13): strict json_schema works.
+    const JSON_SCHEMA_MODELS: &[&str] = &[
+        "mistral-small",
+        "mistral-medium",
+        "mistral-large",
+        "magistral",
+        "codestral",
+        "devstral",
+        "ministral",
+    ];
+
+    const REASONING_MODELS: &[&str] = &["magistral"];
+
+    pub fn supports_json_schema(model_name: &str) -> bool {
+        JSON_SCHEMA_MODELS.iter().any(|m| model_name.contains(m))
+    }
+
+    pub fn supports_reasoning(model_name: &str) -> bool {
+        REASONING_MODELS.iter().any(|m| model_name.contains(m))
+    }
+}
+
+mod cerebras {
+    /// Live-probed + docs (2026-06-13): structured outputs with strict json_schema.
+    const JSON_SCHEMA_MODELS: &[&str] = &["gpt-oss-120b", "zai-glm-4.7"];
+
+    const REASONING_MODELS: &[&str] = &["gpt-oss-120b"];
+
+    pub fn supports_json_schema(model_name: &str) -> bool {
+        JSON_SCHEMA_MODELS.iter().any(|m| model_name.contains(m))
+    }
+
+    pub fn supports_reasoning(model_name: &str) -> bool {
+        REASONING_MODELS.iter().any(|m| model_name.contains(m))
+    }
+}
+
 mod opencode {
     /// Verified against https://opencode.ai/zen/v1 on 2026-06-13.
     const JSON_SCHEMA_MODELS: &[&str] =
@@ -151,5 +209,54 @@ mod cloudflare {
 
     pub fn supports_reasoning(model_name: &str) -> bool {
         REASONING_MODELS.iter().any(|m| model_name.contains(m))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        router::capability::ModelCapability,
+        types::model_id::ModelId,
+    };
+
+    #[test]
+    fn cerebras_gpt_oss_supports_json_schema_and_reasoning() {
+        let mut cap = ModelCapability {
+            provider: InferenceProvider::Named("cerebras".into()),
+            model: ModelId::from_str_and_provider(
+                InferenceProvider::Named("cerebras".into()),
+                "gpt-oss-120b",
+            )
+            .unwrap(),
+            context_window: None,
+            supports_tools: false,
+            supports_json_schema: false,
+            supports_vision: false,
+            reasoning: false,
+        };
+        cerebras(&mut cap, "gpt-oss-120b");
+        assert!(cap.supports_json_schema);
+        assert!(cap.reasoning);
+    }
+
+    #[test]
+    fn mistral_magistral_supports_json_schema_and_reasoning() {
+        let mut cap = ModelCapability {
+            provider: InferenceProvider::Named("mistral".into()),
+            model: ModelId::from_str_and_provider(
+                InferenceProvider::Named("mistral".into()),
+                "magistral-medium-latest",
+            )
+            .unwrap(),
+            context_window: None,
+            supports_tools: false,
+            supports_json_schema: false,
+            supports_vision: false,
+            reasoning: false,
+        };
+        mistral(&mut cap, "magistral-medium-latest");
+        assert!(cap.supports_json_schema);
+        assert!(cap.reasoning);
     }
 }

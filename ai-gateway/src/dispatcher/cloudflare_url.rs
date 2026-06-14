@@ -39,3 +39,24 @@ fn cloudflare_ai_base(
         InternalError::Internal
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::provider::InferenceProvider;
+
+    #[test]
+    fn cerebras_base_url_joins_openai_chat_path_once() {
+        let base = url::Url::parse("https://api.cerebras.ai/").unwrap();
+        let joined = join_provider_path(
+            &InferenceProvider::Named("cerebras".into()),
+            &base,
+            "v1/chat/completions",
+        )
+        .unwrap();
+        assert_eq!(
+            joined.as_str(),
+            "https://api.cerebras.ai/v1/chat/completions"
+        );
+    }
+}

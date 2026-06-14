@@ -10,7 +10,10 @@ use pin_project_lite::pin_project;
 
 use crate::{
     config::response_headers::ResponseHeadersConfig,
-    types::{extensions::ProviderRequestId, provider::InferenceProvider},
+    types::{
+        extensions::{ProviderRequestId, RoutedModelAndProvider},
+        provider::InferenceProvider,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -117,6 +120,20 @@ where
                     .headers_mut()
                     .insert("helicone-provider-req-id", provider_request_id.0);
             }
+        }
+
+        if !response
+            .headers()
+            .contains_key(crate::router::routed_identity::REAL_MODE_MODEL_AND_PROVIDER)
+            && let Some(routed) =
+                response.extensions().get::<RoutedModelAndProvider>()
+            && let Ok(header_value) =
+                http::HeaderValue::from_str(&routed.0)
+        {
+            response.headers_mut().insert(
+                http::HeaderName::from_static("x-realmode-model-and-provider"),
+                header_value,
+            );
         }
         Poll::Ready(Ok(response))
     }

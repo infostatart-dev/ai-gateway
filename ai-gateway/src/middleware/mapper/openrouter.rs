@@ -5,6 +5,7 @@ use async_openai::types::chat::{
     CreateChatCompletionStreamResponse,
 };
 use http::response::Parts;
+use serde_json::Value;
 
 use super::{TryConvert, TryConvertStreamData};
 use crate::{
@@ -59,21 +60,20 @@ impl
     }
 }
 
-impl TryConvert<CreateChatCompletionResponse, CreateChatCompletionResponse>
-    for OpenRouterConverter
-{
+impl TryConvert<Value, CreateChatCompletionResponse> for OpenRouterConverter {
     type Error = MapperError;
     fn try_convert(
         &self,
-        value: CreateChatCompletionResponse,
+        mut value: Value,
     ) -> Result<CreateChatCompletionResponse, Self::Error> {
-        Ok(value)
+        normalize_chat_completion(&mut value);
+        serde_json::from_value(value).map_err(MapperError::SerdeError)
     }
 }
 
 impl
     TryConvertStreamData<
-        CreateChatCompletionStreamResponse,
+        Value,
         CreateChatCompletionStreamResponse,
     > for OpenRouterConverter
 {
@@ -81,13 +81,16 @@ impl
 
     fn try_convert_chunk(
         &self,
-        value: CreateChatCompletionStreamResponse,
+        mut value: Value,
     ) -> Result<Option<CreateChatCompletionStreamResponse>, Self::Error> {
-        Ok(Some(value))
+        normalize_stream_chunk(&mut value);
+        let chunk: CreateChatCompletionStreamResponse =
+            serde_json::from_value(value).map_err(MapperError::SerdeError)?;
+        Ok(Some(chunk))
     }
 }
 
-impl TryConvertError<serde_json::Value, async_openai::error::WrappedError>
+impl TryConvertError<Value, async_openai::error::WrappedError>
     for OpenRouterConverter
 {
     type Error = MapperError;
@@ -95,8 +98,98 @@ impl TryConvertError<serde_json::Value, async_openai::error::WrappedError>
     fn try_convert_error(
         &self,
         resp_parts: &Parts,
-        value: serde_json::Value,
+        value: Value,
     ) -> Result<async_openai::error::WrappedError, Self::Error> {
         Ok(openai_error_from_value(resp_parts.status, &value))
+    }
+}
+
+fn normalize_chat_completion(value: &mut Value) {
+    let Some(obj) = value.as_object_mut() else {
+        return;
+    };
+    if !obj.contains_key("id") {
+        obj.insert(
+            "id".to_string(),
+            Value::String(format!("chatcmpl-{}", uuid::Uuid::new_v4().simple())),
+        );
+    }
+    if !obj.contains_key("object") {
+        obj.insert(
+            "object".to_string(),
+            Value::String("chat.completion".to_string()),
+        );
+    }
+    if !obj.contains_key("created") {
+        let created = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0);
+        obj.insert(
+            "created".to_string(),
+            Value::Number(created.into()),
+        );
+    }
+}
+
+fn normalize_stream_chunk(value: &mut Value) {
+    let Some(obj) = value.as_object_mut() else {
+        return;
+    };
+    if !obj.contains_key("id") {
+        obj.insert(
+            "id".to_string(),
+            Value::String(format!("chatcmpl-{}", uuid::Uuid::new_v4().simple())),
+        );
+    }
+    if !obj.contains_key("object") {
+        obj.insert(
+            "object".to_string(),
+            Value::String("chat.completion.chunk".to_string()),
+        );
+    }
+    if !obj.contains_key("created") {
+        let created = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0);
+        obj.insert(
+            "created".to_string(),
+            Value::Number(created.into()),
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalizes_openrouter_response_missing_openai_required_fields() {
+        let mut value = serde_json::json!({
+            "model": "openai/gpt-oss-120b:free",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": "Привет"},
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15
+            }
+        });
+
+        normalize_chat_completion(&mut value);
+        let response: CreateChatCompletionResponse =
+            serde_json::from_value(value).expect("response must deserialize after normalization");
+
+        assert!(response.id.starts_with("chatcmpl-"));
+        assert_eq!(response.object, "chat.completion");
+        assert_eq!(response.model, "openai/gpt-oss-120b:free");
+        assert_eq!(
+            response.choices[0].message.content.as_ref().unwrap(),
+            "Привет"
+        );
     }
 }

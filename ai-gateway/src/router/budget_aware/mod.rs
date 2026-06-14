@@ -5,6 +5,7 @@ mod cooldown;
 mod dispatch;
 mod factory;
 mod failover_loop;
+mod failover_integration;
 mod health;
 mod new_router;
 mod rank;
@@ -12,6 +13,7 @@ mod rank_score;
 mod selection;
 mod selection_mode;
 mod sort;
+mod structured_output;
 mod tower;
 mod types;
 
