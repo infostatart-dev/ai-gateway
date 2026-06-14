@@ -75,7 +75,14 @@ impl BudgetAwareRouter {
         candidate: &BudgetCandidate,
         requirements: &RequestRequirements,
     ) -> bool {
-        use crate::types::model_id::ModelIdWithoutVersion;
+        use crate::{
+            config::chatgpt_web::is_chatgpt_web,
+            types::model_id::ModelIdWithoutVersion,
+        };
+
+        if is_chatgpt_web(&candidate.capability.provider) {
+            return true;
+        }
 
         self.model_mapper
             .map_model_with_requirements(

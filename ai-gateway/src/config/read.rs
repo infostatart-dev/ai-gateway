@@ -111,7 +111,11 @@ fn build_autodefault_router(config: &Config) -> Option<RouterConfig> {
 }
 
 fn autodefault_provider_order() -> Vec<InferenceProvider> {
-    vec![
+    let mut order = Vec::new();
+    if crate::config::chatgpt_web::session_file_available() {
+        order.push(InferenceProvider::Named("chatgpt-web".into()));
+    }
+    order.extend([
         InferenceProvider::Named("opencode".into()),
         InferenceProvider::OpenRouter,
         InferenceProvider::Named("mistral".into()),
@@ -120,7 +124,8 @@ fn autodefault_provider_order() -> Vec<InferenceProvider> {
         InferenceProvider::Named("cloudflare".into()),
         InferenceProvider::GoogleGemini,
         InferenceProvider::Anthropic,
-    ]
+    ]);
+    order
 }
 
 fn build_autodefault_router_config(
@@ -150,8 +155,13 @@ fn is_available_for_autodefault(
     provider: &InferenceProvider,
     providers_config: &ProvidersConfig,
 ) -> bool {
-    providers_config.contains_key(provider)
-        && (provider.is_keyless() || ProviderKey::from_env(provider).is_some())
+    if !providers_config.contains_key(provider) {
+        return false;
+    }
+    if crate::config::chatgpt_web::is_chatgpt_web(provider) {
+        return crate::config::chatgpt_web::session_file_available();
+    }
+    provider.is_keyless() || ProviderKey::from_env(provider).is_some()
 }
 
 #[cfg(test)]

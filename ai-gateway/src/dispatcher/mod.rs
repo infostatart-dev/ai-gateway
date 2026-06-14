@@ -1,4 +1,5 @@
 pub mod anthropic_client;
+pub mod chatgpt_web;
 pub mod cloudflare_url;
 mod bedrock_client;
 pub mod client;

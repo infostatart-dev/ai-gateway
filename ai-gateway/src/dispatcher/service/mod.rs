@@ -23,6 +23,7 @@ pub mod dispatch_stream;
 pub mod dispatch_sync;
 pub mod factory;
 pub mod logging;
+pub mod outcome;
 pub mod retry;
 pub mod utils;
 

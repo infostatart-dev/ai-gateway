@@ -58,6 +58,7 @@ fn named(cap: &mut ModelCapability, n: &str, model_name: &str) {
         "xai" => xai(cap, model_name),
         "opencode" => opencode(cap, model_name),
         "cloudflare" => cloudflare(cap, model_name),
+        "chatgpt-web" => chatgpt_web(cap),
         _ => {}
     }
 }
@@ -168,6 +169,12 @@ mod cerebras {
     pub fn supports_reasoning(model_name: &str) -> bool {
         REASONING_MODELS.iter().any(|m| model_name.contains(m))
     }
+}
+
+fn chatgpt_web(cap: &mut ModelCapability) {
+    cap.supports_tools = false;
+    cap.supports_json_schema = true;
+    cap.context_window = Some(128_000);
 }
 
 mod opencode {

@@ -1,5 +1,7 @@
 pub mod anthropic;
 pub mod bedrock;
+pub mod chatgpt_json_schema;
+pub mod chatgpt_web;
 pub mod cloudflare;
 pub mod groq;
 pub mod model;

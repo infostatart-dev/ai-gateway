@@ -158,7 +158,7 @@ mod structured_output_failover {
         clear_test_call_responses();
         push_test_call_response(Ok(chat_completion("| broken | markdown |")));
         push_test_call_response(Ok(chat_completion(
-            r#"{"unexpected_field":"wrong_shape_only_syntax_ok"}"#,
+            r#"{"value":"recovered_on_second_provider"}"#,
         )));
 
         let app_state = AppState::test_default().await;
@@ -192,7 +192,7 @@ mod structured_output_failover {
             },
         )
         .await
-        .expect("second candidate should pass syntax gate");
+        .expect("second candidate should pass schema validation");
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
@@ -207,7 +207,7 @@ mod structured_output_failover {
         let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(
             parsed["choices"][0]["message"]["content"],
-            r#"{"unexpected_field":"wrong_shape_only_syntax_ok"}"#
+            r#"{"value":"recovered_on_second_provider"}"#
         );
 
         let states = router.states.lock().expect("provider states");

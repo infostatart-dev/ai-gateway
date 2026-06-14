@@ -7,14 +7,137 @@ cooldown-defaults:
   retry-after-buffer: 1s
 
 gemini:
-  observed-at: "2026-05-01"
+  observed-at: "2026-06-14"
   notes:
-    - Free Flash is ~10-15 RPM / 250k TPM (check AI Studio quotas tab).
+    - Free tier — Flash/Flash-Lite only; Pro/TTS/multimodal require billing (Tier 1+).
+    - Free Flash ~10-15 RPM / 250k TPM / 1.5k RPD; verify live values in AI Studio.
+    - Tier 3 figures below from AI Studio rate-limits dashboard (2026-06-14).
     - 429 with spending cap is billing, not RPM — failover out; raising cap is manual.
+    - Enabling billing on a project removes free-tier quotas for that project.
   scope: project
-  source: google-cloud-console
+  source: google-ai-studio-rate-limits
   tiers:
     free:
+      qualification: Project without billing, or billing enabled but still on free quota (AI Studio).
+      models:
+        gemini-3-flash:
+          display-name: Gemini 3 Flash
+          category: text-out
+          limits:
+            rpm: 10
+            tpm: 250000
+            rpd: 1500
+        gemini-3.5-flash:
+          display-name: Gemini 3.5 Flash
+          category: text-out
+          limits:
+            rpm: 10
+            tpm: 250000
+            rpd: 1500
+        gemini-2.5-flash:
+          display-name: Gemini 2.5 Flash
+          category: text-out
+          limits:
+            rpm: 10
+            tpm: 250000
+            rpd: 1500
+        gemini-2.5-pro:
+          display-name: Gemini 2.5 Pro
+          category: text-out
+          limits:
+            rpm: 5
+            tpm: 150000
+            rpd: 50
+        gemini-2.0-flash:
+          display-name: Gemini 2 Flash
+          category: text-out
+          limits:
+            rpm: 15
+            tpm: 1000000
+            rpd: 1500
+        gemini-2.0-flash-lite:
+          display-name: Gemini 2 Flash Lite
+          category: text-out
+          limits:
+            rpm: 15
+            tpm: 250000
+            rpd: 1500
+        gemini-3.1-flash-lite:
+          display-name: Gemini 3.1 Flash Lite
+          category: text-out
+          limits:
+            rpm: 15
+            tpm: 250000
+            rpd: 1500
+        gemini-2.5-flash-lite:
+          display-name: Gemini 2.5 Flash Lite
+          category: text-out
+          limits:
+            rpm: 15
+            tpm: 250000
+            rpd: 1500
+        gemini-3.1-pro:
+          display-name: Gemini 3.1 Pro
+          category: text-out
+          limits:
+            rpm: 2
+            tpm: 32000
+            rpd: 50
+        gemma-4-26b:
+          display-name: Gemma 4 26B
+          category: other
+          limits:
+            rpm: 30
+            tpm: 15000
+            rpd: 14400
+        gemma-4-31b:
+          display-name: Gemma 4 31B
+          category: other
+          limits:
+            rpm: 30
+            tpm: 15000
+            rpd: 14400
+      tools:
+        search-grounding:
+          gemini-2:
+            category: search-grounding
+            limits:
+              rpd: 500
+          gemini-2.5:
+            category: search-grounding
+            limits:
+              rpd: 500
+          gemini-3:
+            category: search-grounding
+            limits:
+              rpd: 500
+          default:
+            category: search-grounding
+            limits:
+              rpd: 500
+        map-grounding:
+          gemini-2.5-flash:
+            category: map-grounding
+            limits:
+              rpd: 500
+          gemini-2.0-flash:
+            category: map-grounding
+            limits:
+              rpd: 500
+          gemini-3-flash:
+            category: map-grounding
+            limits:
+              rpd: 500
+          gemini-3.1-flash-lite:
+            category: map-grounding
+            limits:
+              rpd: 500
+          gemini-2.5-flash-lite:
+            category: map-grounding
+            limits:
+              rpd: 500
+    tier-3:
+      qualification: Billing enabled; cumulative GCP spend qualifies for Tier 3 (see AI Studio).
       models:
         gemini-3.1-pro:
           display-name: Gemini 3.1 Pro
@@ -25,6 +148,13 @@ gemini:
             rpd: unlimited
         gemini-3-flash:
           display-name: Gemini 3 Flash
+          category: text-out
+          limits:
+            rpm: 20000
+            tpm: 20000000
+            rpd: unlimited
+        gemini-3.5-flash:
+          display-name: Gemini 3.5 Flash
           category: text-out
           limits:
             rpm: 20000
@@ -93,6 +223,161 @@ gemini:
             rpm: 1000
             tpm: 1000000
             rpd: unlimited
+        imagen-4-generate:
+          display-name: Imagen 4 Generate
+          category: multimodal-generative
+          limits:
+            rpm: 20
+            rpd: 15000
+        imagen-4-ultra-generate:
+          display-name: Imagen 4 Ultra Generate
+          category: multimodal-generative
+          limits:
+            rpm: 15
+            rpd: 5000
+        imagen-4-fast-generate:
+          display-name: Imagen 4 Fast Generate
+          category: multimodal-generative
+          limits:
+            rpm: 20
+            rpd: 15000
+        gemma-4-26b:
+          display-name: Gemma 4 26B
+          category: other
+          limits:
+            rpm: 30
+            tpm: 16000
+            rpd: 14400
+        gemma-4-31b:
+          display-name: Gemma 4 31B
+          category: other
+          limits:
+            rpm: 30
+            tpm: 16000
+            rpd: 14400
+        gemini-embedding-1:
+          display-name: Gemini Embedding 1
+          category: other
+          limits:
+            rpm: 20000
+            tpm: 20000000
+            rpd: unlimited
+        gemini-embedding-2:
+          display-name: Gemini Embedding 2
+          category: other
+          limits:
+            rpm: 20000
+            tpm: 20000000
+            rpd: unlimited
+        nano-banana:
+          display-name: Nano Banana (Gemini 2.5 Flash Preview Image)
+          category: multimodal-generative
+          limits:
+            rpm: 5000
+            tpm: 5000000
+            rpd: unlimited
+        nano-banana-pro:
+          display-name: Nano Banana Pro (Gemini 3 Pro Image)
+          category: multimodal-generative
+          limits:
+            rpm: 2000
+            tpm: 5000000
+            rpd: unlimited
+        nano-banana-2:
+          display-name: Nano Banana 2 (Gemini 3.1 Flash Image)
+          category: multimodal-generative
+          limits:
+            rpm: 5000
+            tpm: 10000000
+            rpd: 50000
+        lyria-3-clip:
+          display-name: Lyria 3 Clip
+          category: multimodal-generative
+          limits:
+            rpm: 5000
+            tpm: 30000000
+            rpd: unlimited
+        lyria-3-pro:
+          display-name: Lyria 3 Pro
+          category: multimodal-generative
+          limits:
+            rpm: 5000
+            tpm: 30000000
+            rpd: unlimited
+        veo-3-generate:
+          display-name: Veo 3 Generate
+          category: multimodal-generative
+          limits:
+            rpm: 10
+            rpd: 500
+        veo-3-fast-generate:
+          display-name: Veo 3 Fast Generate
+          category: multimodal-generative
+          limits:
+            rpm: 10
+            rpd: 500
+        veo-3-lite-generate:
+          display-name: Veo 3 Lite Generate
+          category: multimodal-generative
+          limits:
+            rpm: 10
+            rpd: 500
+        gemini-robotics-er-1.5-preview:
+          display-name: Gemini Robotics ER 1.5 Preview
+          category: other
+          limits:
+            rpm: 2000
+            tpm: 8000000
+            rpd: unlimited
+        gemini-robotics-er-1.6-preview:
+          display-name: Gemini Robotics ER 1.6 Preview
+          category: other
+          limits:
+            rpm: 20000
+            tpm: 20000000
+            rpd: unlimited
+        computer-use-preview:
+          display-name: Computer Use Preview
+          category: other
+          limits:
+            rpm: 2000
+            tpm: 8000000
+            rpd: unlimited
+        antigravity:
+          display-name: Antigravity
+          category: agents
+          limits:
+            rpm: 2000
+            tpm: 2000000
+            rpd: unlimited
+        deep-research-pro-preview:
+          display-name: Deep Research Pro Preview
+          category: agents
+          limits:
+            rpm: 20
+            tpm: 20000000
+            rpd: unlimited
+        gemini-3.5-live-translate:
+          display-name: Gemini 3.5 Live Translate
+          category: live-api
+          limits:
+            rpm: unlimited
+            tpm: 500000
+            rpd: unlimited
+        gemini-2.5-flash-native-audio-dialog:
+          display-name: Gemini 2.5 Flash Native Audio Dialog
+          category: live-api
+          limits:
+            rpm: unlimited
+            tpm: 10000000
+            rpd: unlimited
+        gemini-3-flash-live:
+          display-name: Gemini 3 Flash Live
+          category: live-api
+          limits:
+            rpm: unlimited
+            tpm: 1000000
+            rpd: unlimited
       tools:
         search-grounding:
           gemini-2:
@@ -120,7 +405,15 @@ gemini:
             category: map-grounding
             limits:
               rpd: unlimited
+          gemini-2-flash:
+            category: map-grounding
+            limits:
+              rpd: unlimited
           gemini-3-flash:
+            category: map-grounding
+            limits:
+              rpd: unlimited
+          gemini-3.5-flash:
             category: map-grounding
             limits:
               rpd: unlimited
@@ -128,7 +421,27 @@ gemini:
             category: map-grounding
             limits:
               rpd: unlimited
+          gemini-2.5-flash-lite:
+            category: map-grounding
+            limits:
+              rpd: unlimited
           gemini-3.1-pro:
+            category: map-grounding
+            limits:
+              rpd: unlimited
+          gemini-3.1-flash-tts:
+            category: map-grounding
+            limits:
+              rpd: unlimited
+          gemini-robotics-er-1.6-preview:
+            category: map-grounding
+            limits:
+              rpd: unlimited
+          computer-use-preview:
+            category: map-grounding
+            limits:
+              rpd: unlimited
+          deep-research-pro-preview:
             category: map-grounding
             limits:
               rpd: unlimited

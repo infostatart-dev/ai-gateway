@@ -33,6 +33,7 @@ pub(crate) fn default_provider_budget_rank(
     provider: &InferenceProvider,
 ) -> u16 {
     match provider {
+        InferenceProvider::Named(name) if name == "chatgpt-web" => 0,
         InferenceProvider::Named(name) if name == "opencode" => 0,
         InferenceProvider::Ollama | InferenceProvider::OpenRouter => 1,
         InferenceProvider::Named(name) if name == "mistral" => 1,

@@ -398,6 +398,12 @@ impl CapabilityAwareRouter {
         source_model: &ModelId,
         candidate: &CapabilityCandidate,
     ) -> bool {
+        if crate::config::chatgpt_web::is_chatgpt_web(
+            &candidate.capability.provider,
+        ) {
+            return true;
+        }
+
         self.model_mapper
             .map_model(source_model, &candidate.capability.provider)
             .is_ok_and(|target_model| {

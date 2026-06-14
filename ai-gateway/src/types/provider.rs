@@ -258,6 +258,9 @@ impl ProviderKey {
         ) {
             crate::config::cloudflare::credentials_from_env()
                 .map(|(_, api_token)| ProviderKey::Secret(Secret::from(api_token)))
+        } else if crate::config::chatgpt_web::is_chatgpt_web(provider) {
+            crate::config::chatgpt_web::session_file_available()
+                .then_some(ProviderKey::NotRequired)
         } else {
             let provider_str = provider.to_string().to_uppercase();
             let env_var = format!("{provider_str}_API_KEY");

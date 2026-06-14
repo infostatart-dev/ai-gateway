@@ -3,11 +3,14 @@ use std::str::FromStr;
 use http::{HeaderName, HeaderValue};
 use http_body_util::BodyExt;
 use tracing::{Instrument, info_span};
-use uuid::Uuid;
 
-use super::{Dispatcher, retry::dispatch_stream_with_retry};
+use super::{
+    outcome::{DispatchOutcome, FinalizeDispatchContext},
+    retry::dispatch_stream_with_retry,
+    Dispatcher,
+};
 use crate::{
-    dispatcher::{client::ProviderClient, extensions::ExtensionsCopier},
+    dispatcher::client::ProviderClient,
     error::{api::ApiError, internal::InternalError},
     types::{body::Body, request::Request},
 };
@@ -34,6 +37,62 @@ impl Dispatcher {
         let auth_ctx = req_ctx.auth_context.as_ref();
         let target_provider = &self.provider;
 
+        let finalize_ctx = FinalizeDispatchContext {
+            mapper_ctx: mapper_ctx.clone(),
+            req_ctx: &req_ctx,
+            api_endpoint: api_endpoint.clone(),
+            inference_provider: inference_provider.clone(),
+            router_id: router_id.clone(),
+            start_instant,
+            start_time,
+            request_kind,
+            prompt_ctx,
+            router_runtime_labels: router_runtime_labels.clone(),
+            extracted_path_and_query: extracted_path_and_query.clone(),
+        };
+
+        if let Some(ref api_endpoint) = api_endpoint {
+            let endpoint_metrics = self
+                .app_state
+                .0
+                .endpoint_metrics
+                .health_metrics(api_endpoint.clone())?;
+            endpoint_metrics.incr_req_count();
+        }
+
+        let outcome = if crate::config::chatgpt_web::is_chatgpt_web(target_provider) {
+            let headers = req.headers().clone();
+            self.dispatch_chatgpt_web(req, headers).await?
+        } else {
+            self.dispatch_via_upstream_proxy(
+                req,
+                auth_ctx,
+                target_provider,
+                extracted_path_and_query.as_str(),
+                mapper_ctx.is_stream,
+                api_endpoint.clone(),
+                router_runtime_labels.clone(),
+                &req_ctx,
+                request_kind,
+            )
+            .await?
+        };
+
+        self.finalize_dispatch(outcome, finalize_ctx).await
+    }
+
+    async fn dispatch_via_upstream_proxy(
+        &self,
+        mut req: Request,
+        auth_ctx: Option<&crate::types::extensions::AuthContext>,
+        target_provider: &crate::types::provider::InferenceProvider,
+        extracted_path_and_query: &str,
+        is_stream: bool,
+        api_endpoint: Option<crate::endpoints::ApiEndpoint>,
+        router_runtime_labels: Option<crate::types::extensions::RouterRuntimeLabels>,
+        req_ctx: &crate::types::extensions::RequestContext,
+        request_kind: crate::types::extensions::RequestKind,
+    ) -> Result<DispatchOutcome, ApiError> {
         {
             let h = req.headers_mut();
             h.remove(http::header::HOST);
@@ -50,9 +109,9 @@ impl Dispatcher {
         let method = req.method().clone();
         let headers = req.headers().clone();
         let target_url = self.build_target_url(
-            &req_ctx,
+            req_ctx,
             target_provider,
-            extracted_path_and_query.as_str(),
+            extracted_path_and_query,
         )?;
         let req_body_bytes = req
             .into_body()
@@ -77,126 +136,38 @@ impl Dispatcher {
             .await?;
 
         let metrics_for_stream = self.app_state.0.endpoint_metrics.clone();
-        if let Some(ref api_endpoint) = api_endpoint {
-            let endpoint_metrics = self
-                .app_state
-                .0
-                .endpoint_metrics
-                .health_metrics(api_endpoint.clone())?;
-            endpoint_metrics.incr_req_count();
-        }
-
-        let (mut client_response, response_body_for_logger, tfft_rx) =
-            if mapper_ctx.is_stream {
-                dispatch_stream_with_retry(
-                    &self.app_state,
-                    self.provider.clone(),
-                    router_runtime_labels.clone(),
-                    request_builder,
-                    req_body_bytes.clone(),
-                    api_endpoint.clone(),
-                    metrics_for_stream,
-                    &req_ctx,
-                    request_kind,
-                )
-                .await?
-            } else {
-                self.dispatch_sync_with_retry(
-                    request_builder,
-                    req_body_bytes.clone(),
-                    &req_ctx,
-                    request_kind,
-                    router_runtime_labels.clone(),
-                )
-                .instrument(info_span!("dispatch_sync"))
-                .await?
-            };
-
-        tracing::info!(method = %method, target_url = %target_url, is_stream = %mapper_ctx.is_stream, response_status = %client_response.status(), "proxied request");
-        let helicone_request_id = Uuid::new_v4();
-        let provider_request_id = {
-            let headers = client_response.headers_mut();
-            headers.insert(
-                "helicone-id",
-                HeaderValue::from_str(&helicone_request_id.to_string())
-                    .expect("valid uuid"),
-            );
-            headers.remove(http::header::CONTENT_LENGTH);
-            headers.remove("x-request-id")
+        let (client_response, response_body_for_logger, tfft_rx) = if is_stream {
+            dispatch_stream_with_retry(
+                &self.app_state,
+                self.provider.clone(),
+                router_runtime_labels,
+                request_builder,
+                req_body_bytes.clone(),
+                api_endpoint,
+                metrics_for_stream,
+                req_ctx,
+                request_kind,
+            )
+            .await?
+        } else {
+            self.dispatch_sync_with_retry(
+                request_builder,
+                req_body_bytes.clone(),
+                req_ctx,
+                request_kind,
+                router_runtime_labels,
+            )
+            .instrument(info_span!("dispatch_sync"))
+            .await?
         };
 
-        let extensions_copier = ExtensionsCopier::builder()
-            .inference_provider(inference_provider)
-            .router_id(router_id.clone())
-            .auth_context(auth_ctx.cloned())
-            .provider_request_id(provider_request_id)
-            .mapper_ctx(mapper_ctx.clone())
-            .build();
-        extensions_copier.copy_extensions(client_response.extensions_mut());
-        client_response.extensions_mut().insert(mapper_ctx.clone());
-        if let Some(api_endpoint) = api_endpoint.clone() {
-            client_response.extensions_mut().insert(api_endpoint);
-        }
-        client_response
-            .extensions_mut()
-            .insert(extracted_path_and_query);
-
-        let response_status = client_response.status();
-        let response_headers = client_response.headers();
-        let provider_metric_attrs = crate::metrics::llm::provider_attrs(
-            &self.provider,
-            mapper_ctx.model.as_ref(),
-            router_id.as_ref(),
-            target_url.path(),
-            response_status,
-            mapper_ctx.is_stream,
-            request_kind,
-        );
-        self.app_state
-            .0
-            .metrics
-            .llm
-            .provider_requests
-            .add(1, &provider_metric_attrs);
-        self.app_state
-            .0
-            .metrics
-            .llm
-            .provider_request_body_bytes
-            .add(
-                u64::try_from(req_body_bytes.len()).unwrap_or(u64::MAX),
-                &provider_metric_attrs,
-            );
-        self.app_state.0.metrics.llm.record_rate_limit_headers(
-            response_headers,
-            &provider_metric_attrs,
-        );
-        self.handle_error_and_rate_limiting(
-            response_status,
-            response_headers,
-            api_endpoint.clone(),
-            mapper_ctx.model.clone(),
-        )
-        .await?;
-
-        self.handle_logging(
-            &req_ctx,
-            start_time,
-            start_instant,
-            target_url,
-            headers,
-            req_body_bytes,
-            &client_response,
-            response_body_for_logger,
+        Ok(DispatchOutcome {
+            response: client_response,
+            body_reader: response_body_for_logger,
             tfft_rx,
-            &mapper_ctx,
-            router_id,
-            helicone_request_id,
-            prompt_ctx,
-            request_kind,
-            router_runtime_labels,
-        );
-
-        Ok(client_response)
+            target_url,
+            req_body_bytes,
+            request_headers: headers,
+        })
     }
 }

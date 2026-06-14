@@ -353,6 +353,13 @@ mod tests {
         );
         assert!(
             catalog
+                .provider(&InferenceProvider::GoogleGemini)
+                .unwrap()
+                .tier("tier-3")
+                .is_some()
+        );
+        assert!(
+            catalog
                 .provider(&InferenceProvider::Named("groq".into()))
                 .unwrap()
                 .tier("developer")
@@ -361,10 +368,28 @@ mod tests {
     }
 
     #[test]
-    fn catalog_contains_gemini_text_model_limits() {
+    fn catalog_contains_gemini_free_tier_text_model_limits() {
         let catalog = ProviderLimitCatalog::default();
         let limits = &catalog
             .model(&InferenceProvider::GoogleGemini, "free", "gemini-2.0-flash")
+            .unwrap()
+            .limits;
+
+        assert_eq!(limits.rpm, QuotaValue::Limited(15));
+        assert_eq!(limits.tpm, QuotaValue::Limited(1_000_000));
+        assert_eq!(limits.rpd, QuotaValue::Limited(1_500));
+        assert_eq!(limits.tpd, QuotaValue::Unknown);
+    }
+
+    #[test]
+    fn catalog_contains_gemini_tier3_text_model_limits() {
+        let catalog = ProviderLimitCatalog::default();
+        let limits = &catalog
+            .model(
+                &InferenceProvider::GoogleGemini,
+                "tier-3",
+                "gemini-2.0-flash",
+            )
             .unwrap()
             .limits;
 
@@ -372,6 +397,16 @@ mod tests {
         assert_eq!(limits.tpm, QuotaValue::Limited(30_000_000));
         assert_eq!(limits.rpd, QuotaValue::Unlimited);
         assert_eq!(limits.tpd, QuotaValue::Unknown);
+    }
+
+    #[test]
+    fn catalog_contains_gemini_free_search_grounding_limits() {
+        let catalog = ProviderLimitCatalog::default();
+        let gemini = catalog.provider(&InferenceProvider::GoogleGemini).unwrap();
+        let search = gemini.tier("free").unwrap().tools.get("search-grounding").unwrap();
+        let gemini_3 = search.get("gemini-3").unwrap();
+
+        assert_eq!(gemini_3.limits.rpd, QuotaValue::Limited(500));
     }
 
     #[test]

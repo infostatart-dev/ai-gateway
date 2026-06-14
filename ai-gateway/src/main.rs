@@ -13,7 +13,7 @@ use ai_gateway::{
     store::db_listener::DatabaseListener,
     utils::meltdown::TaggedService,
 };
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use meltdown::Meltdown;
 use opentelemetry_sdk::{
     logs::SdkLoggerProvider, metrics::SdkMeterProvider,
@@ -26,24 +26,69 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 #[derive(Debug, Parser)]
 #[command(version)]
-pub struct Args {
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
     /// Path to the default config file.
-    /// Configs in this file can be overridden by environment variables.
-    #[arg(short, long)]
+    #[arg(short, long, global = true)]
     config: Option<PathBuf>,
 
     /// Enable verbose logging
-    #[arg(short, long)]
+    #[arg(short, long, global = true)]
     verbose: bool,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Run the AI gateway HTTP server (default).
+    Serve,
+    /// ChatGPT web session utilities.
+    #[cfg(feature = "chatgpt-login")]
+    Chatgpt {
+        #[command(subcommand)]
+        action: ChatgptAction,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+#[cfg(feature = "chatgpt-login")]
+enum ChatgptAction {
+    /// Open a browser to log in and save session cookies to CHATGPT_BROWSER_CLI path.
+    Login,
+    /// Paste Cookie header from Firefox/Chrome DevTools.
+    Import {
+        /// Full cookie string, e.g. `Cookie: __Secure-next-auth.session-token=...; cf_clearance=...`
+        #[arg(long)]
+        cookie: String,
+    },
 }
 
 #[tokio::main]
 async fn main() -> Result<(), RuntimeError> {
-    // Install the crypto provider before any TLS operations
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
-    let config = load_and_validate_config()?;
+
+    dotenvy::dotenv().ok();
+    let cli = Cli::parse();
+
+    #[cfg(feature = "chatgpt-login")]
+    if let Some(Command::Chatgpt { action }) = cli.command {
+        let result = match action {
+            ChatgptAction::Login => ai_gateway::cli::chatgpt_login::run_login().await,
+            ChatgptAction::Import { cookie } => {
+                ai_gateway::cli::chatgpt_login::run_import(cookie).await
+            }
+        };
+        if let Err(e) = result {
+            eprintln!("chatgpt command failed: {e}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+
+    let config = load_and_validate_config(cli.config, cli.verbose)?;
     let (logger_provider, tracer_provider, metrics_provider) =
         init_telemetry(&config)?;
 
@@ -56,10 +101,11 @@ async fn main() -> Result<(), RuntimeError> {
     Ok(())
 }
 
-fn load_and_validate_config() -> Result<Config, RuntimeError> {
-    dotenvy::dotenv().ok();
-    let args = Args::parse();
-    let mut config = match Config::try_read(args.config) {
+fn load_and_validate_config(
+    config_path: Option<PathBuf>,
+    verbose: bool,
+) -> Result<Config, RuntimeError> {
+    let mut config = match Config::try_read(config_path) {
         Ok(config) => config,
         Err(error) => {
             eprintln!("failed to read config: {error}");
@@ -67,14 +113,22 @@ fn load_and_validate_config() -> Result<Config, RuntimeError> {
         }
     };
 
-    // Override telemetry level if verbose flag is provided
-    if args.verbose {
+    if verbose {
         config.telemetry.level = "info,ai_gateway=trace".to_string();
     }
 
     config.validate().inspect_err(|e| {
         tracing::error!(error = %e, "configuration validation failed");
     })?;
+
+    if !config.has_autodefault_router()
+        && ai_gateway::config::chatgpt_web::session_path_from_env().is_some()
+    {
+        eprintln!(
+            "CHATGPT_BROWSER_CLI is set but session file is missing. \
+             Run: cargo run --features chatgpt-login -- chatgpt login"
+        );
+    }
 
     Ok(config)
 }
@@ -111,7 +165,6 @@ fn init_telemetry(
 }
 
 async fn run_app(config: Config) -> Result<(), RuntimeError> {
-    // 5 mins
     const CLEANUP_INTERVAL: Duration = Duration::from_mins(5);
     let mut shutting_down = false;
     let helicone_config = config.helicone.clone();

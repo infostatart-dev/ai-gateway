@@ -2,6 +2,7 @@ target
 node_modules
 .wrangler
 .env
+dev/session.json
 .idea/*
 .DS_Store
 bindings/

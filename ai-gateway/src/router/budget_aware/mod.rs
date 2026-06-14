@@ -20,5 +20,8 @@ mod types;
 #[cfg(test)]
 mod tests;
 
+#[cfg(all(test, feature = "testing"))]
+mod chatgpt_web_tests;
+
 pub(crate) use rank::default_provider_budget_rank;
 pub use types::BudgetAwareRouter;
