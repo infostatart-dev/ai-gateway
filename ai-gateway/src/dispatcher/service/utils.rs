@@ -153,19 +153,5 @@ impl Dispatcher {
 }
 
 pub fn extract_retry_after(headers: &HeaderMap) -> Option<u64> {
-    let s = headers.get(http::header::RETRY_AFTER)?.to_str().ok()?;
-    if let Ok(secs) = s.parse::<u64>() {
-        return Some(secs);
-    }
-    if let Ok(dt) = DateTime::parse_from_str(s, "%a, %d %b %Y %H:%M:%S GMT") {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        let target = u64::try_from(dt.to_utc().timestamp()).ok()?;
-        if target > now {
-            return Some(target - now);
-        }
-    }
-    None
+    crate::router::retry_after::extract_retry_after_from_headers(headers)
 }

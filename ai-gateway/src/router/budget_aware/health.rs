@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use super::types::BudgetAwareRouter;
 use crate::{
-    router::provider_attempt::{
-        cooldown_for_response, lock_states, smoothed_latency,
+    router::{
+        provider_attempt::{lock_states, smoothed_latency},
+        retry_after::cooldown_for_response,
     },
     types::{provider::InferenceProvider, response::Response},
 };
@@ -30,27 +31,30 @@ impl BudgetAwareRouter {
         }
     }
 
-    pub(super) fn record_failure(
+    pub(super) async fn record_failure(
         &self,
         provider: &InferenceProvider,
-        response: &Response,
+        response: Response,
         elapsed: Duration,
-    ) {
+    ) -> Response {
+        let config = self.app_state.config().provider_limits.cooldown_for(provider);
+        let status = response.status();
+        let (response, cooldown) = cooldown_for_response(response, &config).await;
         let mut states = lock_states(&self.states);
         let state = states.entry(provider.clone()).or_default();
         state.latency = Some(smoothed_latency(state.latency, elapsed));
         state.failures = state.failures.saturating_add(1);
         let prev_cooldown = state.cooldown_until;
-        state.cooldown_until =
-            Some(std::time::Instant::now() + cooldown_for_response(response));
+        state.cooldown_until = Some(std::time::Instant::now() + cooldown);
         if prev_cooldown.is_none() {
             self.app_state.runtime_metrics().record_cooldown_enter(
                 &self.router_id,
                 self.endpoint_type.as_ref(),
                 self.strategy,
                 provider,
-                crate::metrics::router::status_class(response.status()),
+                crate::metrics::router::status_class(status),
             );
         }
+        response
     }
 }

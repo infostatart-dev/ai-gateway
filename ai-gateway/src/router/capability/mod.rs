@@ -26,9 +26,11 @@ use crate::{
         decision::policy::{KeyPolicy, Tier},
         mapper::model::ModelMapper,
     },
-    router::provider_attempt::{
-        ProviderState, cooldown_for_response, is_failoverable_status,
-        lock_states, smoothed_latency,
+    router::{
+        provider_attempt::{
+            ProviderState, is_failoverable_status, lock_states, smoothed_latency,
+        },
+        retry_after::cooldown_for_response,
     },
     types::{
         model_id::{ModelId, ModelIdWithoutVersion},
@@ -281,6 +283,7 @@ pub struct CapabilityAwareRouter {
     default_latency: Duration,
     cascade: TierCascade,
     tiers_configured: bool,
+    provider_limits: crate::config::provider_limits::ProviderLimitCatalog,
 }
 
 impl CapabilityAwareRouter {
@@ -336,6 +339,7 @@ impl CapabilityAwareRouter {
                 .tier_cascade
                 .unwrap_or(app_state.config().decision.shaper.cascade),
             tiers_configured: !model_tiers.is_empty(),
+            provider_limits: app_state.config().provider_limits.clone(),
         })
     }
 
@@ -497,18 +501,19 @@ impl CapabilityAwareRouter {
         state.failures = 0;
     }
 
-    fn record_failure(
+    async fn record_failure(
         &self,
         provider: &InferenceProvider,
-        response: &Response,
+        response: Response,
         elapsed: Duration,
     ) {
+        let config = self.provider_limits.cooldown_for(provider);
+        let (_, cooldown) = cooldown_for_response(response, &config).await;
         let mut states = lock_states(&self.states);
         let state = states.entry(provider.clone()).or_default();
         state.latency = Some(smoothed_latency(state.latency, elapsed));
         state.failures = state.failures.saturating_add(1);
-        state.cooldown_until =
-            Some(Instant::now() + cooldown_for_response(response));
+        state.cooldown_until = Some(Instant::now() + cooldown);
     }
 }
 
@@ -566,9 +571,10 @@ impl Service<Request> for CapabilityAwareRouter {
                 if is_failoverable_status(status) {
                     this.record_failure(
                         &candidate.capability.provider,
-                        &response,
+                        response,
                         elapsed,
-                    );
+                    )
+                    .await;
                     failed_providers
                         .insert(candidate.capability.provider.clone());
                     continue;

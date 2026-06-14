@@ -1,10 +1,13 @@
 use bytes::Bytes;
 use futures::TryStreamExt;
+use http::StatusCode;
 use reqwest::RequestBuilder;
 
 use super::Dispatcher;
 use crate::{
+    dispatcher::service::utils::extract_retry_after,
     error::{api::ApiError, internal::InternalError},
+    router::retry_after::extract_retry_after_from_body,
     types::body::{Body, BodyReader},
 };
 
@@ -30,12 +33,27 @@ impl Dispatcher {
             .await
             .map_err(InternalError::ReqwestError)?;
         let status = response.status();
+        let mut headers = response.headers().clone();
         let mut resp_builder = http::Response::builder().status(status);
-        *resp_builder.headers_mut().unwrap() = response.headers().clone();
+        *resp_builder.headers_mut().unwrap() = headers.clone();
 
         if status.is_server_error() || status.is_client_error() {
             let body =
                 response.text().await.map_err(InternalError::ReqwestError)?;
+            if matches!(
+                status,
+                StatusCode::TOO_MANY_REQUESTS | StatusCode::SERVICE_UNAVAILABLE
+            ) && extract_retry_after(&headers).is_none()
+            {
+                if let Some(secs) = extract_retry_after_from_body(body.as_bytes())
+                {
+                    if let Ok(value) = http::HeaderValue::from_str(&secs.to_string())
+                    {
+                        headers.insert(http::header::RETRY_AFTER, value);
+                        *resp_builder.headers_mut().unwrap() = headers;
+                    }
+                }
+            }
             tracing::warn!(
                 upstream_status = %status,
                 upstream_body = %body,

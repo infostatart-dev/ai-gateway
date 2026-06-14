@@ -12,7 +12,8 @@ use crate::{
     endpoints::openrouter::chat_completions::CreateChatCompletionRequestOpenRouter,
     error::mapper::MapperError,
     middleware::mapper::{
-        TryConvertError, model::ModelMapper, openai_error_from_value,
+        TryConvertError, model::ModelMapper, openai_chat_response,
+        openai_error_from_value,
     },
     types::{model_id::ModelId, provider::InferenceProvider},
 };
@@ -45,14 +46,12 @@ impl
             .map_model(&source_model, &InferenceProvider::OpenRouter)?;
         tracing::trace!(source_model = ?source_model, target_model = ?target_model, "mapped model");
 
-        // Convert via JSON to adapt from async_openai structure to
-        // openrouter-rs cleanly
         let mut value_json = serde_json::to_value(&value)
             .map_err(|e| MapperError::UnsupportedFormat(e.to_string()))?;
         if let Some(obj) = value_json.as_object_mut() {
             obj.insert(
                 "model".to_string(),
-                serde_json::Value::String(target_model.to_string()),
+                Value::String(target_model.to_string()),
             );
         }
 
@@ -66,7 +65,8 @@ impl TryConvert<Value, CreateChatCompletionResponse> for OpenRouterConverter {
         &self,
         mut value: Value,
     ) -> Result<CreateChatCompletionResponse, Self::Error> {
-        normalize_chat_completion(&mut value);
+        openai_chat_response::normalize_chat_completion(&mut value);
+        openai_chat_response::ensure_non_empty_choices(&value)?;
         serde_json::from_value(value).map_err(MapperError::SerdeError)
     }
 }
@@ -83,7 +83,7 @@ impl
         &self,
         mut value: Value,
     ) -> Result<Option<CreateChatCompletionStreamResponse>, Self::Error> {
-        normalize_stream_chunk(&mut value);
+        openai_chat_response::normalize_stream_chunk(&mut value);
         let chunk: CreateChatCompletionStreamResponse =
             serde_json::from_value(value).map_err(MapperError::SerdeError)?;
         Ok(Some(chunk))
@@ -101,62 +101,6 @@ impl TryConvertError<Value, async_openai::error::WrappedError>
         value: Value,
     ) -> Result<async_openai::error::WrappedError, Self::Error> {
         Ok(openai_error_from_value(resp_parts.status, &value))
-    }
-}
-
-fn normalize_chat_completion(value: &mut Value) {
-    let Some(obj) = value.as_object_mut() else {
-        return;
-    };
-    if !obj.contains_key("id") {
-        obj.insert(
-            "id".to_string(),
-            Value::String(format!("chatcmpl-{}", uuid::Uuid::new_v4().simple())),
-        );
-    }
-    if !obj.contains_key("object") {
-        obj.insert(
-            "object".to_string(),
-            Value::String("chat.completion".to_string()),
-        );
-    }
-    if !obj.contains_key("created") {
-        let created = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_secs())
-            .unwrap_or(0);
-        obj.insert(
-            "created".to_string(),
-            Value::Number(created.into()),
-        );
-    }
-}
-
-fn normalize_stream_chunk(value: &mut Value) {
-    let Some(obj) = value.as_object_mut() else {
-        return;
-    };
-    if !obj.contains_key("id") {
-        obj.insert(
-            "id".to_string(),
-            Value::String(format!("chatcmpl-{}", uuid::Uuid::new_v4().simple())),
-        );
-    }
-    if !obj.contains_key("object") {
-        obj.insert(
-            "object".to_string(),
-            Value::String("chat.completion.chunk".to_string()),
-        );
-    }
-    if !obj.contains_key("created") {
-        let created = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_secs())
-            .unwrap_or(0);
-        obj.insert(
-            "created".to_string(),
-            Value::Number(created.into()),
-        );
     }
 }
 
@@ -180,7 +124,7 @@ mod tests {
             }
         });
 
-        normalize_chat_completion(&mut value);
+        openai_chat_response::normalize_chat_completion(&mut value);
         let response: CreateChatCompletionResponse =
             serde_json::from_value(value).expect("response must deserialize after normalization");
 
@@ -191,5 +135,17 @@ mod tests {
             response.choices[0].message.content.as_ref().unwrap(),
             "Привет"
         );
+    }
+
+    #[test]
+    fn rejects_openrouter_response_without_choices() {
+        let value = serde_json::json!({
+            "model": "openai/gpt-oss-120b:free",
+            "usage": {"total_tokens": 0}
+        });
+
+        let error = openai_chat_response::ensure_non_empty_choices(&value)
+            .expect_err("missing choices must fail before serde");
+        assert!(matches!(error, MapperError::UnsupportedFormat(_)));
     }
 }

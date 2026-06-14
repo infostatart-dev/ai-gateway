@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0-beta.2] - 2026-06-14
+
+### Features
+
+- Configurable router cooldown defaults and per-provider overrides in `provider-limits.yaml`
+- Upstream-aware 429 cooldown resolution: headers, JSON retry hints, and error-text reset windows
+- 429 classification (rate-limit vs quota-exhausted) with distinct fallback durations
+- Dispatcher synthesizes `Retry-After` from upstream error bodies when the header is absent
+- Shared OpenAI chat response normalizer for Cloudflare and OpenRouter mappers
+
+### Fixes
+
+- Cloudflare map/object `content` no longer breaks serde on successful responses
+- OpenRouter responses without `choices` fail fast in the mapper and trigger failover
+
 ## [0.2.0-beta.29] - 2025-07-18
 
 ### 🚀 Features

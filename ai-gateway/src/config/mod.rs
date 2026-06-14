@@ -12,6 +12,7 @@ pub mod model_capability;
 pub mod model_mapping;
 pub mod monitor;
 pub mod provider_limits;
+pub mod router_cooldown;
 pub mod providers;
 pub mod rate_limit;
 pub mod redis;

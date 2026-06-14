@@ -66,11 +66,13 @@ pub(super) async fn run_failover_candidates(
                 next_provider,
                 crate::metrics::router::status_class(status),
             );
-            this.record_failure(
-                &candidate.capability.provider,
-                &response,
-                elapsed,
-            );
+            let _ = this
+                .record_failure(
+                    &candidate.capability.provider,
+                    response,
+                    elapsed,
+                )
+                .await;
             failed_providers.insert(candidate.capability.provider.clone());
             tracing::warn!(
                 provider = %candidate.capability.provider,
@@ -123,11 +125,13 @@ pub(super) async fn run_failover_candidates(
                             "structured_output",
                         );
                     }
-                    this.record_failure(
-                        &candidate.capability.provider,
-                        &response,
-                        elapsed,
-                    );
+                    let _ = this
+                        .record_failure(
+                            &candidate.capability.provider,
+                            response,
+                            elapsed,
+                        )
+                        .await;
                     failed_providers.insert(candidate.capability.provider.clone());
                     tracing::warn!(
                         provider = %candidate.capability.provider,
@@ -140,11 +144,13 @@ pub(super) async fn run_failover_candidates(
 
             this.record_success(&candidate.capability.provider, elapsed);
         } else if is_failoverable_status(status) {
-            this.record_failure(
-                &candidate.capability.provider,
-                &response,
-                elapsed,
-            );
+            response = this
+                .record_failure(
+                    &candidate.capability.provider,
+                    response,
+                    elapsed,
+                )
+                .await;
         }
         attach_routed_identity(
             &mut response,

@@ -5,6 +5,7 @@ pub mod failover;
 pub mod latency;
 pub mod meta;
 pub mod provider_attempt;
+pub mod retry_after;
 pub mod routed_identity;
 pub mod router_details;
 pub mod service;

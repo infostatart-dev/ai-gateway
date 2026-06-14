@@ -6,15 +6,7 @@ use std::{
 
 use http::StatusCode;
 
-use crate::{
-    dispatcher::service::utils::extract_retry_after,
-    types::{provider::InferenceProvider, response::Response},
-};
-
-pub const DEFAULT_PROVIDER_ERROR_COOLDOWN: Duration = Duration::from_secs(15);
-pub const DEFAULT_RATE_LIMIT_COOLDOWN: Duration = Duration::from_mins(1);
-pub const DEFAULT_AUTH_ERROR_COOLDOWN: Duration = Duration::from_mins(5);
-pub const RETRY_AFTER_BUFFER: Duration = Duration::from_secs(1);
+use crate::types::provider::InferenceProvider;
 
 #[derive(Debug, Clone, Default)]
 pub struct ProviderState {
@@ -59,24 +51,4 @@ pub fn is_failoverable_status(status: StatusCode) -> bool {
             | StatusCode::CONFLICT
             | StatusCode::TOO_MANY_REQUESTS
     ) || status.is_server_error()
-}
-
-#[must_use]
-pub fn cooldown_for_response(response: &Response) -> Duration {
-    if response.status() == StatusCode::TOO_MANY_REQUESTS {
-        return extract_retry_after(response.headers())
-            .map_or(DEFAULT_RATE_LIMIT_COOLDOWN, Duration::from_secs)
-            + RETRY_AFTER_BUFFER;
-    }
-
-    if matches!(
-        response.status(),
-        StatusCode::UNAUTHORIZED
-            | StatusCode::FORBIDDEN
-            | StatusCode::PAYMENT_REQUIRED
-    ) {
-        return DEFAULT_AUTH_ERROR_COOLDOWN;
-    }
-
-    DEFAULT_PROVIDER_ERROR_COOLDOWN
 }

@@ -1,21 +1,26 @@
 use std::fmt;
 
-use derive_more::{AsRef, Deref};
 use indexmap::IndexMap;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{self, Visitor},
 };
 
-use crate::types::provider::InferenceProvider;
+use crate::{
+    config::router_cooldown::{ProviderCooldownOverrides, RouterCooldownConfig},
+    types::provider::InferenceProvider,
+};
 
 const PROVIDER_LIMITS_YAML: &str =
     include_str!("../../config/embedded/provider-limits.yaml");
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, AsRef, Deref)]
-pub struct ProviderLimitCatalog(
-    pub(crate) IndexMap<InferenceProvider, ProviderLimitConfig>,
-);
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderLimitCatalog {
+    #[serde(default, rename = "cooldown-defaults")]
+    pub cooldown_defaults: RouterCooldownConfig,
+    #[serde(flatten)]
+    pub providers: IndexMap<InferenceProvider, ProviderLimitConfig>,
+}
 
 impl Default for ProviderLimitCatalog {
     fn default() -> Self {
@@ -26,11 +31,20 @@ impl Default for ProviderLimitCatalog {
 
 impl ProviderLimitCatalog {
     #[must_use]
+    pub fn cooldown_for(&self, provider: &InferenceProvider) -> RouterCooldownConfig {
+        let overrides = self
+            .provider(provider)
+            .map(|config| config.cooldown)
+            .unwrap_or_default();
+        self.cooldown_defaults.merge(&overrides)
+    }
+
+    #[must_use]
     pub fn provider(
         &self,
         provider: &InferenceProvider,
     ) -> Option<&ProviderLimitConfig> {
-        self.0.get(provider)
+        self.providers.get(provider)
     }
 
     #[must_use]
@@ -68,6 +82,8 @@ pub struct ProviderLimitConfig {
     pub source: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<String>,
+    #[serde(default, skip_serializing_if = "ProviderCooldownOverrides::is_empty")]
+    pub cooldown: ProviderCooldownOverrides,
     #[serde(skip_serializing_if = "IndexMap::is_empty")]
     pub runtime_sources: IndexMap<String, RuntimeLimitSource>,
     pub tiers: IndexMap<String, ProviderLimitTier>,
@@ -80,6 +96,7 @@ impl Default for ProviderLimitConfig {
             scope: None,
             source: None,
             notes: Vec::new(),
+            cooldown: ProviderCooldownOverrides::default(),
             runtime_sources: IndexMap::new(),
             tiers: IndexMap::new(),
         }
@@ -313,6 +330,8 @@ impl Visitor<'_> for QuotaValueVisitor {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
 
     #[test]
@@ -461,6 +480,73 @@ mod tests {
         assert_eq!(
             serde_yml::from_str::<QuotaValue>("42").unwrap(),
             QuotaValue::Limited(42)
+        );
+    }
+
+    #[test]
+    fn cooldown_defaults_load_from_provider_limits_yaml() {
+        let catalog = ProviderLimitCatalog::default();
+
+        assert_eq!(
+            catalog.cooldown_defaults.provider_error,
+            Duration::from_secs(15)
+        );
+        assert_eq!(
+            catalog.cooldown_defaults.rate_limit,
+            Duration::from_secs(60)
+        );
+        assert_eq!(
+            catalog.cooldown_defaults.quota_exhausted,
+            Duration::from_secs(3600)
+        );
+        assert_eq!(
+            catalog.cooldown_defaults.auth_error,
+            Duration::from_secs(300)
+        );
+    }
+
+    #[test]
+    fn autodefault_free_stack_cooldown_overrides_load_from_yaml() {
+        let catalog = ProviderLimitCatalog::default();
+        let defaults = catalog.cooldown_defaults;
+
+        assert_eq!(defaults.rate_limit, Duration::from_secs(60));
+
+        for provider in [
+            InferenceProvider::Named("groq".into()),
+            InferenceProvider::OpenRouter,
+            InferenceProvider::GoogleGemini,
+            InferenceProvider::Named("mistral".into()),
+            InferenceProvider::Named("cerebras".into()),
+            InferenceProvider::Named("cloudflare".into()),
+            InferenceProvider::Named("opencode".into()),
+        ] {
+            assert_eq!(
+                catalog.cooldown_for(&provider).rate_limit,
+                defaults.rate_limit,
+                "unexpected rate-limit override for {provider}"
+            );
+        }
+
+        assert_eq!(
+            catalog.cooldown_for(&InferenceProvider::OpenRouter).provider_error,
+            Duration::from_secs(30)
+        );
+        assert_eq!(
+            catalog
+                .cooldown_for(&InferenceProvider::Named("cloudflare".into()))
+                .provider_error,
+            Duration::from_secs(30)
+        );
+        assert_eq!(
+            catalog
+                .cooldown_for(&InferenceProvider::Named("mistral".into()))
+                .provider_error,
+            Duration::from_secs(20)
+        );
+        assert_eq!(
+            catalog.cooldown_for(&InferenceProvider::Named("groq".into())).provider_error,
+            defaults.provider_error
         );
     }
 }

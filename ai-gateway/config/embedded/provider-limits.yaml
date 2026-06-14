@@ -1,5 +1,16 @@
+cooldown-defaults:
+  # Fallback when upstream returns 429 without Retry-After. NOT the provider RPM/RPD quota.
+  provider-error: 15s
+  rate-limit: 60s
+  quota-exhausted: 1h
+  auth-error: 5m
+  retry-after-buffer: 1s
+
 gemini:
   observed-at: "2026-05-01"
+  notes:
+    - Free Flash is ~10-15 RPM / 250k TPM (check AI Studio quotas tab).
+    - 429 with spending cap is billing, not RPM — failover out; raising cap is manual.
   scope: project
   source: google-cloud-console
   tiers:
@@ -234,6 +245,8 @@ groq:
                 tpd: 3600
 
 cerebras:
+  cooldown:
+    provider-error: 20s
   observed-at: "2026-06-13"
   scope: api-key
   source: cerebras-inference-docs
@@ -252,6 +265,8 @@ cerebras:
                 tpd: 1000000
 
 mistral:
+  cooldown:
+    provider-error: 20s
   observed-at: "2026-06-13"
   scope: api-key
   source: mistral-la-plateforme
@@ -270,6 +285,8 @@ mistral:
                 tpd: 33333333
 
 opencode:
+  cooldown:
+    provider-error: 20s
   observed-at: "2026-06-13"
   scope: api-key
   source: opencode-zen
@@ -288,6 +305,8 @@ opencode:
                 rpd: 200
 
 cloudflare:
+  cooldown:
+    provider-error: 30s
   observed-at: "2026-06-13"
   scope: account
   source: cloudflare-workers-ai-pricing
@@ -304,6 +323,8 @@ cloudflare:
                 rpd: 300
 
 openrouter:
+  cooldown:
+    provider-error: 30s
   observed-at: "2026-05-02"
   scope: api-key
   source: openrouter-docs
