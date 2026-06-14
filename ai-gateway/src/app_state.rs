@@ -53,6 +53,11 @@ impl AppState {
     pub fn runtime_metrics(&self) -> &crate::metrics::RouterRuntimeMetrics {
         &self.0.metrics.runtime
     }
+
+    #[must_use]
+    pub fn upstream_pacing(&self) -> &Arc<crate::router::pacing::PacingRegistry> {
+        &self.0.upstream_pacing
+    }
 }
 
 pub struct InnerAppState {
@@ -84,6 +89,7 @@ pub struct InnerAppState {
     pub traffic_shaper: Arc<TrafficShaper>,
     pub state_store: Arc<dyn crate::middleware::decision::budget::StateStore>,
     pub policy_store: Arc<dyn crate::middleware::decision::policy::PolicyStore>,
+    pub upstream_pacing: Arc<crate::router::pacing::PacingRegistry>,
 }
 
 impl fmt::Debug for InnerAppState {

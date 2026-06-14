@@ -19,7 +19,8 @@ use crate::{
     error::{api::ApiError, internal::InternalError},
     router::{
         provider_attempt::{
-            ProviderState, is_failoverable_status, lock_states, smoothed_latency,
+            ProviderState, is_failoverable_status, lock_provider_states,
+            smoothed_latency,
         },
         retry_after::cooldown_for_response,
     },
@@ -85,7 +86,7 @@ impl ProviderFailoverRouter {
 
     fn ordered_candidates(&self) -> Vec<ProviderCandidate> {
         let now = Instant::now();
-        let states = lock_states(&self.states);
+        let states = lock_provider_states(&self.states);
         let mut candidates = self
             .candidates
             .iter()
@@ -141,7 +142,7 @@ impl ProviderFailoverRouter {
     }
 
     fn record_success(&self, provider: &InferenceProvider, elapsed: Duration) {
-        let mut states = lock_states(&self.states);
+        let mut states = lock_provider_states(&self.states);
         let state = states.entry(provider.clone()).or_default();
         state.latency = Some(smoothed_latency(state.latency, elapsed));
         state.cooldown_until = None;
@@ -156,7 +157,7 @@ impl ProviderFailoverRouter {
     ) {
         let config = self.app_state.config().provider_limits.cooldown_for(provider);
         let (_, cooldown) = cooldown_for_response(response, &config).await;
-        let mut states = lock_states(&self.states);
+        let mut states = lock_provider_states(&self.states);
         let state = states.entry(provider.clone()).or_default();
         state.latency = Some(smoothed_latency(state.latency, elapsed));
         state.failures = state.failures.saturating_add(1);

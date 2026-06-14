@@ -361,14 +361,18 @@ impl ProviderKeyMap {
     }
 
     pub fn from_env(providers_config: &ProvidersConfig) -> Self {
-        tracing::debug!("Discovering provider keys");
+        tracing::debug!("Discovering provider credentials");
+        let registry =
+            crate::config::credentials::CredentialRegistry::build(
+                providers_config,
+            );
         let mut keys = HashMap::default();
 
         for (provider, _config) in providers_config.iter() {
             if provider.is_keyless() {
                 continue;
             }
-            if let Some(key) = ProviderKey::from_env(provider) {
+            if let Some(key) = registry.default_key(provider) {
                 keys.insert(provider.clone(), key);
             }
         }

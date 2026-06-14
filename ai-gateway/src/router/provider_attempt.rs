@@ -6,7 +6,10 @@ use std::{
 
 use http::StatusCode;
 
-use crate::types::provider::InferenceProvider;
+use crate::{
+    config::credentials::ProviderCredentialId,
+    types::provider::InferenceProvider,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct ProviderState {
@@ -15,9 +18,17 @@ pub struct ProviderState {
     pub failures: u32,
 }
 
-pub fn lock_states(
+pub fn lock_provider_states(
     states: &Mutex<HashMap<InferenceProvider, ProviderState>>,
 ) -> MutexGuard<'_, HashMap<InferenceProvider, ProviderState>> {
+    states
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+pub fn lock_credential_states(
+    states: &Mutex<HashMap<ProviderCredentialId, ProviderState>>,
+) -> MutexGuard<'_, HashMap<ProviderCredentialId, ProviderState>> {
     states
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)

@@ -244,6 +244,10 @@ pub struct QuotaLimits {
     pub audio_seconds_per_hour: QuotaValue,
     pub audio_seconds_per_day: QuotaValue,
     pub monthly_usd: QuotaValue,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub concurrent: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_interval_ms: Option<u64>,
 }
 
 impl Default for QuotaLimits {
@@ -256,6 +260,8 @@ impl Default for QuotaLimits {
             audio_seconds_per_hour: QuotaValue::Unknown,
             audio_seconds_per_day: QuotaValue::Unknown,
             monthly_usd: QuotaValue::Unknown,
+            concurrent: None,
+            min_interval_ms: None,
         }
     }
 }
@@ -537,6 +543,29 @@ mod tests {
         assert_eq!(
             catalog.cooldown_defaults.auth_error,
             Duration::from_secs(300)
+        );
+    }
+
+    #[test]
+    fn catalog_contains_chatgpt_web_session_limits() {
+        let catalog = ProviderLimitCatalog::default();
+        let provider =
+            catalog.provider(&InferenceProvider::Named("chatgpt-web".into()))
+                .expect("chatgpt-web limits");
+        let limits = &provider.tier("plus-single-session").unwrap().limits;
+
+        assert_eq!(limits.rpm, QuotaValue::Limited(12));
+        assert_eq!(limits.concurrent, Some(2));
+        assert_eq!(limits.min_interval_ms, Some(3000));
+        assert_eq!(
+            catalog.cooldown_for(&InferenceProvider::Named("chatgpt-web".into()))
+                .rate_limit,
+            Duration::from_secs(120)
+        );
+        assert_eq!(
+            catalog.cooldown_for(&InferenceProvider::Named("chatgpt-web".into()))
+                .auth_error,
+            Duration::from_secs(30 * 60)
         );
     }
 

@@ -60,6 +60,12 @@ impl Dispatcher {
             endpoint_metrics.incr_req_count();
         }
 
+        let _pacing_permit = crate::router::pacing::acquire_upstream_pacing(
+            &self.app_state,
+            target_provider,
+        )
+        .await?;
+
         let outcome = if crate::config::chatgpt_web::is_chatgpt_web(target_provider) {
             let headers = req.headers().clone();
             self.dispatch_chatgpt_web(req, headers).await?

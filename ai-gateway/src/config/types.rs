@@ -63,6 +63,8 @@ pub struct Config {
     pub helicone: crate::config::helicone::HeliconeConfig,
     pub providers: crate::config::providers::ProvidersConfig,
     pub provider_limits: crate::config::provider_limits::ProviderLimitCatalog,
+    #[serde(skip)]
+    pub credentials: crate::config::credentials::CredentialRegistry,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_store: Option<crate::config::cache::CacheStore>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -76,6 +78,9 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
+        let providers = crate::config::providers::ProvidersConfig::default();
+        let credentials =
+            crate::config::credentials::CredentialRegistry::build(&providers);
         Self {
             telemetry: telemetry::Config::default(),
             server: crate::config::server::ServerConfig::default(),
@@ -93,9 +98,10 @@ impl Default for Config {
             default_model_mapping:
                 crate::config::model_mapping::ModelMappingConfig::default(),
             helicone: crate::config::helicone::HeliconeConfig::default(),
-            providers: crate::config::providers::ProvidersConfig::default(),
+            providers,
             provider_limits:
                 crate::config::provider_limits::ProviderLimitCatalog::default(),
+            credentials,
             cache_store: Some(crate::config::cache::CacheStore::default()),
             rate_limit_store: None,
             decision: crate::config::decision::DecisionEngineConfig::default(),

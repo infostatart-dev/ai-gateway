@@ -14,8 +14,10 @@ use crate::{
         mapper::{model::ModelMapper, registry::EndpointConverterRegistry},
     },
     types::{
-        model_id::ModelId, provider::InferenceProvider,
-        rate_limit::RateLimitEvent, router::RouterId,
+        model_id::ModelId,
+        provider::{InferenceProvider, ProviderKey},
+        rate_limit::RateLimitEvent,
+        router::RouterId,
     },
     utils::handle_error::ErrorHandlerLayer,
 };
@@ -91,13 +93,73 @@ impl Dispatcher {
         provider: InferenceProvider,
         model_id: ModelId,
     ) -> Result<DispatcherService, InitError> {
+        Self::new_with_model_id_and_provider_key_without_rate_limit_events(
+            app_state,
+            router_id,
+            router_config,
+            provider,
+            model_id,
+            None,
+        )
+        .await
+    }
+
+    pub async fn new_with_model_id_and_provider_key_without_rate_limit_events(
+        app_state: AppState,
+        router_id: &RouterId,
+        router_config: &Arc<RouterConfig>,
+        provider: InferenceProvider,
+        model_id: ModelId,
+        provider_key: Option<&ProviderKey>,
+    ) -> Result<DispatcherService, InitError> {
         let model_mapper = ModelMapper::new_with_model_id(
             app_state.clone(),
             router_config.clone(),
             model_id,
         );
-        Self::new_inner(app_state, router_id, provider, model_mapper, None)
-            .await
+        Self::new_inner_with_provider_key(
+            app_state,
+            router_id,
+            provider,
+            model_mapper,
+            None,
+            provider_key,
+        )
+        .await
+    }
+
+    async fn new_inner_with_provider_key(
+        app_state: AppState,
+        router_id: &RouterId,
+        provider: InferenceProvider,
+        model_mapper: ModelMapper,
+        rate_limit_tx: Option<Sender<RateLimitEvent>>,
+        provider_key: Option<&ProviderKey>,
+    ) -> Result<DispatcherService, InitError> {
+        let client = if let Some(key) = provider_key {
+            Client::new_with_provider_key(&app_state, provider.clone(), Some(key))
+                .await?
+        } else {
+            Client::new(&app_state, provider.clone()).await?
+        };
+
+        let dispatcher = Self {
+            client,
+            app_state: app_state.clone(),
+            provider: provider.clone(),
+            rate_limit_tx,
+        };
+        let converter_registry = EndpointConverterRegistry::new(&model_mapper);
+        let extensions_layer = AddExtensionsLayer::builder()
+            .inference_provider(provider.clone())
+            .router_id(Some(router_id.clone()))
+            .build();
+
+        Ok(ServiceBuilder::new()
+            .layer(extensions_layer)
+            .layer(ErrorHandlerLayer::new(app_state))
+            .layer(crate::middleware::mapper::Layer::new(converter_registry))
+            .service(dispatcher))
     }
 
     pub async fn new_with_model_id(

@@ -10,7 +10,7 @@ pub fn show_welcome_banner(addr: &SocketAddr, config: &Config) {
     print_example_curl(addr);
 
     if let Some(router_config) = autodefault_router(config) {
-        print_autodefault_section(addr, router_config);
+        print_autodefault_section(addr, config, router_config);
     }
     router_summary::print_configured_router_sections(config);
 }
@@ -44,6 +44,7 @@ fn autodefault_router(
 
 fn print_autodefault_section(
     addr: &SocketAddr,
+    config: &Config,
     router_config: &crate::config::router::RouterConfig,
 ) {
     let mut section = String::from(
@@ -51,7 +52,7 @@ fn print_autodefault_section(
          /router/autodefault/chat/completions\n",
     );
 
-    router_summary::print_decision_status(&mut section, router_config);
+    router_summary::print_decision_status(&mut section, config, router_config);
     router_summary::print_strategy_and_providers(&mut section, router_config);
     print_autodefault_curl(&mut section, addr);
 

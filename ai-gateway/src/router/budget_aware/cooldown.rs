@@ -1,18 +1,18 @@
 use std::time::Instant;
 
 use super::types::{BudgetAwareRouter, BudgetCandidate};
-use crate::router::provider_attempt::lock_states;
+use crate::router::provider_attempt::lock_credential_states;
 
 impl BudgetAwareRouter {
     pub(super) async fn wait_for_candidate(
         &self,
         candidate: &BudgetCandidate,
-        has_next_provider: bool,
+        has_next_candidate: bool,
     ) -> bool {
         let remaining = {
-            let states = lock_states(&self.states);
+            let states = lock_credential_states(&self.states);
             states
-                .get(&candidate.capability.provider)
+                .get(&candidate.credential_id)
                 .and_then(|state| state.cooldown_until)
                 .and_then(|until| until.checked_duration_since(Instant::now()))
         };
@@ -22,6 +22,7 @@ impl BudgetAwareRouter {
         };
         if remaining <= self.max_cooldown_wait {
             tracing::debug!(
+                credential = %candidate.credential_id,
                 provider = %candidate.capability.provider,
                 model = %candidate.capability.model,
                 wait_ms = remaining.as_millis(),
@@ -31,8 +32,9 @@ impl BudgetAwareRouter {
             return true;
         }
 
-        if has_next_provider {
+        if has_next_candidate {
             tracing::debug!(
+                credential = %candidate.credential_id,
                 provider = %candidate.capability.provider,
                 model = %candidate.capability.model,
                 cooldown_ms = remaining.as_millis(),
@@ -41,7 +43,14 @@ impl BudgetAwareRouter {
             return false;
         }
 
-        tokio::time::sleep(self.max_cooldown_wait).await;
+        tracing::debug!(
+            credential = %candidate.credential_id,
+            provider = %candidate.capability.provider,
+            model = %candidate.capability.model,
+            wait_ms = remaining.as_millis(),
+            "waiting full cooldown for sole provider candidate"
+        );
+        tokio::time::sleep(remaining).await;
         true
     }
 }

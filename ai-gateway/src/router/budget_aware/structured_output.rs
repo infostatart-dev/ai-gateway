@@ -41,26 +41,6 @@ pub(super) fn request_is_stream(request_body: &Bytes) -> bool {
         .unwrap_or(false)
 }
 
-pub(super) fn chat_content_is_valid_json(response_body: &Bytes) -> bool {
-    let Ok(value) = serde_json::from_slice::<serde_json::Value>(response_body)
-    else {
-        return false;
-    };
-
-    let Some(content) = value
-        .pointer("/choices/0/message/content")
-        .and_then(serde_json::Value::as_str)
-    else {
-        return false;
-    };
-
-    if content.trim().is_empty() {
-        return false;
-    }
-
-    serde_json::from_str::<serde_json::Value>(content).is_ok()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

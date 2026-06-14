@@ -23,7 +23,7 @@ pub fn print_configured_router_sections(config: &Config) {
             "\n\n\x1b[1mRouter {router_id}\x1b[0m  \
              /router/{router_id}/chat/completions\n",
         );
-        print_decision_status(&mut section, router_config);
+        print_decision_status(&mut section, config, router_config);
         print_strategy_and_providers(&mut section, router_config);
         print!("{section}");
     }
@@ -31,27 +31,10 @@ pub fn print_configured_router_sections(config: &Config) {
 
 pub fn print_decision_status(
     out: &mut String,
+    config: &Config,
     router_config: &crate::config::router::RouterConfig,
 ) {
-    let (label, color) = if router_config.decision.enabled {
-        ("enabled", "\x1b[32m")
-    } else {
-        ("disabled", "\x1b[90m")
-    };
-    writeln!(out, "  Decision engine : {color}{label}\x1b[0m")
-        .expect("write to String");
-
-    if router_config.decision.enabled {
-        let cascade = router_config
-            .decision
-            .tier_cascade
-            .map_or("global-default", decision_display::tier_cascade_kebab);
-        writeln!(
-            out,
-            "  Tier cascade (this router) : \x1b[33m{cascade}\x1b[0m"
-        )
-        .expect("write to String");
-    }
+    decision_display::write_decision_status(out, config, router_config);
 }
 
 pub fn print_strategy_and_providers(

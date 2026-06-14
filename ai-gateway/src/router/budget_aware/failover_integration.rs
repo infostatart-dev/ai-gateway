@@ -19,7 +19,7 @@ mod structured_output_failover {
     };
     use crate::{
         app_state::AppState,
-        config::router::RouterConfig,
+        config::{credentials::ProviderCredentialId, router::RouterConfig},
         dispatcher::Dispatcher,
         endpoints::EndpointType,
         error::{api::ApiError, internal::InternalError},
@@ -129,6 +129,11 @@ mod structured_output_failover {
             .expect("dispatcher for mock candidate");
 
         BudgetCandidate {
+            credential_id: ProviderCredentialId::new(format!(
+                "{}-test",
+                provider
+            )),
+            credential_budget_rank: 0,
             capability: ModelCapability {
                 provider,
                 model: model_id,
@@ -200,7 +205,7 @@ mod structured_output_failover {
                 .headers()
                 .get(REAL_MODE_MODEL_AND_PROVIDER)
                 .and_then(|value| value.to_str().ok()),
-            Some("mistral/magistral-medium-latest")
+            Some("mistral-test/magistral-medium-latest")
         );
 
         let body = response.into_body().collect().await.unwrap().to_bytes();
@@ -210,17 +215,22 @@ mod structured_output_failover {
             r#"{"value":"recovered_on_second_provider"}"#
         );
 
-        let states = router.states.lock().expect("provider states");
+        let groq_credential = ProviderCredentialId::new("groq-test");
+        let mistral_credential = ProviderCredentialId::new("mistral-test");
+        let states = router.states.lock().expect("credential states");
         assert!(
-            states.get(&groq()).and_then(|state| state.cooldown_until).is_some(),
-            "first provider must be marked faulty after invalid structured output"
+            states
+                .get(&groq_credential)
+                .and_then(|state| state.cooldown_until)
+                .is_some(),
+            "first credential must be marked faulty after invalid structured output"
         );
         assert!(
             states
-                .get(&mistral())
+                .get(&mistral_credential)
                 .and_then(|state| state.cooldown_until)
                 .is_none(),
-            "winning provider must not stay in cooldown"
+            "winning credential must not stay in cooldown"
         );
     }
 
@@ -327,7 +337,7 @@ mod structured_output_failover {
                 .headers()
                 .get(REAL_MODE_MODEL_AND_PROVIDER)
                 .and_then(|value| value.to_str().ok()),
-            Some("cerebras/openai/gpt-oss-120b")
+            Some("cerebras-test/openai/gpt-oss-120b")
         );
     }
 }

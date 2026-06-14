@@ -4,6 +4,7 @@ pub mod direct;
 pub mod failover;
 pub mod latency;
 pub mod meta;
+pub mod pacing;
 pub mod provider_attempt;
 pub mod retry_after;
 pub mod routed_identity;

@@ -22,13 +22,18 @@ impl BudgetAwareRouter {
         )
     }
 
-    pub(super) fn budget_rank(
+    pub(crate) fn budget_rank(
         &self,
         candidate: &super::types::BudgetCandidate,
     ) -> u16 {
-        self.provider_priorities
+        let provider_rank = self
+            .provider_priorities
             .get(&candidate.capability.provider)
             .copied()
-            .unwrap_or_else(|| rank::default_budget_rank(&candidate.capability))
+            .unwrap_or_else(|| rank::default_budget_rank(&candidate.capability));
+        candidate
+            .credential_budget_rank
+            .saturating_mul(100)
+            .saturating_add(provider_rank)
     }
 }

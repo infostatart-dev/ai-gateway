@@ -256,8 +256,15 @@ mod autodefault_scenario_tests {
 
         assert!(
             ordered.windows(2).all(|window| {
-                default_provider_budget_rank(&window[0].0)
-                    <= default_provider_budget_rank(&window[1].0)
+                let left = candidates
+                    .iter()
+                    .find(|c| candidate_key(c) == window[0])
+                    .expect("left candidate");
+                let right = candidates
+                    .iter()
+                    .find(|c| candidate_key(c) == window[1])
+                    .expect("right candidate");
+                router.budget_rank(left) <= router.budget_rank(right)
             }),
             "providers must stay sorted by budget rank: {ordered:?}"
         );
@@ -284,8 +291,15 @@ mod autodefault_scenario_tests {
         );
         assert!(
             ordered.windows(2).all(|window| {
-                default_provider_budget_rank(&window[0].0)
-                    <= default_provider_budget_rank(&window[1].0)
+                let left = candidates
+                    .iter()
+                    .find(|c| candidate_key(c) == window[0])
+                    .expect("left candidate");
+                let right = candidates
+                    .iter()
+                    .find(|c| candidate_key(c) == window[1])
+                    .expect("right candidate");
+                router.budget_rank(left) <= router.budget_rank(right)
             }),
             "budget-first ordering for plain chat: {ordered:?}"
         );

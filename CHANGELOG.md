@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0-beta.4] - 2026-06-14
+
+### Features
+
+- Embedded `credentials.yaml` with provider, tier, and budget-rank slots per upstream account
+- `CredentialRegistry` loading secrets from `AI_GATEWAY_CREDENTIAL_<ID>` with legacy env fallbacks
+- Budget-aware router builds candidates per credential; cooldown, rank, and failover track credential id
+- `X-RealMode-Model-And-Provider` response header reports `credential-id/model`
+- Upstream pacing module: concurrent, RPM, and min-interval gates driven by `provider-limits.yaml`
+- Dispatcher acquires pacing permit before upstream dispatch
+- `chatgpt-web` session limits and cooldown entries in `provider-limits.yaml`
+- Startup banner shows default policy tier, cascade mode, fallback chain, and tier override header
+- `.env.template` documents universal credential env variable naming
+- Cloudflare credential resolution accepts `AI_GATEWAY_CREDENTIAL_CLOUDFLARE_DEFAULT`
+
+### Tests
+
+- Credential env resolver and registry loading tests
+- Credential failover integration test for budget-aware router
+- ChatGPT web provider limits catalog test
+
 ## [0.3.0-beta.2] - 2026-06-14
 
 ### Features

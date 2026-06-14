@@ -22,6 +22,8 @@ mod tests;
 
 #[cfg(all(test, feature = "testing"))]
 mod chatgpt_web_tests;
+#[cfg(all(test, feature = "testing"))]
+mod credential_failover;
 
 pub(crate) use rank::default_provider_budget_rank;
 pub use types::BudgetAwareRouter;

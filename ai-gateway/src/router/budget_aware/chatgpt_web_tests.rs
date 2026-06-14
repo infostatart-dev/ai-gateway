@@ -1,6 +1,6 @@
 //! chatgpt-web routing: no cross-provider model yaml matching.
 
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use indexmap::IndexMap;
 use nonempty_collections::nes;
@@ -12,11 +12,23 @@ use super::{
 };
 use crate::{
     app_state::AppState,
-    config::router::RouterConfig,
+    config::{chatgpt_web::SESSION_ENV, router::RouterConfig},
     endpoints::EndpointType,
     router::capability::RequestRequirements,
     types::{model_id::ModelId, provider::InferenceProvider, router::RouterId},
 };
+
+fn ensure_chatgpt_session_env() {
+    if std::env::var(SESSION_ENV).is_ok() {
+        return;
+    }
+    let session = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dev/session.json");
+    if session.exists() {
+        unsafe {
+            std::env::set_var(SESSION_ENV, session);
+        }
+    }
+}
 
 fn client_model(name: &str) -> ModelId {
     ModelId::from_str_and_provider(
@@ -27,6 +39,7 @@ fn client_model(name: &str) -> ModelId {
 }
 
 async fn chatgpt_only_router() -> BudgetAwareRouter {
+    ensure_chatgpt_session_env();
     let app_state = AppState::test_default().await;
     let provider = InferenceProvider::Named("chatgpt-web".into());
     build(

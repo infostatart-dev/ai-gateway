@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use super::types::BudgetAwareRouter;
 use crate::{
+    config::credentials::ProviderCredentialId,
     router::{
-        provider_attempt::{lock_states, smoothed_latency},
+        provider_attempt::{lock_credential_states, smoothed_latency},
         retry_after::cooldown_for_response,
     },
     types::{provider::InferenceProvider, response::Response},
@@ -12,11 +13,12 @@ use crate::{
 impl BudgetAwareRouter {
     pub(super) fn record_success(
         &self,
+        credential_id: &ProviderCredentialId,
         provider: &InferenceProvider,
         elapsed: Duration,
     ) {
-        let mut states = lock_states(&self.states);
-        let state = states.entry(provider.clone()).or_default();
+        let mut states = lock_credential_states(&self.states);
+        let state = states.entry(credential_id.clone()).or_default();
         let had_cooldown = state.cooldown_until.is_some();
         state.latency = Some(smoothed_latency(state.latency, elapsed));
         state.cooldown_until = None;
@@ -33,6 +35,7 @@ impl BudgetAwareRouter {
 
     pub(super) async fn record_failure(
         &self,
+        credential_id: &ProviderCredentialId,
         provider: &InferenceProvider,
         response: Response,
         elapsed: Duration,
@@ -40,8 +43,8 @@ impl BudgetAwareRouter {
         let config = self.app_state.config().provider_limits.cooldown_for(provider);
         let status = response.status();
         let (response, cooldown) = cooldown_for_response(response, &config).await;
-        let mut states = lock_states(&self.states);
-        let state = states.entry(provider.clone()).or_default();
+        let mut states = lock_credential_states(&self.states);
+        let state = states.entry(credential_id.clone()).or_default();
         state.latency = Some(smoothed_latency(state.latency, elapsed));
         state.failures = state.failures.saturating_add(1);
         let prev_cooldown = state.cooldown_until;

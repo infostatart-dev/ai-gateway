@@ -28,7 +28,8 @@ use crate::{
     },
     router::{
         provider_attempt::{
-            ProviderState, is_failoverable_status, lock_states, smoothed_latency,
+            ProviderState, is_failoverable_status, lock_provider_states,
+            smoothed_latency,
         },
         retry_after::cooldown_for_response,
     },
@@ -349,7 +350,7 @@ impl CapabilityAwareRouter {
         requirements: &RequestRequirements,
     ) {
         let now = Instant::now();
-        let states = lock_states(&self.states);
+        let states = lock_provider_states(&self.states);
 
         candidates.sort_by(|a, b| {
             let state_a = states.get(&a.capability.provider);
@@ -500,7 +501,7 @@ impl CapabilityAwareRouter {
     }
 
     fn record_success(&self, provider: &InferenceProvider, elapsed: Duration) {
-        let mut states = lock_states(&self.states);
+        let mut states = lock_provider_states(&self.states);
         let state = states.entry(provider.clone()).or_default();
         state.latency = Some(smoothed_latency(state.latency, elapsed));
         state.cooldown_until = None;
@@ -515,7 +516,7 @@ impl CapabilityAwareRouter {
     ) {
         let config = self.provider_limits.cooldown_for(provider);
         let (_, cooldown) = cooldown_for_response(response, &config).await;
-        let mut states = lock_states(&self.states);
+        let mut states = lock_provider_states(&self.states);
         let state = states.entry(provider.clone()).or_default();
         state.latency = Some(smoothed_latency(state.latency, elapsed));
         state.failures = state.failures.saturating_add(1);

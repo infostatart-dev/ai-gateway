@@ -12,7 +12,7 @@ use super::types::{
 };
 use crate::{
     app_state::AppState,
-    config::router::RouterConfig,
+    config::{credentials::ProviderCredentialId, providers::GlobalProviderConfig, router::RouterConfig},
     dispatcher::Dispatcher,
     endpoints::EndpointType,
     error::init::InitError,
@@ -20,6 +20,44 @@ use crate::{
     router::capability::get_model_capability,
     types::{provider::InferenceProvider, router::RouterId},
 };
+
+async fn push_anonymous_candidates(
+    candidates: &mut Vec<BudgetCandidate>,
+    app_state: AppState,
+    router_id: &RouterId,
+    router_config: &Arc<RouterConfig>,
+    provider: &InferenceProvider,
+    config: &GlobalProviderConfig,
+    provider_priorities: &IndexMap<InferenceProvider, u16>,
+) -> Result<(), InitError> {
+    let credential_id =
+        ProviderCredentialId::new(format!("{provider}-anonymous"));
+    let credential_budget_rank = 0;
+
+    for model in &config.models {
+        let capability = get_model_capability(
+            provider,
+            model,
+            config.model_capabilities.get(model),
+        );
+        let service = Dispatcher::new_with_model_id_and_provider_key_without_rate_limit_events(
+            app_state.clone(),
+            router_id,
+            router_config,
+            provider.clone(),
+            model.clone(),
+            None,
+        )
+        .await?;
+        candidates.push(BudgetCandidate {
+            credential_id: credential_id.clone(),
+            credential_budget_rank,
+            capability,
+            service,
+        });
+    }
+    Ok(())
+}
 
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn build(
@@ -35,25 +73,48 @@ pub(super) async fn build(
 ) -> Result<BudgetAwareRouter, InitError> {
     let mut candidates = Vec::new();
     let providers_config = &app_state.config().providers;
+    let credentials = &app_state.config().credentials;
 
     for provider in providers {
-        if let Some(config) = providers_config.get(provider) {
+        let Some(config) = providers_config.get(provider) else {
+            continue;
+        };
+        let provider_credentials: Vec<_> =
+            credentials.for_provider(provider).collect();
+
+        if provider_credentials.is_empty() {
+            push_anonymous_candidates(
+                &mut candidates,
+                app_state.clone(),
+                &router_id,
+                &router_config,
+                provider,
+                config,
+                provider_priorities,
+            )
+            .await?;
+            continue;
+        }
+
+        for credential in provider_credentials {
             for model in &config.models {
                 let capability = get_model_capability(
                     provider,
                     model,
                     config.model_capabilities.get(model),
                 );
-                let service =
-                    Dispatcher::new_with_model_id_without_rate_limit_events(
-                        app_state.clone(),
-                        &router_id,
-                        &router_config,
-                        provider.clone(),
-                        model.clone(),
-                    )
-                    .await?;
+                let service = Dispatcher::new_with_model_id_and_provider_key_without_rate_limit_events(
+                    app_state.clone(),
+                    &router_id,
+                    &router_config,
+                    provider.clone(),
+                    model.clone(),
+                    Some(&credential.key),
+                )
+                .await?;
                 candidates.push(BudgetCandidate {
+                    credential_id: credential.id.clone(),
+                    credential_budget_rank: credential.budget_rank,
                     capability,
                     service,
                 });

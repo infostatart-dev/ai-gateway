@@ -12,6 +12,8 @@ pub mod minio;
 pub mod model_capability;
 pub mod model_mapping;
 pub mod monitor;
+pub mod credentials;
+pub mod credential_env;
 pub mod provider_limits;
 pub mod router_cooldown;
 pub mod providers;

@@ -19,7 +19,7 @@ use crate::{
     },
     endpoints::EndpointType,
     types::{
-        provider::{InferenceProvider, ProviderKey},
+        provider::InferenceProvider,
         secret::Secret,
     },
 };
@@ -56,6 +56,10 @@ impl Config {
             serde_path_to_error::deserialize(default_config)
                 .map_err(Error::from)
                 .map_err(Box::new)?;
+        config.credentials =
+            crate::config::credentials::CredentialRegistry::build(
+                &config.providers,
+            );
 
         let autodefault_id = Self::autodefault_router_id();
         if config.deployment_target.is_sidecar()
@@ -95,7 +99,11 @@ fn build_autodefault_router(config: &Config) -> Option<RouterConfig> {
 
     for (rank, provider) in autodefault_provider_order().into_iter().enumerate()
     {
-        if is_available_for_autodefault(&provider, &config.providers) {
+        if is_available_for_autodefault(
+            &provider,
+            &config.providers,
+            &config.credentials,
+        ) {
             provider_priorities.insert(
                 provider.clone(),
                 u16::try_from(rank).unwrap_or(u16::MAX),
@@ -154,6 +162,7 @@ fn build_autodefault_router_config(
 fn is_available_for_autodefault(
     provider: &InferenceProvider,
     providers_config: &ProvidersConfig,
+    credentials: &crate::config::credentials::CredentialRegistry,
 ) -> bool {
     if !providers_config.contains_key(provider) {
         return false;
@@ -161,7 +170,7 @@ fn is_available_for_autodefault(
     if crate::config::chatgpt_web::is_chatgpt_web(provider) {
         return crate::config::chatgpt_web::session_file_available();
     }
-    provider.is_keyless() || ProviderKey::from_env(provider).is_some()
+    provider.is_keyless() || credentials.has_for(provider)
 }
 
 #[cfg(test)]
@@ -217,15 +226,24 @@ mod tests {
             "embedded providers must include opencode"
         );
         assert!(
-            !is_available_for_autodefault(&opencode, &config.providers),
+            !is_available_for_autodefault(
+                &opencode,
+                &config.providers,
+                &config.credentials,
+            ),
             "opencode must be omitted from autodefault without OPENCODE_API_KEY"
         );
 
         unsafe {
             std::env::set_var("OPENCODE_API_KEY", "test-key");
         }
+        let config = Config::default();
         assert!(
-            is_available_for_autodefault(&opencode, &config.providers),
+            is_available_for_autodefault(
+                &opencode,
+                &config.providers,
+                &config.credentials,
+            ),
             "opencode must join autodefault when OPENCODE_API_KEY is set"
         );
         unsafe {

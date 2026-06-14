@@ -724,3 +724,20 @@ openai:
       qualification: $1000 paid and 30+ days since first successful payment.
       limits:
         monthly-usd: 200000
+
+chatgpt-web:
+  observed-at: "2026-06-14"
+  scope: browser-session
+  notes:
+    - Plus/Pro web session — not platform API; limits are heuristic.
+    - One session file equals one account; do not share across instances without a pool.
+  cooldown:
+    rate-limit: 120s
+    auth-error: 30m
+    provider-error: 60s
+  tiers:
+    plus-single-session:
+      limits:
+        rpm: 12
+        concurrent: 2
+        min-interval-ms: 3000

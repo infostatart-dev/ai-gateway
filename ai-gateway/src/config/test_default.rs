@@ -28,6 +28,9 @@ impl TestDefault for Config {
             providers: crate::config::providers::ProvidersConfig::default(),
             provider_limits:
                 crate::config::provider_limits::ProviderLimitCatalog::default(),
+            credentials: crate::config::credentials::CredentialRegistry::build(
+                &crate::config::providers::ProvidersConfig::default(),
+            ),
             helicone: crate::config::helicone::HeliconeConfig::test_default(),
             deployment_target:
                 crate::config::deployment_target::DeploymentTarget::Sidecar,

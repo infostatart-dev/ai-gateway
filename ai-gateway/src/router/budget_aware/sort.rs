@@ -3,7 +3,7 @@ use std::time::Instant;
 use super::types::BudgetAwareRouter;
 use crate::router::{
     capability::{RequestRequirements, capability_fit_score},
-    provider_attempt::lock_states,
+    provider_attempt::lock_credential_states,
 };
 
 impl BudgetAwareRouter {
@@ -13,11 +13,11 @@ impl BudgetAwareRouter {
         requirements: &RequestRequirements,
     ) {
         let now = Instant::now();
-        let states = lock_states(&self.states);
+        let states = lock_credential_states(&self.states);
 
         candidates.sort_by(|left, right| {
-            let left_state = states.get(&left.capability.provider);
-            let right_state = states.get(&right.capability.provider);
+            let left_state = states.get(&left.credential_id);
+            let right_state = states.get(&right.credential_id);
 
             self.effective_budget_rank(left, left_state, now)
                 .cmp(&self.effective_budget_rank(right, right_state, now))

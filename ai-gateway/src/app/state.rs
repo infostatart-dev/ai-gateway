@@ -59,6 +59,9 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
     let provider_keys = ProviderKeys::new(&config, &metrics);
 
     let decision_state = super::decision_state::build_decision_state(&config)?;
+    let upstream_pacing = Arc::new(crate::router::pacing::PacingRegistry::new(
+        config.provider_limits.clone(),
+    ));
 
     Ok(AppState(Arc::new(InnerAppState {
         config,
@@ -84,5 +87,6 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
         traffic_shaper: decision_state.traffic_shaper,
         state_store: decision_state.state_store,
         policy_store: decision_state.policy_store,
+        upstream_pacing,
     })))
 }
