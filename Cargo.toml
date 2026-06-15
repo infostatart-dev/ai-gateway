@@ -19,7 +19,7 @@ edition = "2024"
 authors = [ "Thomas Harmon <tom@helicone.ai>, Justin Torre <justin@helicone.ai>, Kavin Desi Valli <kavin@helicone.ai>, Charlie Wu <charlie@helicone.ai>", "Helicone Developers" ]
 license = "Apache-2.0"
 publish = false
-version = "0.3.0-beta.7"
+version = "0.3.0-beta.8"
 
 
 [profile.release]
@@ -116,7 +116,7 @@ r2d2 = "0.8.10"
 rand = "0.9.1"
 redis = { version = "0.32.4" }
 regex = "1.11.1"
-reqwest = { version = "0.12.21", features = ["json", "stream", "multipart", "native-tls", "charset", "gzip"], default-features = false }
+reqwest = { version = "0.12.21", features = ["json", "stream", "multipart", "rustls-tls", "charset", "gzip"], default-features = false }
 reqwest-eventsource = "0.6.0"
 rustls = { version = "0.23.39" }
 rust_decimal = "1.41.0"
@@ -135,7 +135,7 @@ thiserror = "2.0.18"
 tokio = { version = "1.52.1", features = ['full'] }
 tokio-stream = "0.1.18"
 tokio-test = "0.4.5"
-tokio-tungstenite = { version = "0.29.0", features = ["native-tls", "url"] }
+tokio-tungstenite = { version = "0.29.0", features = ["rustls-tls-webpki-roots", "url"] }
 tokio-util = "0.7.18"
 tower = "0.5.3"
 tower_governor = { version = "0.8.0", features = [] }

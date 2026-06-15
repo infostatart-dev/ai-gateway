@@ -8,7 +8,7 @@ RUN cargo chef prepare --bin ai-gateway --recipe-path recipe.json
 
 FROM chef AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    pkg-config libssl-dev cmake clang libclang-dev build-essential \
+    pkg-config cmake clang libclang-dev build-essential \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
@@ -18,7 +18,7 @@ RUN cargo build --release -p ai-gateway \
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl openssl \
+    ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /tmp/ai-gateway /usr/local/bin/ai-gateway

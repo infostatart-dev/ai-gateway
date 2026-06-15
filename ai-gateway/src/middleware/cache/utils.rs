@@ -124,7 +124,7 @@ mod tests {
 
     fn cache_key(parts: &Parts, body: &bytes::Bytes) -> u64 {
         let router_id = parts.extensions.get::<RouterId>();
-        let mut hasher = get_hasher(parts, body, None, router_id);
+        let hasher = get_hasher(parts, body, None, router_id);
         hasher.finish()
     }
 

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0-beta.8] - 2026-06-15
+
+### Build
+
+- Standardize workspace HTTP clients on rustls to avoid native TLS linker conflicts with wreq/BoringSSL on Linux
+- Trim native OpenSSL packages from the Docker build and runtime images
+- Align credential and routed-identity unit tests with the current provider/model formats
+
 ## [0.3.0-beta.7] - 2026-06-15
 
 ### Fixes

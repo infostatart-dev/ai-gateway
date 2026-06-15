@@ -49,11 +49,11 @@ mod tests {
 
     #[test]
     fn legacy_provider_format_still_parseable() {
-        let _provider = InferenceProvider::OpenRouter;
+        let _provider = InferenceProvider::GoogleGemini;
         let identity = format_routed_identity(
             &ProviderCredentialId::new("gemini-free"),
-            &ModelId::from_str("gemini-2.5-flash").unwrap(),
+            &ModelId::from_str("gemini/gemini-2.5-flash").unwrap(),
         );
-        assert!(identity.starts_with("gemini-free/"));
+        assert_eq!(identity, "gemini-free/gemini-2.5-flash");
     }
 }

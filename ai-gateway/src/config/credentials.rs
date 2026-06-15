@@ -272,17 +272,19 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(env)]
     fn legacy_default_synthesized_for_provider_with_single_env_key() {
         unsafe {
-            std::env::set_var("GROQ_API_KEY", "groq-test");
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_DEEPSEEK_DEFAULT");
+            std::env::set_var("DEEPSEEK_API_KEY", "deepseek-test");
         }
         let registry = CredentialRegistry::build(&providers());
-        let groq = InferenceProvider::Named("groq".into());
-        assert!(registry.has_for(&groq));
-        let cred = registry.default_for(&groq).unwrap();
-        assert_eq!(cred.id.0, "groq-default");
+        let deepseek = InferenceProvider::Named("deepseek".into());
+        assert!(registry.has_for(&deepseek));
+        let cred = registry.default_for(&deepseek).unwrap();
+        assert_eq!(cred.id.0, "deepseek-default");
         unsafe {
-            std::env::remove_var("GROQ_API_KEY");
+            std::env::remove_var("DEEPSEEK_API_KEY");
         }
     }
 
