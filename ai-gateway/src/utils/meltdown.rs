@@ -7,7 +7,6 @@ use std::{
 use futures::{Future, FutureExt, future::CatchUnwind};
 use meltdown::{Service, Token};
 use pin_project_lite::pin_project;
-use tokio::signal::unix::{SignalKind, signal};
 use tracing::info;
 
 use crate::error::runtime::RuntimeError;
@@ -82,21 +81,41 @@ where
 pub async fn wait_for_shutdown_signals(
     mut token: Token,
 ) -> Result<(), RuntimeError> {
-    let mut sigint = signal(SignalKind::interrupt())
-        .expect("failed to register SIGINT signal");
-    let mut sigterm = signal(SignalKind::terminate())
-        .expect("failed to register SIGTERM signal");
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
 
-    tokio::select! {
-        () = &mut token => {
-            info!("Shutdown signal received");
-        },
-        _ = sigint.recv() => {
-            info!("SIGINT received");
-        },
-        _ = sigterm.recv() => {
-            info!("SIGTERM received");
-        },
+        let mut sigint = signal(SignalKind::interrupt())
+            .expect("failed to register SIGINT signal");
+        let mut sigterm = signal(SignalKind::terminate())
+            .expect("failed to register SIGTERM signal");
+
+        tokio::select! {
+            () = &mut token => {
+                info!("Shutdown signal received");
+            },
+            _ = sigint.recv() => {
+                info!("SIGINT received");
+            },
+            _ = sigterm.recv() => {
+                info!("SIGTERM received");
+            },
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        tokio::select! {
+            () = &mut token => {
+                info!("Shutdown signal received");
+            },
+            result = tokio::signal::ctrl_c() => {
+                match result {
+                    Ok(()) => info!("Ctrl+C received"),
+                    Err(err) => return Err(RuntimeError::Serve(err)),
+                }
+            },
+        }
     }
 
     Ok(())
