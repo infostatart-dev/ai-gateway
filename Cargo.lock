@@ -4083,7 +4083,6 @@ dependencies = [
  "bytes",
  "http 1.4.0",
  "opentelemetry",
- "reqwest 0.12.24",
 ]
 
 [[package]]
@@ -4114,7 +4113,6 @@ dependencies = [
  "opentelemetry-proto",
  "opentelemetry_sdk",
  "prost 0.14.3",
- "reqwest 0.12.24",
  "thiserror 2.0.18",
  "tokio",
  "tonic",

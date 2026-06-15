@@ -34,7 +34,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-targets: "false"
-          shared-key: "deps"
+          shared-key: "deps-rustls-v1"
           # To only cache runs from `main`:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: print rust version for educational purposes
@@ -55,7 +55,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-targets: "false"
-          shared-key: "deps"
+          shared-key: "deps-rustls-v1"
           # To only cache runs from `main`:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: print rust version for educational purposes

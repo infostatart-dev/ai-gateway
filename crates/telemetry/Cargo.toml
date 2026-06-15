@@ -13,7 +13,7 @@ log-panics = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
-opentelemetry-otlp = { workspace = true, features = ['default', 'grpc-tonic'] }
+opentelemetry-otlp = { workspace = true, features = ["grpc-tonic", "trace", "metrics", "logs", "internal-logs"] }
 opentelemetry-appender-tracing = { workspace = true }
 opentelemetry-http = { workspace = true }
 serde = { workspace = true }

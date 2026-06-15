@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0-beta.9] - 2026-06-15
+
+### Build
+
+- Enable wreq BoringSSL symbol prefixing on Linux for coexistence with transitive native TLS clients
+- Route OpenTelemetry OTLP export through gRPC-only features to drop unused HTTP client TLS stacks
+- Bust Rust CI dependency cache after the TLS stack realignment
+
 ## [0.3.0-beta.8] - 2026-06-15
 
 ### Build

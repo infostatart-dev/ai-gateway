@@ -12,7 +12,7 @@ base64 = { workspace = true }
 chrono = { workspace = true, features = ["serde", "clock"] }
 rand = { workspace = true }
 regex = { workspace = true }
-wreq = { workspace = true }
+wreq = { workspace = true, features = ["cookies", "json", "stream"] }
 wreq-util = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -31,3 +31,6 @@ login = ["dep:chromiumoxide", "dep:futures"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+wreq = { workspace = true, features = ["prefix-symbols"] }
