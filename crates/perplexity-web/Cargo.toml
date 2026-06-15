@@ -1,29 +1,24 @@
 [package]
-name = "chatgpt-web"
+name = "perplexity-web"
 version = { workspace = true }
 edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
 publish = false
-description = "ChatGPT web session client (chatgpt.com backend-api)"
+description = "Perplexity web session client (perplexity.ai SSE API)"
 
 [dependencies]
-base64 = { workspace = true }
 chrono = { workspace = true, features = ["serde", "clock"] }
-rand = { workspace = true }
-regex = { workspace = true }
-wreq = { workspace = true, features = ["cookies", "json", "stream"] }
-wreq-util = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-web-message-budget = { workspace = true }
-jsonschema = { workspace = true }
 sha2 = { workspace = true }
-sha3 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "sync", "time", "rt"] }
 web-browser-login = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
+wreq = { workspace = true, features = ["cookies", "json", "stream"] }
+wreq-util = { workspace = true }
+web-message-budget = { workspace = true }
 chromiumoxide = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 
@@ -33,7 +28,6 @@ login = ["dep:chromiumoxide", "dep:futures"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-serial_test = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 wreq = { workspace = true, features = ["prefix-symbols"] }

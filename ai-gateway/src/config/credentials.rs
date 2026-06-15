@@ -72,6 +72,27 @@ impl CredentialRegistry {
         let mut registry = Self::default();
 
         for (id, spec) in catalog.credentials {
+            if crate::config::perplexity_web::is_perplexity_web(&spec.provider) {
+                let Some(path) =
+                    crate::config::perplexity_web::session_path_for_credential(&id)
+                else {
+                    continue;
+                };
+                if !providers_config.contains_key(&spec.provider) {
+                    continue;
+                }
+                registry.push(ProviderCredential {
+                    id: ProviderCredentialId::new(id),
+                    provider: spec.provider,
+                    tier: spec.tier,
+                    key: ProviderKey::Secret(crate::types::secret::Secret::from(
+                        path.display().to_string(),
+                    )),
+                    budget_rank: spec.budget_rank,
+                });
+                continue;
+            }
+
             let extra_env = spec
                 .key_env
                 .iter()

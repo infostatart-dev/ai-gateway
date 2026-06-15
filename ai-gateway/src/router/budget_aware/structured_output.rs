@@ -47,8 +47,6 @@ pub(super) fn request_is_stream(request_body: &Bytes) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
-
     use super::*;
     use crate::types::{model_id::ModelId, provider::InferenceProvider};
 

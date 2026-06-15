@@ -1,6 +1,7 @@
 pub mod balance;
 pub mod cache;
 pub mod chatgpt_web;
+pub mod perplexity_web;
 pub mod cloudflare;
 pub mod control_plane;
 pub mod credential_env;

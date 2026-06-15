@@ -137,11 +137,19 @@ pub fn invalidate_token_cache(cookie: &str) {
 }
 
 #[cfg(test)]
+pub fn clear_all_token_cache() {
+    if let Ok(mut cache) = TOKEN_CACHE.lock() {
+        cache.clear();
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::tls::fetch::{FetchResponse, MockFetch};
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn caches_session_token() {
         let body = br#"{"accessToken":"tok123","user":{"id":"u1"}}"#.to_vec();
         let fetch = MockFetch::new(vec![FetchResponse {

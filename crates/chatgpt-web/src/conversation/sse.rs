@@ -87,7 +87,16 @@ fn flush_data(lines: &mut Vec<String>) -> Option<SseEvent> {
     })
 }
 
-pub fn collect_sse_content(raw: &str) -> Result<String, String> {
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SseTurnMeta {
+    pub conversation_id: Option<String>,
+    pub assistant_message_id: Option<String>,
+    pub content: String,
+}
+
+pub fn collect_sse_turn_meta(raw: &str) -> Result<SseTurnMeta, String> {
+    let mut conversation_id = None;
+    let mut assistant_message_id = None;
     let mut current_id: Option<String> = None;
     let mut current_parts = String::new();
     let mut is_live = false;
@@ -95,6 +104,9 @@ pub fn collect_sse_content(raw: &str) -> Result<String, String> {
     for event in parse_sse_events(raw) {
         if let Some(err) = event.error {
             return Err(err);
+        }
+        if let Some(cid) = event.conversation_id {
+            conversation_id = Some(cid);
         }
         let Some(msg) = event.message else { continue };
         if msg.role.as_deref() != Some("assistant") {
@@ -104,6 +116,9 @@ pub fn collect_sse_content(raw: &str) -> Result<String, String> {
             current_id = msg.id.clone();
             current_parts.clear();
             is_live = false;
+        }
+        if let Some(id) = &msg.id {
+            assistant_message_id = Some(id.clone());
         }
         if msg.status.as_deref() == Some("in_progress") {
             is_live = true;
@@ -115,9 +130,21 @@ pub fn collect_sse_content(raw: &str) -> Result<String, String> {
     }
 
     if current_parts.is_empty() && !is_live {
-        return Ok(String::new());
+        return Ok(SseTurnMeta {
+            conversation_id,
+            assistant_message_id,
+            content: String::new(),
+        });
     }
-    Ok(clean_text(&current_parts))
+    Ok(SseTurnMeta {
+        conversation_id,
+        assistant_message_id,
+        content: clean_text(&current_parts),
+    })
+}
+
+pub fn collect_sse_content(raw: &str) -> Result<String, String> {
+    collect_sse_turn_meta(raw).map(|m| m.content)
 }
 
 fn clean_text(text: &str) -> String {

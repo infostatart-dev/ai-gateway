@@ -497,6 +497,26 @@ chatgpt-web:
       supports-json-schema: true
       context-window: 128000
 
+perplexity-web:
+  models:
+    - "pplx-auto"
+    - "pplx-gpt"
+    - "pplx-gemini"
+  base-url: https://www.perplexity.ai/
+  model-capabilities:
+    pplx-auto:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 128000
+    pplx-gpt:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 128000
+    pplx-gemini:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 128000
+
 bedrock:
   # bedrock models must be enabled prior to sending
   # requests which use them

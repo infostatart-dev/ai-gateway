@@ -1,41 +1,42 @@
-//! Headed browser login — extracts ChatGPT session cookies into
-//! `CHATGPT_BROWSER_CLI` path.
-//!
-//! OmniRoute uses Electron/Playwright with **`context.cookies()`** (full jar),
-//! not page-only cookies. Manual DevTools paste of the full Cookie header is
-//! also supported — see `import`.
+//! Headed browser login — same flow as `chatgpt-web` / OmniRoute DevTools import.
 
 use chrono::Utc;
 use web_browser_login::{
-    BrowserLoginTarget, chatgpt_domain, chatgpt_left_login, poll_session_cookie,
+    BrowserLoginTarget, PollOptions, perplexity_domain, poll_session_cookie_with_options,
 };
 
 use crate::{
     Error,
     session::{
         cookie::{build_session_cookie_header, format_login_cookie_pairs},
-        file::{SessionFile, save_session, session_path_from_env},
+        file::{save_session, session_path_from_env, SessionFile},
     },
 };
 
 const TARGET: BrowserLoginTarget = BrowserLoginTarget::new(
-    "https://chatgpt.com/auth/login",
-    "https://chatgpt.com/",
-);
+    "https://www.perplexity.ai/",
+    "https://www.perplexity.ai/",
+)
+.with_timeout(900);
 
 pub async fn run_login() -> Result<(), Error> {
     let path = session_path_from_env().ok_or(Error::MissingSession)?;
     eprintln!(
-        "Log in to ChatGPT in the opened browser (email + password / Google)."
+        "Log in to Perplexity in the opened browser (email → 2FA → password)."
     );
+    eprintln!("Up to 15 minutes. Browser stays open — close it yourself.");
     eprintln!(
-        "Fallback: Firefox DevTools → Cookie header → `chatgpt import --cookie '...'`"
+        "Fallback: DevTools → Cookie header → `perplexity import --cookie '...'`"
     );
-    let cookie = poll_session_cookie(
+    let cookie = poll_session_cookie_with_options(
         TARGET,
-        chatgpt_domain,
+        perplexity_domain,
         format_login_cookie_pairs,
-        chatgpt_left_login,
+        |_| false,
+        PollOptions {
+            keep_browser_open: true,
+            ..PollOptions::default()
+        },
     )
     .await
     .map_err(Error::Other)?;

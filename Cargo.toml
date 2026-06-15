@@ -2,6 +2,9 @@
 
 members = [
     "crates/chatgpt-web",
+    "crates/perplexity-web",
+    "crates/web-message-budget",
+    "crates/web-browser-login",
     "crates/mock-server",
     "crates/telemetry",
     "crates/weighted-balance",
@@ -154,6 +157,9 @@ wreq-util = { version = "3.0.0-rc.12", features = ["emulation"] }
 sha3 = "0.10"
 chromiumoxide = { version = "0.9", default-features = true }
 chatgpt-web = { path = "./crates/chatgpt-web" }
+perplexity-web = { path = "./crates/perplexity-web" }
+web-message-budget = { path = "./crates/web-message-budget" }
+web-browser-login = { path = "./crates/web-browser-login" }
 
 [patch.crates-io]
 anthropic-ai-sdk = { path = "patches/anthropic-ai-sdk" }

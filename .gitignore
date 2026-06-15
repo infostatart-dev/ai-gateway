@@ -3,6 +3,7 @@ node_modules
 .wrangler
 .env
 dev/session.json
+dev/perplexity-session.json
 .idea/*
 .DS_Store
 bindings/

@@ -1,0 +1,13 @@
+[package]
+name = "web-browser-login"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = false
+description = "Shared chromiumoxide session cookie capture for web providers"
+
+[dependencies]
+chromiumoxide = { workspace = true }
+futures = { workspace = true }
+tokio = { workspace = true, features = ["time"] }

@@ -64,6 +64,23 @@ Legacy fallbacks: `CLOUDFLARE_API_KEY_WITH_ACCOUNT_ID`, or separate
 Not an `AI_GATEWAY_CREDENTIAL_*` slot. Uses a session file path instead — see
 [chatgpt-web.md](chatgpt-web.md).
 
+### Perplexity Web
+
+Session file with logged-in `__Secure-next-auth.session-token` (+ CF cookies).
+OmniRoute stores the same token in credentials as `apiKey`.
+
+```bash
+cargo run --features perplexity-login -p ai-gateway -- perplexity login
+cargo run --features perplexity-login -p ai-gateway -- perplexity import \
+  --cookie 'Cookie: __Secure-next-auth.session-token=...; cf_clearance=...'
+```
+
+| Slot | Env var (value = path to session JSON) |
+|------|----------------------------------------|
+| `perplexity-web-default` | `AI_GATEWAY_CREDENTIAL_PERPLEXITY_WEB_DEFAULT` |
+
+CLI writes to `PERPLEXITY_BROWSER_CLI` (default account path).
+
 ## Budget rank
 
 Each slot has a `budget-rank` in YAML. **Lower values are preferred first**

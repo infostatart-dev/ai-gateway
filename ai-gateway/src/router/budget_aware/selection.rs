@@ -105,7 +105,6 @@ mod autodefault_scenario_tests {
         app_state::AppState,
         config::router::RouterConfig,
         endpoints::EndpointType,
-        router::budget_aware::default_provider_budget_rank,
         types::{provider::InferenceProvider, router::RouterId},
     };
 

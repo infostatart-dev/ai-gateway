@@ -1,95 +1,21 @@
 use serde_json::Value;
+use web_message_budget::{
+    plan_web_chunks, ChunkPlan, MessageBudget, ParsedChat,
+    CHATGPT_WEB_CONTEXT_TOKENS,
+};
 
-#[derive(Debug, Clone, Default)]
-pub struct ParsedMessages {
-    pub system_msg: String,
-    pub history: Vec<(String, String)>,
-    pub current_msg: String,
-}
-
-pub fn parse_openai_messages(messages: &[Value]) -> ParsedMessages {
-    let mut system_msg = String::new();
-    let mut history = Vec::new();
-
-    for msg in messages {
-        let mut role = msg
-            .get("role")
-            .and_then(Value::as_str)
-            .unwrap_or("user")
-            .to_string();
-        if role == "developer" {
-            role = "system".into();
-        }
-        let content = message_content(msg);
-        if content.trim().is_empty() {
-            continue;
-        }
-        if role == "system" {
-            if !system_msg.is_empty() {
-                system_msg.push('\n');
-            }
-            system_msg.push_str(&content);
-        } else if role == "user" || role == "assistant" {
-            history.push((role, content));
-        }
-    }
-
-    let mut current_msg = String::new();
-    if history.last().is_some_and(|(r, _)| r == "user") {
-        current_msg = history.pop().map(|(_, c)| c).unwrap_or_default();
-    }
-
-    ParsedMessages {
-        system_msg,
-        history,
-        current_msg,
-    }
-}
-
-fn message_content(msg: &Value) -> String {
-    match msg.get("content") {
-        Some(Value::String(s)) => s.clone(),
-        Some(Value::Array(parts)) => parts
-            .iter()
-            .filter_map(|p| {
-                if p.get("type").and_then(Value::as_str) == Some("text") {
-                    p.get("text").and_then(Value::as_str).map(str::to_string)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(" "),
-        _ => String::new(),
-    }
-}
+pub use web_message_budget::ParsedChat as ParsedMessages;
+pub use web_message_budget::parse_openai_messages;
 
 pub fn build_conversation_body(
     parsed: &ParsedMessages,
     model_slug: &str,
     parent_message_id: &str,
+    conversation_id: Option<&str>,
 ) -> Value {
     let mut system_parts = Vec::new();
     if !parsed.system_msg.trim().is_empty() {
         system_parts.push(parsed.system_msg.trim().to_string());
-    }
-    if !parsed.history.is_empty() {
-        let formatted = parsed
-            .history
-            .iter()
-            .map(|(role, content)| {
-                if role == "assistant" {
-                    format!("Assistant: {content}")
-                } else {
-                    format!("User: {content}")
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        system_parts.push(format!(
-            "Prior conversation (for context — answer only the new user \
-             message below):\n\n{formatted}"
-        ));
     }
 
     let mut messages = Vec::new();
@@ -110,7 +36,7 @@ pub fn build_conversation_body(
         "action": "next",
         "messages": messages,
         "model": model_slug,
-        "conversation_id": null,
+        "conversation_id": conversation_id,
         "parent_message_id": parent_message_id,
         "timezone_offset_min": chrono::Local::now().offset().local_minus_utc() / 60,
         "history_and_training_disabled": true,
@@ -119,60 +45,96 @@ pub fn build_conversation_body(
     })
 }
 
+#[must_use]
+pub fn plan_conversation_turns(
+    parsed: &ParsedChat,
+    base_system: &str,
+    schema_instruction: Option<&str>,
+    reserved_output_tokens: u32,
+) -> ChunkPlan {
+    plan_web_chunks(
+        parsed,
+        base_system,
+        schema_instruction,
+        MessageBudget {
+            max_context_tokens: CHATGPT_WEB_CONTEXT_TOKENS,
+            reserved_output_tokens,
+            ..MessageBudget::default()
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use web_message_budget::WebTurnKind;
 
     use super::*;
+    use crate::schema::{build_schema_instruction, parse_json_schema_spec};
 
     #[test]
-    fn folds_history_into_system() {
-        let msgs = vec![
+    fn single_turn_when_payload_small() {
+        let parsed = parse_openai_messages(&[
             json!({"role":"user","content":"hi"}),
-            json!({"role":"assistant","content":"hello"}),
-            json!({"role":"user","content":"again"}),
-        ];
-        let parsed = parse_openai_messages(&msgs);
-        assert_eq!(parsed.current_msg, "again");
-        assert_eq!(parsed.history.len(), 2);
-        let body = build_conversation_body(&parsed, "gpt-5-mini", "parent");
-        let msgs = body.get("messages").unwrap().as_array().unwrap();
-        assert_eq!(msgs.len(), 2);
-    }
-
-    #[test]
-    fn system_schema_instruction_reaches_chatgpt_body() {
-        let schema_hint = "Output ONLY the JSON object in the message content";
-        let msgs = vec![
-            json!({
-                "role": "system",
-                "content": format!("You must respond with valid JSON.\n{schema_hint}")
-            }),
-            json!({"role":"user","content":"extract entity"}),
-        ];
-        let parsed = parse_openai_messages(&msgs);
-        let body = build_conversation_body(&parsed, "gpt-5-mini", "parent");
-        let system = &body["messages"][0]["content"]["parts"][0];
-        let text = system.as_str().unwrap();
-        assert!(text.contains(schema_hint));
-        assert!(text.contains("valid JSON"));
-    }
-
-    #[test]
-    fn json_retry_suffix_appends_to_system() {
-        let mut parsed = parse_openai_messages(&[
-            json!({
-                "role": "system",
-                "content": "schema rules"
-            }),
-            json!({"role":"user","content":"go"}),
         ]);
-        parsed
+        let plan = plan_conversation_turns(&parsed, "", None, 4_096);
+        assert_eq!(plan.turns.len(), 1);
+    }
+
+    #[test]
+    fn huge_dossier_splits_into_uploads_not_truncation() {
+        let dossier = "word ".repeat(157_000 * 3);
+        let parsed = parse_openai_messages(&[
+            json!({"role":"user","content":dossier}),
+        ]);
+        let plan = plan_conversation_turns(&parsed, "", None, 4_096);
+        assert!(plan.turns.len() > 1);
+        assert!(matches!(
+            plan.turns[0].kind,
+            WebTurnKind::ContextUpload { part: 1, .. }
+        ));
+        assert!(matches!(plan.turns.last().unwrap().kind, WebTurnKind::Final));
+        let joined: String = plan
+            .turns
+            .iter()
+            .map(|t| t.user_msg.clone())
+            .collect();
+        assert!(joined.contains("word "));
+        assert!(!joined.contains("truncated"));
+    }
+
+    #[test]
+    fn strict_schema_only_on_final_turn() {
+        let body = json!({
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "out",
+                    "strict": true,
+                    "schema": { "type": "object" }
+                }
+            }
+        });
+        let schema = parse_json_schema_spec(&body)
+            .map(|s| build_schema_instruction(&s));
+        let huge = "word ".repeat(400_000 * 3);
+        let parsed = parse_openai_messages(&[
+            json!({"role":"system","content":"base rules"}),
+            json!({"role":"user","content":huge}),
+        ]);
+        let plan = plan_conversation_turns(
+            &parsed,
+            "base rules",
+            schema.as_deref(),
+            4_096,
+        );
+        assert!(plan.turns.len() >= 2);
+        assert!(!plan.turns[0].system_msg.contains("MANDATORY strict mode"));
+        assert!(plan
+            .turns
+            .last()
+            .unwrap()
             .system_msg
-            .push_str(crate::constants::JSON_RETRY_SUFFIX);
-        let body = build_conversation_body(&parsed, "gpt-5-mini", "parent");
-        let text = body["messages"][0]["content"]["parts"][0].as_str().unwrap();
-        assert!(text.contains("CRITICAL"));
-        assert!(text.contains("ONLY a JSON object"));
+            .contains("MANDATORY strict mode"));
     }
 }

@@ -49,6 +49,12 @@ enum Command {
         #[command(subcommand)]
         action: ChatgptAction,
     },
+    /// Perplexity web session utilities.
+    #[cfg(feature = "perplexity-login")]
+    Perplexity {
+        #[command(subcommand)]
+        action: PerplexityAction,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -63,6 +69,23 @@ enum ChatgptAction {
         /// __Secure-next-auth.session-token=...; cf_clearance=...`
         #[arg(long)]
         cookie: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+#[cfg(feature = "perplexity-login")]
+enum PerplexityAction {
+    /// Open perplexity.ai in browser and save cookies to `PERPLEXITY_BROWSER_CLI`.
+    Login,
+    /// Paste Cookie header from browser `DevTools` (logged-in account).
+    Import {
+        #[arg(long)]
+        cookie: String,
+    },
+    /// Send one test query using the session file.
+    Probe {
+        #[arg(long, default_value = "Reply with exactly one word: OK")]
+        query: String,
     },
 }
 
@@ -87,6 +110,26 @@ async fn main() -> Result<(), RuntimeError> {
         };
         if let Err(e) = result {
             eprintln!("chatgpt command failed: {e}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+
+    #[cfg(feature = "perplexity-login")]
+    if let Some(Command::Perplexity { action }) = cli.command {
+        let result = match action {
+            PerplexityAction::Login => {
+                ai_gateway::cli::perplexity_login::run_login().await
+            }
+            PerplexityAction::Import { cookie } => {
+                ai_gateway::cli::perplexity_login::run_import(cookie).await
+            }
+            PerplexityAction::Probe { query } => {
+                ai_gateway::cli::perplexity_login::run_probe(query).await
+            }
+        };
+        if let Err(e) = result {
+            eprintln!("perplexity command failed: {e}");
             std::process::exit(1);
         }
         return Ok(());
@@ -131,6 +174,15 @@ fn load_and_validate_config(
         eprintln!(
             "CHATGPT_BROWSER_CLI is set but session file is missing. Run: \
              cargo run --features chatgpt-login -- chatgpt login"
+        );
+    }
+
+    if ai_gateway::config::perplexity_web::session_path_from_env().is_some()
+        && !ai_gateway::config::perplexity_web::session_file_available()
+    {
+        eprintln!(
+            "PERPLEXITY_BROWSER_CLI is set but session file is missing or invalid. \
+             Run: cargo run --features perplexity-login -- perplexity import --cookie '...'"
         );
     }
 

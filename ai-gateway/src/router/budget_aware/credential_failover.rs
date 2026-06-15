@@ -1,5 +1,5 @@
 #[cfg(all(test, feature = "testing"))]
-mod credential_failover {
+mod tests {
     use std::{
         collections::HashMap,
         sync::{Arc, Mutex},
@@ -9,7 +9,6 @@ mod credential_failover {
     use axum_core::body::Body;
     use bytes::Bytes;
     use http::{Request, StatusCode};
-    use http_body_util::BodyExt;
     use indexmap::IndexMap;
 
     use super::super::{

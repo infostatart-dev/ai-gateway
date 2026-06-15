@@ -8,12 +8,13 @@ use crate::{
     constants::{CONV_URL, JSON_RETRY_SUFFIX, SCHEMA_RETRY_SUFFIX},
     conversation::{
         build_conversation_body, build_non_streaming_response,
-        collect_sse_content, parse_openai_messages,
+        collect_sse_turn_meta, parse_openai_messages, plan_conversation_turns,
     },
     headers::{browser_headers, oai_headers},
     models::map_model,
     schema::{
-        StructuredOutputIssue, check_structured_response,
+        StructuredOutputIssue, base_system_without_schema,
+        build_schema_instruction, check_structured_response,
         parse_json_schema_spec,
     },
     sentinel::{
@@ -90,13 +91,26 @@ impl Executor {
         let mut structured_attempt = 0u32;
         let mut last_issue = None;
 
+        let reserved_output = req
+            .body
+            .get("max_tokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(4_096) as u32;
+
         loop {
             let retry_suffix = structured_attempt
                 .gt(&0)
                 .then(|| retry_suffix_for(last_issue));
 
             match self
-                .execute_once(&cookie, &model, &messages, retry_suffix)
+                .execute_once(
+                    &cookie,
+                    &model,
+                    &req.body,
+                    &messages,
+                    retry_suffix,
+                    reserved_output,
+                )
                 .await
             {
                 Ok((new_cookie, response)) => {
@@ -145,8 +159,10 @@ impl Executor {
         &self,
         cookie: &str,
         model: &str,
+        body: &Value,
         messages: &[Value],
         retry_suffix: Option<&'static str>,
+        reserved_output_tokens: u32,
     ) -> Result<(String, Value), Error> {
         let token = exchange_session(self.fetch.as_ref(), cookie).await?;
         let cookie = token
@@ -215,88 +231,162 @@ impl Executor {
             None
         };
 
-        let mut parsed = parse_openai_messages(messages);
-        if let Some(suffix) = retry_suffix {
-            parsed.system_msg.push_str(suffix);
-        }
+        let parsed = parse_openai_messages(messages);
+        let schema_spec = parse_json_schema_spec(body);
+        let schema_instruction =
+            schema_spec.as_ref().map(build_schema_instruction);
+        let base_system = base_system_without_schema(
+            &parsed.system_msg,
+            schema_instruction.as_deref(),
+        );
 
-        if parsed.current_msg.trim().is_empty() && parsed.history.is_empty() {
+        let plan = plan_conversation_turns(
+            &parsed,
+            &base_system,
+            schema_instruction.as_deref(),
+            reserved_output_tokens,
+        );
+
+        if plan.turns.is_empty()
+            || (plan.turns.len() == 1
+                && plan.turns[0].user_msg.trim().is_empty()
+                && plan.turns[0].system_msg.trim().is_empty())
+        {
             return Ok((cookie, serde_json::json!({})));
         }
 
-        let parent_message_id = uuid::Uuid::new_v4().to_string();
         let model_slug = map_model(model);
-        let cgpt_body =
-            build_conversation_body(&parsed, &model_slug, &parent_message_id);
+        let mut conversation_id: Option<String> = None;
+        let mut parent_message_id = uuid::Uuid::new_v4().to_string();
+        let turn_count = plan.turns.len();
 
-        let mut headers = browser_headers();
-        headers.extend(oai_headers(&session_id, &device_id));
-        headers.push(("Content-Type".into(), "application/json".into()));
-        headers.push(("Accept".into(), "text/event-stream".into()));
-        headers.push((
-            "Authorization".into(),
-            format!("Bearer {}", token.access_token),
-        ));
-        headers.push(("Cookie".into(), build_session_cookie_header(&cookie)));
-        if let Some(id) = &token.account_id {
-            headers.push(("chatgpt-account-id".into(), id.clone()));
-        }
-        if let Some(t) = &reqs.token {
-            headers.push((
-                "openai-sentinel-chat-requirements-token".into(),
-                t.clone(),
-            ));
-        }
-        if let Some(t) = &reqs.prepare_token {
-            headers.push((
-                "openai-sentinel-chat-requirements-prepare-token".into(),
-                t.clone(),
-            ));
-        }
-        if let Some(t) = proof_token {
-            headers.push(("openai-sentinel-proof-token".into(), t));
+        for (idx, turn) in plan.turns.iter().enumerate() {
+            let is_final = idx + 1 == turn_count;
+            let mut system_msg = turn.system_msg.clone();
+            if is_final && let Some(suffix) = retry_suffix {
+                system_msg.push_str(suffix);
+            }
+            let turn_parsed = web_message_budget::ParsedChat {
+                system_msg,
+                history: vec![],
+                current_msg: turn.user_msg.clone(),
+            };
+            let cgpt_body = build_conversation_body(
+                &turn_parsed,
+                &model_slug,
+                &parent_message_id,
+                conversation_id.as_deref(),
+            );
+
+            let resp = self
+                .fetch
+                .as_ref()
+                .fetch(FetchRequest {
+                    url: CONV_URL.into(),
+                    method: "POST".into(),
+                    headers: conv_headers(
+                        &token,
+                        &session_id,
+                        &device_id,
+                        &cookie,
+                        &reqs,
+                        proof_token.as_deref(),
+                    ),
+                    body: Some(serde_json::to_vec(&cgpt_body)?),
+                    timeout_ms: 120_000,
+                })
+                .await?;
+
+            if resp.status == 401 || resp.status == 403 {
+                invalidate_token_cache(&cookie);
+                return Err(Error::SessionAuth(
+                    "conversation unauthorized".into(),
+                ));
+            }
+            if resp.status == 429 {
+                return Err(Error::Upstream {
+                    status: 429,
+                    message: "rate limited".into(),
+                });
+            }
+            if resp.status >= 400 {
+                return Err(Error::Upstream {
+                    status: resp.status,
+                    message: String::from_utf8_lossy(&resp.body).into(),
+                });
+            }
+            if resp.body.is_empty() {
+                return Err(Error::EmptyResponse);
+            }
+
+            let raw = String::from_utf8_lossy(&resp.body);
+            let meta = collect_sse_turn_meta(&raw).map_err(Error::Other)?;
+            if is_final {
+                if meta.content.trim().is_empty() {
+                    return Err(Error::EmptyResponse);
+                }
+                return Ok((
+                    cookie,
+                    build_non_streaming_response(model, &meta.content),
+                ));
+            }
+            conversation_id = meta
+                .conversation_id
+                .or(conversation_id)
+                .or_else(|| {
+                    cgpt_body
+                        .get("conversation_id")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string)
+                });
+            parent_message_id = meta.assistant_message_id.ok_or_else(|| {
+                Error::Other(
+                    "missing assistant message id for context upload turn"
+                        .into(),
+                )
+            })?;
         }
 
-        let resp = self
-            .fetch
-            .as_ref()
-            .fetch(FetchRequest {
-                url: CONV_URL.into(),
-                method: "POST".into(),
-                headers,
-                body: Some(serde_json::to_vec(&cgpt_body)?),
-                timeout_ms: 120_000,
-            })
-            .await?;
-
-        if resp.status == 401 || resp.status == 403 {
-            invalidate_token_cache(&cookie);
-            return Err(Error::SessionAuth("conversation unauthorized".into()));
-        }
-        if resp.status == 429 {
-            return Err(Error::Upstream {
-                status: 429,
-                message: "rate limited".into(),
-            });
-        }
-        if resp.status >= 400 {
-            return Err(Error::Upstream {
-                status: resp.status,
-                message: String::from_utf8_lossy(&resp.body).into(),
-            });
-        }
-        if resp.body.is_empty() {
-            return Err(Error::EmptyResponse);
-        }
-
-        let raw = String::from_utf8_lossy(&resp.body);
-        let content = collect_sse_content(&raw).map_err(Error::Other)?;
-        if content.trim().is_empty() {
-            return Err(Error::EmptyResponse);
-        }
-
-        Ok((cookie, build_non_streaming_response(model, &content)))
+        Err(Error::Other("chunk plan produced no final turn".into()))
     }
+}
+
+fn conv_headers(
+    token: &crate::session::exchange::TokenEntry,
+    session_id: &str,
+    device_id: &str,
+    cookie: &str,
+    reqs: &crate::sentinel::prepare::ChatRequirements,
+    proof_token: Option<&str>,
+) -> Vec<(String, String)> {
+    let mut headers = browser_headers();
+    headers.extend(oai_headers(session_id, device_id));
+    headers.push(("Content-Type".into(), "application/json".into()));
+    headers.push(("Accept".into(), "text/event-stream".into()));
+    headers.push((
+        "Authorization".into(),
+        format!("Bearer {}", token.access_token),
+    ));
+    headers.push(("Cookie".into(), build_session_cookie_header(cookie)));
+    if let Some(id) = &token.account_id {
+        headers.push(("chatgpt-account-id".into(), id.clone()));
+    }
+    if let Some(t) = &reqs.token {
+        headers.push((
+            "openai-sentinel-chat-requirements-token".into(),
+            t.clone(),
+        ));
+    }
+    if let Some(t) = &reqs.prepare_token {
+        headers.push((
+            "openai-sentinel-chat-requirements-prepare-token".into(),
+            t.clone(),
+        ));
+    }
+    if let Some(t) = proof_token {
+        headers.push(("openai-sentinel-proof-token".into(), t.to_string()));
+    }
+    headers
 }
 
 fn retry_suffix_for(issue: Option<StructuredOutputIssue>) -> &'static str {

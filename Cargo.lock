@@ -53,7 +53,7 @@ dependencies = [
 
 [[package]]
 name = "ai-gateway"
-version = "0.3.0-beta.9"
+version = "0.3.0-beta.11"
 dependencies = [
  "anthropic-ai-sdk",
  "async-openai",
@@ -109,6 +109,7 @@ dependencies = [
  "opentelemetry-instrumentation-tower",
  "opentelemetry-system-metrics",
  "opentelemetry_sdk",
+ "perplexity-web",
  "pin-project-lite",
  "pretty_assertions",
  "r2d2",
@@ -1248,7 +1249,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chatgpt-web"
-version = "0.3.0-beta.9"
+version = "0.3.0-beta.11"
 dependencies = [
  "base64 0.22.1",
  "chromiumoxide",
@@ -1259,11 +1260,14 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "serial_test",
  "sha2 0.11.0",
  "sha3",
  "thiserror 2.0.18",
  "tokio",
  "uuid",
+ "web-browser-login",
+ "web-message-budget",
  "wreq",
  "wreq-util",
 ]
@@ -1966,7 +1970,7 @@ checksum = "1c7a8fb8a9fbf66c1f703fe16184d10ca0ee9d23be5b4436400408ba54a95005"
 
 [[package]]
 name = "dynamic-router"
-version = "0.3.0-beta.9"
+version = "0.3.0-beta.11"
 dependencies = [
  "futures",
  "http 1.4.0",
@@ -3470,7 +3474,7 @@ dependencies = [
 
 [[package]]
 name = "latency-router"
-version = "0.3.0-beta.9"
+version = "0.3.0-beta.11"
 dependencies = [
  "futures",
  "http 1.4.0",
@@ -3699,7 +3703,7 @@ dependencies = [
 
 [[package]]
 name = "mock-server"
-version = "0.3.0-beta.9"
+version = "0.3.0-beta.11"
 dependencies = [
  "ai-gateway",
  "axum",
@@ -4176,6 +4180,25 @@ name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
+
+[[package]]
+name = "perplexity-web"
+version = "0.3.0-beta.11"
+dependencies = [
+ "chromiumoxide",
+ "chrono",
+ "futures",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+ "web-browser-login",
+ "web-message-budget",
+ "wreq",
+ "wreq-util",
+]
 
 [[package]]
 name = "pest"
@@ -6238,7 +6261,7 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "telemetry"
-version = "0.3.0-beta.9"
+version = "0.3.0-beta.11"
 dependencies = [
  "http 1.4.0",
  "log-panics",
@@ -7283,6 +7306,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "web-browser-login"
+version = "0.3.0-beta.11"
+dependencies = [
+ "chromiumoxide",
+ "futures",
+ "tokio",
+]
+
+[[package]]
+name = "web-message-budget"
+version = "0.3.0-beta.11"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "web-sys"
 version = "0.3.97"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7331,7 +7371,7 @@ dependencies = [
 
 [[package]]
 name = "weighted-balance"
-version = "0.3.0-beta.9"
+version = "0.3.0-beta.11"
 dependencies = [
  "futures",
  "pin-project-lite",
