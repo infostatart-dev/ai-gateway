@@ -50,7 +50,6 @@ hyper-util = { workspace = true, features = ['server-auto', 'server-graceful', '
 indexmap = { workspace = true, features = ['serde'] }
 infer = { workspace = true }
 isocountry = { workspace = true }
-jemallocator = { workspace = true }
 json-patch = { workspace = true }
 latency-router = { workspace = true }
 meltdown = { workspace = true }
@@ -190,3 +189,7 @@ required-features = ["testing"]
 [[test]]
 name = "router_metrics"
 required-features = ["testing"]
+
+# jemalloc does not build on Windows MSVC in CI; use the system allocator there.
+[target.'cfg(not(windows))'.dependencies]
+jemallocator = { workspace = true }

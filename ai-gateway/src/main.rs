@@ -21,6 +21,9 @@ use opentelemetry_sdk::{
 };
 use tracing::{debug, info};
 
+// jemalloc is used on Unix for lower memory use; Windows release builds use the
+// system allocator.
+#[cfg(not(windows))]
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
