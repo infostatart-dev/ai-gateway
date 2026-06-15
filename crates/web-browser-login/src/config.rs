@@ -1,4 +1,5 @@
-/// Target site for headed browser login (OmniRoute uses manual import; this is CLI convenience).
+/// Target site for headed browser login (OmniRoute uses manual import; this is
+/// CLI convenience).
 #[derive(Debug, Clone, Copy)]
 pub struct BrowserLoginTarget {
     pub login_url: &'static str,

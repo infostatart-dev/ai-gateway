@@ -5,7 +5,8 @@ use crate::{
 
 const HISTORY_TURN_OVERHEAD_TOKENS: usize = 24;
 
-/// Fit messages into provider input budget: keep system + current, drop oldest history.
+/// Fit messages into provider input budget: keep system + current, drop oldest
+/// history.
 #[must_use]
 pub fn fit_parsed(parsed: &mut ParsedChat, budget: MessageBudget) -> FitReport {
     let mut report = FitReport::default();

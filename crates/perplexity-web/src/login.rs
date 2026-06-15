@@ -1,4 +1,5 @@
-//! Headed browser login — same flow as `chatgpt-web` / OmniRoute DevTools import.
+//! Headed browser login — same flow as `chatgpt-web` / OmniRoute DevTools
+//! import.
 
 use chrono::Utc;
 use web_browser_login::{
@@ -27,7 +28,8 @@ pub async fn run_login() -> Result<(), Error> {
     );
     eprintln!("Up to 15 minutes. Browser stays open — close it yourself.");
     eprintln!(
-        "Fallback: DevTools → Cookie header → `perplexity import --cookie '...'`"
+        "Fallback: DevTools → Cookie header → `perplexity import --cookie \
+         '...'`"
     );
     let cookie = poll_session_cookie_with_options(
         TARGET,

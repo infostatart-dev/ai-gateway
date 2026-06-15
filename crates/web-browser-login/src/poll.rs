@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use chromiumoxide::browser::Browser;
 use futures::StreamExt;
@@ -40,7 +39,8 @@ pub async fn poll_session_cookie(
     .await
 }
 
-/// Like [`poll_session_cookie`], but optionally leaves the browser open after capture.
+/// Like [`poll_session_cookie`], but optionally leaves the browser open after
+/// capture.
 pub async fn poll_session_cookie_with_options(
     target: BrowserLoginTarget,
     domain_ok: impl Fn(&str) -> bool,
@@ -73,10 +73,9 @@ pub async fn poll_session_cookie_with_options(
     let cookie = async {
         loop {
             if tokio::time::Instant::now() > deadline {
-                return Err(
-                    "login timed out — copy Cookie from DevTools and use import"
-                        .into(),
-                );
+                return Err("login timed out — copy Cookie from DevTools and \
+                            use import"
+                    .into());
             }
 
             if tokio::time::Instant::now() >= min_deadline {

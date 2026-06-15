@@ -1,5 +1,6 @@
-use serde_json::json;
 use std::sync::Arc;
+
+use serde_json::json;
 
 use crate::{
     executor::{ExecuteRequest, Executor},
@@ -48,9 +49,10 @@ fn conv_sse_meta(content: &str, conv_id: &str, msg_id: &str) -> FetchResponse {
     let escaped = content.replace('\\', "\\\\").replace('"', "\\\"");
     let body = format!(
         "data: {{\"conversation_id\":\"{conv_id}\",\"message\":{{\"id\":\"\
-         {msg_id}\",\"author\":{{\"role\":\"assistant\"}},\"content\":{{\"parts\
-         \":[\"{escaped}\"]}},\"status\":\"finished_successfully\"}}}}\n\ndata: \
-         [DONE]\n\n"
+         {msg_id}\",\"author\":{{\"role\":\"assistant\"}},\"content\":{{\"\
+         parts\":[\"{escaped}\"]}},\"status\":\"finished_successfully\"}}}}\n\\
+         \
+         ndata: [DONE]\n\n"
     );
     FetchResponse {
         status: 200,

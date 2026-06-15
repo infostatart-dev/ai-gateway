@@ -75,7 +75,8 @@ enum ChatgptAction {
 #[derive(Debug, Subcommand)]
 #[cfg(feature = "perplexity-login")]
 enum PerplexityAction {
-    /// Open perplexity.ai in browser and save cookies to `PERPLEXITY_BROWSER_CLI`.
+    /// Open perplexity.ai in browser and save cookies to
+    /// `PERPLEXITY_BROWSER_CLI`.
     Login,
     /// Paste Cookie header from browser `DevTools` (logged-in account).
     Import {
@@ -181,8 +182,9 @@ fn load_and_validate_config(
         && !ai_gateway::config::perplexity_web::session_file_available()
     {
         eprintln!(
-            "PERPLEXITY_BROWSER_CLI is set but session file is missing or invalid. \
-             Run: cargo run --features perplexity-login -- perplexity import --cookie '...'"
+            "PERPLEXITY_BROWSER_CLI is set but session file is missing or \
+             invalid. Run: cargo run --features perplexity-login -- \
+             perplexity import --cookie '...'"
         );
     }
 

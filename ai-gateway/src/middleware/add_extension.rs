@@ -4,8 +4,10 @@ use http::{Request, Response};
 use tower::{Layer, Service};
 use typed_builder::TypedBuilder;
 
-use crate::config::credentials::ProviderCredentialId;
-use crate::types::{provider::InferenceProvider, router::RouterId};
+use crate::{
+    config::credentials::ProviderCredentialId,
+    types::{provider::InferenceProvider, router::RouterId},
+};
 
 /// [`Layer`] to add all required request extensions.
 #[derive(Clone, Debug, TypedBuilder)]

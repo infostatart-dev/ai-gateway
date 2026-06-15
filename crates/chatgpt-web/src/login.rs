@@ -29,7 +29,8 @@ pub async fn run_login() -> Result<(), Error> {
         "Log in to ChatGPT in the opened browser (email + password / Google)."
     );
     eprintln!(
-        "Fallback: Firefox DevTools → Cookie header → `chatgpt import --cookie '...'`"
+        "Fallback: Firefox DevTools → Cookie header → `chatgpt import \
+         --cookie '...'`"
     );
     let cookie = poll_session_cookie(
         TARGET,

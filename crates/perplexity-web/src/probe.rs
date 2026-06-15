@@ -21,7 +21,8 @@ pub async fn probe_query(
 ) -> Result<ProbeResult, Error> {
     if !has_session_token(cookie) {
         return Err(Error::SessionAuth(
-            "missing __Secure-next-auth.session-token — run perplexity login or import"
+            "missing __Secure-next-auth.session-token — run perplexity login \
+             or import"
                 .into(),
         ));
     }

@@ -12,8 +12,8 @@ use crate::{
     types::provider::InferenceProvider,
 };
 
-/// Factory + cache: one [`PacingGate`] per `(provider, account scope)` (Registry
-/// pattern).
+/// Factory + cache: one [`PacingGate`] per `(provider, account scope)`
+/// (Registry pattern).
 #[derive(Debug)]
 pub struct PacingRegistry {
     gates: Mutex<HashMap<(String, String), Arc<PacingGate>>>,

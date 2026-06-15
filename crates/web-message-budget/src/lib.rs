@@ -1,4 +1,5 @@
-//! Shared message token budgeting for web-session providers (ChatGPT Web, Perplexity).
+//! Shared message token budgeting for web-session providers (ChatGPT Web,
+//! Perplexity).
 
 mod chunk;
 mod fit;

@@ -4,13 +4,14 @@ use crate::{
 };
 
 const UPLOAD_PAYLOAD_TOKENS: usize = 90_000;
-const UPLOAD_ACK_SYSTEM: &str = "The user will upload context in several messages. \
-    Acknowledge each part with only OK until the final message.";
+const UPLOAD_ACK_SYSTEM: &str = "The user will upload context in several \
+                                 messages. Acknowledge each part with only OK \
+                                 until the final message.";
 
 pub fn upload_part_header(part: usize, total: usize) -> String {
     format!(
-        "[Context part {part}/{total}] Store this — more context follows in the \
-         next message. Reply only OK.\n\n"
+        "[Context part {part}/{total}] Store this — more context follows in \
+         the next message. Reply only OK.\n\n"
     )
 }
 

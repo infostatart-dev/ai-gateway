@@ -42,8 +42,8 @@ fn account_pool_key(candidate: &BudgetCandidate) -> AccountPoolKey {
     )
 }
 
-/// Groups ranked candidates by `(provider, model)`, keeps provider order, rotates
-/// account keys inside each pool.
+/// Groups ranked candidates by `(provider, model)`, keeps provider order,
+/// rotates account keys inside each pool.
 pub(super) fn balance_credentials_among_accounts(
     ranked: Vec<BudgetCandidate>,
     round_robin: &mut HashMap<AccountPoolKey, usize>,
@@ -93,9 +93,10 @@ pub(super) fn balance_credentials_among_accounts(
 mod tests {
     use std::collections::HashMap;
 
+    use indexmap::IndexMap;
+
     use super::AccountPoolKey;
     use crate::types::provider::InferenceProvider;
-    use indexmap::IndexMap;
 
     #[derive(Clone)]
     struct PoolEntry {

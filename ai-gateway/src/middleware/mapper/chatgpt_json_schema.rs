@@ -11,7 +11,8 @@ use async_openai::types::chat::{
 const ONLY_JSON_TAIL: &str = "Output ONLY the JSON object in the message \
                               content. No markdown fences, no prose.";
 
-const STRICT_MANDATORY: &str = "MANDATORY strict mode: you MUST NOT omit any required field, use wrong \
+const STRICT_MANDATORY: &str =
+    "MANDATORY strict mode: you MUST NOT omit any required field, use wrong \
      types, or add extra properties. The response must be a single JSON \
      object that validates against the schema below — no exceptions.";
 

@@ -3,9 +3,9 @@ use web_message_budget::{
     CHATGPT_WEB_CONTEXT_TOKENS, ChunkPlan, MessageBudget, ParsedChat,
     plan_web_chunks,
 };
-
-pub use web_message_budget::ParsedChat as ParsedMessages;
-pub use web_message_budget::parse_openai_messages;
+pub use web_message_budget::{
+    ParsedChat as ParsedMessages, parse_openai_messages,
+};
 
 pub fn build_conversation_body(
     parsed: &ParsedMessages,

@@ -3,7 +3,8 @@ use serde_json::Value;
 const ONLY_JSON_TAIL: &str = "Output ONLY the JSON object in the message \
                               content. No markdown fences, no prose.";
 
-const STRICT_MANDATORY: &str = "MANDATORY strict mode: you MUST NOT omit any required field, use wrong \
+const STRICT_MANDATORY: &str =
+    "MANDATORY strict mode: you MUST NOT omit any required field, use wrong \
      types, or add extra properties. The response must be a single JSON \
      object that validates against the schema below — no exceptions.";
 
@@ -51,7 +52,8 @@ pub fn build_schema_instruction(spec: &JsonSchemaSpec) -> String {
     let schema = serde_json::to_string_pretty(&spec.schema)
         .unwrap_or_else(|_| "{}".into());
     lines.push(format!(
-        "You must respond with valid JSON that strictly follows this JSON schema:\n{schema}"
+        "You must respond with valid JSON that strictly follows this JSON \
+         schema:\n{schema}"
     ));
     lines.push(ONLY_JSON_TAIL.into());
     lines.join("\n")

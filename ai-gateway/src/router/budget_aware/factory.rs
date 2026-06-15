@@ -7,9 +7,9 @@ use std::{
 use indexmap::IndexMap;
 use nonempty_collections::NESet;
 
-use super::credential_balance::CredentialRoundRobin;
-use super::types::{
-    BudgetAwareRouter, BudgetCandidate, CandidateSelectionMode,
+use super::{
+    credential_balance::CredentialRoundRobin,
+    types::{BudgetAwareRouter, BudgetCandidate, CandidateSelectionMode},
 };
 use crate::{
     app_state::AppState,
