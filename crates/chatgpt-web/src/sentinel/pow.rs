@@ -1,4 +1,4 @@
-use base64::{engine::general_purpose::STANDARD, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD};
 use sha3::{Digest, Sha3_512};
 
 pub struct PowOptions {
@@ -29,7 +29,8 @@ pub fn solve_pow(opts: PowOptions) -> String {
             return format!("{}{}", opts.prefix, b64);
         }
     }
-    let b64 = STANDARD.encode(serde_json::to_string(&cfg).unwrap_or_default().as_bytes());
+    let b64 = STANDARD
+        .encode(serde_json::to_string(&cfg).unwrap_or_default().as_bytes());
     format!("{}{}", opts.prefix, b64)
 }
 

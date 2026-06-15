@@ -1,13 +1,17 @@
-use std::sync::{LazyLock, Mutex};
-use std::time::Instant;
+use std::{
+    sync::{LazyLock, Mutex},
+    time::Instant,
+};
 
 use rand::Rng;
 
-use crate::constants::{CHATGPT_BASE, DPL_TTL_MS, OAI_CLIENT_VERSION};
-use crate::headers::browser_headers;
-use crate::session::cookie::build_session_cookie_header;
-use crate::tls::fetch::{FetchRequest, HttpFetch};
-use crate::Error;
+use crate::{
+    Error,
+    constants::{CHATGPT_BASE, DPL_TTL_MS, OAI_CLIENT_VERSION},
+    headers::browser_headers,
+    session::cookie::build_session_cookie_header,
+    tls::fetch::{FetchRequest, HttpFetch},
+};
 
 #[derive(Debug, Clone)]
 pub struct DplInfo {
@@ -16,21 +20,25 @@ pub struct DplInfo {
     expires_at: Instant,
 }
 
-static DPL_CACHE: LazyLock<Mutex<Option<DplInfo>>> = LazyLock::new(|| Mutex::new(None));
+static DPL_CACHE: LazyLock<Mutex<Option<DplInfo>>> =
+    LazyLock::new(|| Mutex::new(None));
 
-pub async fn fetch_dpl(fetch: &dyn HttpFetch, cookie: &str) -> Result<(String, String), Error> {
-    if let Ok(guard) = DPL_CACHE.lock() {
-        if let Some(ref info) = *guard {
-            if info.expires_at > Instant::now() {
-                return Ok((info.dpl.clone(), info.script_src.clone()));
-            }
-        }
+pub async fn fetch_dpl(
+    fetch: &dyn HttpFetch,
+    cookie: &str,
+) -> Result<(String, String), Error> {
+    if let Ok(guard) = DPL_CACHE.lock()
+        && let Some(ref info) = *guard
+        && info.expires_at > Instant::now()
+    {
+        return Ok((info.dpl.clone(), info.script_src.clone()));
     }
 
     let mut headers = browser_headers();
     headers.push((
         "Accept".into(),
-        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8".into(),
+        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            .into(),
     ));
     headers.push(("Cookie".into(), build_session_cookie_header(cookie)));
 
@@ -49,24 +57,28 @@ pub async fn fetch_dpl(fetch: &dyn HttpFetch, cookie: &str) -> Result<(String, S
         .ok()
         .and_then(|re| re.captures(&html))
         .and_then(|c| c.get(1).map(|m| format!("dpl={}", m.as_str())))
-        .unwrap_or_else(|| format!("dpl={}", OAI_CLIENT_VERSION.trim_start_matches("prod-")));
-
-    let script_src = regex::Regex::new(r#"<script[^>]+src="(https?://[^"]*\.js[^"]*)""#)
-        .ok()
-        .and_then(|re| re.captures(&html))
-        .and_then(|c| c.get(1).map(|m| m.as_str().to_string()))
         .unwrap_or_else(|| {
-            format!(
-                "{CHATGPT_BASE}/_next/static/chunks/webpack-{}.js",
-                random_hex(16)
-            )
+            format!("dpl={}", OAI_CLIENT_VERSION.trim_start_matches("prod-"))
         });
+
+    let script_src =
+        regex::Regex::new(r#"<script[^>]+src="(https?://[^"]*\.js[^"]*)""#)
+            .ok()
+            .and_then(|re| re.captures(&html))
+            .and_then(|c| c.get(1).map(|m| m.as_str().to_string()))
+            .unwrap_or_else(|| {
+                format!(
+                    "{CHATGPT_BASE}/_next/static/chunks/webpack-{}.js",
+                    random_hex(16)
+                )
+            });
 
     if let Ok(mut guard) = DPL_CACHE.lock() {
         *guard = Some(DplInfo {
             dpl: dpl.clone(),
             script_src: script_src.clone(),
-            expires_at: Instant::now() + std::time::Duration::from_millis(DPL_TTL_MS),
+            expires_at: Instant::now()
+                + std::time::Duration::from_millis(DPL_TTL_MS),
         });
     }
     Ok((dpl, script_src))
@@ -79,7 +91,11 @@ pub fn clear_dpl_cache() {
     }
 }
 
-pub fn build_prekey_config(user_agent: &str, dpl: &str, script_src: &str) -> Vec<serde_json::Value> {
+pub fn build_prekey_config(
+    user_agent: &str,
+    dpl: &str,
+    script_src: &str,
+) -> Vec<serde_json::Value> {
     let screen_sizes = [3000, 4000, 3120, 4160];
     let cores = [8, 16, 24, 32];
     let mut rng = rand::rng();
@@ -95,7 +111,9 @@ pub fn build_prekey_config(user_agent: &str, dpl: &str, script_src: &str) -> Vec
         - perf_now;
 
     vec![
-        serde_json::json!(screen_sizes[rng.random_range(0..screen_sizes.len())]),
+        serde_json::json!(
+            screen_sizes[rng.random_range(0..screen_sizes.len())]
+        ),
         serde_json::json!(chrono::Utc::now().to_rfc3339()),
         serde_json::json!(4294705152_i64),
         serde_json::json!(0),

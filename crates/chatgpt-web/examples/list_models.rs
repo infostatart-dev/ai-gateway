@@ -1,11 +1,15 @@
-use chatgpt_web::session::file::load_session;
-use chatgpt_web::session::warmup::run_session_warmup;
-use chatgpt_web::session::{build_session_cookie_header, exchange_session};
-use chatgpt_web::tls::fetch::{FetchRequest, HttpFetch, RquestFetch};
+use chatgpt_web::{
+    session::{
+        build_session_cookie_header, exchange_session, file::load_session,
+        warmup::run_session_warmup,
+    },
+    tls::fetch::{FetchRequest, HttpFetch, RquestFetch},
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let path = std::env::var("CHATGPT_BROWSER_CLI").expect("CHATGPT_BROWSER_CLI");
+    let path =
+        std::env::var("CHATGPT_BROWSER_CLI").expect("CHATGPT_BROWSER_CLI");
     let session = load_session(path.as_ref()).await?;
     let cookie = session.normalized_cookie();
     let fetch = RquestFetch;
@@ -25,7 +29,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut headers = chatgpt_web::headers::browser_headers();
     headers.extend(chatgpt_web::headers::oai_headers(&session_id, &device_id));
     headers.push(("Accept".into(), "application/json".into()));
-    headers.push(("Authorization".into(), format!("Bearer {}", token.access_token)));
+    headers.push((
+        "Authorization".into(),
+        format!("Bearer {}", token.access_token),
+    ));
     headers.push(("Cookie".into(), build_session_cookie_header(&cookie)));
     if let Some(id) = &token.account_id {
         headers.push(("chatgpt-account-id".into(), id.clone()));
@@ -46,7 +53,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
         if let Some(models) = v.get("models").and_then(|m| m.as_array()) {
             for m in models.iter().take(20) {
-                let slug = m.get("slug").and_then(|s| s.as_str()).unwrap_or("?");
+                let slug =
+                    m.get("slug").and_then(|s| s.as_str()).unwrap_or("?");
                 let title = m
                     .get("title")
                     .or_else(|| m.get("display_name"))

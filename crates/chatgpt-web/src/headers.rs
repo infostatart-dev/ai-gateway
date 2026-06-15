@@ -1,5 +1,6 @@
 use crate::constants::{
-    CHATGPT_BASE, CHATGPT_USER_AGENT, OAI_CLIENT_BUILD_NUMBER, OAI_CLIENT_VERSION,
+    CHATGPT_BASE, CHATGPT_USER_AGENT, OAI_CLIENT_BUILD_NUMBER,
+    OAI_CLIENT_VERSION,
 };
 
 pub fn browser_headers() -> Vec<(String, String)> {
@@ -22,7 +23,10 @@ pub fn oai_headers(session_id: &str, device_id: &str) -> Vec<(String, String)> {
         ("OAI-Language".into(), "en-US".into()),
         ("OAI-Device-Id".into(), device_id.into()),
         ("OAI-Client-Version".into(), OAI_CLIENT_VERSION.into()),
-        ("OAI-Client-Build-Number".into(), OAI_CLIENT_BUILD_NUMBER.into()),
+        (
+            "OAI-Client-Build-Number".into(),
+            OAI_CLIENT_BUILD_NUMBER.into(),
+        ),
         ("OAI-Session-Id".into(), session_id.into()),
     ]
 }

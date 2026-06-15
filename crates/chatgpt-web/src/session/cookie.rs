@@ -2,7 +2,8 @@ use sha2::{Digest, Sha256};
 
 const SESSION_TOKEN_PREFIX: &str = "__Secure-next-auth.session-token";
 
-/// Cloudflare cookies that must travel with the session token (OmniRoute DevTools flow).
+/// Cloudflare cookies that must travel with the session token (OmniRoute
+/// DevTools flow).
 const CF_COOKIE_NAMES: &[&str] = &["cf_clearance", "__cf_bm", "_cfuvid"];
 
 pub fn cookie_key(cookie: &str) -> String {
@@ -20,11 +21,15 @@ pub fn build_session_cookie_header(raw_input: &str) -> String {
     normalize_cookie_blob(raw_input)
 }
 
-/// Dedupe cookie pairs and keep only session-token + Cloudflare helpers (OmniRoute DevTools set).
+/// Dedupe cookie pairs and keep only session-token + Cloudflare helpers
+/// (OmniRoute DevTools set).
 #[must_use]
 pub fn normalize_cookie_blob(raw_input: &str) -> String {
     let mut s = raw_input.trim().to_string();
-    if let Some(stripped) = s.strip_prefix("Cookie:").or_else(|| s.strip_prefix("cookie:")) {
+    if let Some(stripped) = s
+        .strip_prefix("Cookie:")
+        .or_else(|| s.strip_prefix("cookie:"))
+    {
         s = stripped.trim().to_string();
     }
     if !s.contains('=') {
@@ -32,7 +37,8 @@ pub fn normalize_cookie_blob(raw_input: &str) -> String {
     }
 
     let mut order: Vec<String> = Vec::new();
-    let mut values: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut values: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
 
     for pair in s.split(';') {
         let pair = pair.trim();
@@ -43,7 +49,9 @@ pub fn normalize_cookie_blob(raw_input: &str) -> String {
             continue;
         };
         let name = name.trim().to_string();
-        if !name.starts_with(SESSION_TOKEN_PREFIX) && !CF_COOKIE_NAMES.contains(&name.as_str()) {
+        if !name.starts_with(SESSION_TOKEN_PREFIX)
+            && !CF_COOKIE_NAMES.contains(&name.as_str())
+        {
             continue;
         }
         if !values.contains_key(&name) {
@@ -59,7 +67,10 @@ pub fn normalize_cookie_blob(raw_input: &str) -> String {
         .join("; ")
 }
 
-pub fn merge_refreshed_cookie(existing: &str, set_cookie: Option<&str>) -> Option<String> {
+pub fn merge_refreshed_cookie(
+    existing: &str,
+    set_cookie: Option<&str>,
+) -> Option<String> {
     let set_cookie = set_cookie?;
     let mut refreshed = Vec::new();
     for part in set_cookie.split(',') {
@@ -67,7 +78,10 @@ pub fn merge_refreshed_cookie(existing: &str, set_cookie: Option<&str>) -> Optio
         let (name, value) = part.split_once('=')?;
         let name = name.trim();
         if name.starts_with("__Secure-next-auth.session-token") {
-            refreshed.push((name.to_string(), value.split(';').next()?.trim().to_string()));
+            refreshed.push((
+                name.to_string(),
+                value.split(';').next()?.trim().to_string(),
+            ));
         }
     }
     if refreshed.is_empty() {
@@ -91,7 +105,8 @@ pub fn merge_refreshed_cookie(existing: &str, set_cookie: Option<&str>) -> Optio
     Some(normalize_cookie_blob(&kept.join("; ")))
 }
 
-/// Build a Cookie header from browser cookie pairs after login (OmniRoute-style).
+/// Build a Cookie header from browser cookie pairs after login
+/// (OmniRoute-style).
 #[must_use]
 pub fn format_login_cookie_pairs(pairs: &[(String, String)]) -> Option<String> {
     let mut parts = Vec::new();
@@ -140,17 +155,15 @@ mod tests {
 
     #[test]
     fn chunked_passthrough() {
-        let c = "__Secure-next-auth.session-token.0=a; __Secure-next-auth.session-token.1=b";
+        let c = "__Secure-next-auth.session-token.0=a; \
+                 __Secure-next-auth.session-token.1=b";
         assert_eq!(build_session_cookie_header(c), c);
     }
 
     #[test]
     fn format_login_pairs_includes_cf_cookies() {
         let pairs = vec![
-            (
-                "__Secure-next-auth.session-token".into(),
-                "eyJ".into(),
-            ),
+            ("__Secure-next-auth.session-token".into(), "eyJ".into()),
             ("cf_clearance".into(), "abc".into()),
             ("unrelated".into(), "skip".into()),
         ];

@@ -1,9 +1,11 @@
 use serde_json::json;
 
-use crate::executor::{ExecuteRequest, Executor};
-use crate::sentinel::dpl::clear_dpl_cache;
-use crate::session::exchange::invalidate_token_cache;
-use crate::tls::fetch::{FetchResponse, MockFetch};
+use crate::{
+    executor::{ExecuteRequest, Executor},
+    sentinel::dpl::clear_dpl_cache,
+    session::exchange::invalidate_token_cache,
+    tls::fetch::{FetchResponse, MockFetch},
+};
 
 fn session_resp() -> FetchResponse {
     FetchResponse {
@@ -40,7 +42,9 @@ fn cr_resp() -> FetchResponse {
 fn conv_sse(content: &str) -> FetchResponse {
     let escaped = content.replace('\\', "\\\\").replace('"', "\\\"");
     let body = format!(
-        "data: {{\"message\":{{\"id\":\"m1\",\"author\":{{\"role\":\"assistant\"}},\"content\":{{\"parts\":[\"{escaped}\"]}},\"status\":\"finished_successfully\"}}}}\n\ndata: [DONE]\n\n"
+        "data: {{\"message\":{{\"id\":\"m1\",\"author\":{{\"role\":\"\
+         assistant\"}},\"content\":{{\"parts\":[\"{escaped}\"]}},\"status\":\"\
+         finished_successfully\"}}}}\n\ndata: [DONE]\n\n"
     );
     FetchResponse {
         status: 200,
@@ -107,7 +111,8 @@ async fn retries_until_assistant_content_is_valid_json() {
     let fetch = MockFetch::new({
         let mut responses =
             first_execute_once_responses(conv_sse("Sure! Here is your JSON."));
-        responses.extend(execute_once_responses(conv_sse(r#"{"status":"ok"}"#)));
+        responses
+            .extend(execute_once_responses(conv_sse(r#"{"status":"ok"}"#)));
         responses
     });
     let exec = Executor::new(fetch);
@@ -121,12 +126,16 @@ async fn retries_until_assistant_content_is_valid_json() {
         .await
         .unwrap();
     assert_eq!(result.status, 200);
-    let value: serde_json::Value = serde_json::from_slice(&result.body).unwrap();
-    assert!(crate::schema::check_structured_response(
-        &value,
-        crate::schema::parse_json_schema_spec(&strict_schema_body()).as_ref(),
-    )
-    .is_none());
+    let value: serde_json::Value =
+        serde_json::from_slice(&result.body).unwrap();
+    assert!(
+        crate::schema::check_structured_response(
+            &value,
+            crate::schema::parse_json_schema_spec(&strict_schema_body())
+                .as_ref(),
+        )
+        .is_none()
+    );
 }
 
 #[tokio::test]
@@ -136,7 +145,8 @@ async fn retries_when_json_valid_but_schema_mismatch() {
     let fetch = MockFetch::new({
         let mut responses =
             first_execute_once_responses(conv_sse(r#"{"status":42}"#));
-        responses.extend(execute_once_responses(conv_sse(r#"{"status":"ok"}"#)));
+        responses
+            .extend(execute_once_responses(conv_sse(r#"{"status":"ok"}"#)));
         responses
     });
     let exec = Executor::new(fetch);
@@ -174,11 +184,14 @@ async fn returns_502_after_schema_retries_exhausted() {
         .await
         .unwrap();
     assert_eq!(result.status, 502);
-    let value: serde_json::Value = serde_json::from_slice(&result.body).unwrap();
-    assert!(value["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("schema"));
+    let value: serde_json::Value =
+        serde_json::from_slice(&result.body).unwrap();
+    assert!(
+        value["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("schema")
+    );
 }
 
 #[tokio::test]
@@ -203,11 +216,14 @@ async fn returns_502_after_json_retries_exhausted() {
         .await
         .unwrap();
     assert_eq!(result.status, 502);
-    let value: serde_json::Value = serde_json::from_slice(&result.body).unwrap();
-    assert!(value["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("not valid JSON"));
+    let value: serde_json::Value =
+        serde_json::from_slice(&result.body).unwrap();
+    assert!(
+        value["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("not valid JSON")
+    );
 }
 
 #[tokio::test]

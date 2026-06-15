@@ -87,7 +87,8 @@ pub fn build_conversation_body(
             .collect::<Vec<_>>()
             .join("\n\n");
         system_parts.push(format!(
-            "Prior conversation (for context — answer only the new user message below):\n\n{formatted}"
+            "Prior conversation (for context — answer only the new user \
+             message below):\n\n{formatted}"
         ));
     }
 
@@ -120,8 +121,9 @@ pub fn build_conversation_body(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn folds_history_into_system() {
@@ -158,15 +160,18 @@ mod tests {
 
     #[test]
     fn json_retry_suffix_appends_to_system() {
-        let mut parsed = parse_openai_messages(&[json!({
-            "role": "system",
-            "content": "schema rules"
-        }), json!({"role":"user","content":"go"})]);
-        parsed.system_msg.push_str(crate::constants::JSON_RETRY_SUFFIX);
+        let mut parsed = parse_openai_messages(&[
+            json!({
+                "role": "system",
+                "content": "schema rules"
+            }),
+            json!({"role":"user","content":"go"}),
+        ]);
+        parsed
+            .system_msg
+            .push_str(crate::constants::JSON_RETRY_SUFFIX);
         let body = build_conversation_body(&parsed, "gpt-5-mini", "parent");
-        let text = body["messages"][0]["content"]["parts"][0]
-            .as_str()
-            .unwrap();
+        let text = body["messages"][0]["content"]["parts"][0].as_str().unwrap();
         assert!(text.contains("CRITICAL"));
         assert!(text.contains("ONLY a JSON object"));
     }

@@ -1,15 +1,21 @@
-use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashMap,
+    sync::{LazyLock, Mutex},
+    time::{Duration, Instant},
+};
 
 use chrono::DateTime;
 use serde::Deserialize;
 
-use crate::constants::{SESSION_URL, TOKEN_TTL_MS};
-use crate::headers::browser_headers;
-use crate::session::cookie::{build_session_cookie_header, cookie_key, merge_refreshed_cookie};
-use crate::tls::fetch::{FetchRequest, HttpFetch};
-use crate::Error;
+use crate::{
+    Error,
+    constants::{SESSION_URL, TOKEN_TTL_MS},
+    headers::browser_headers,
+    session::cookie::{
+        build_session_cookie_header, cookie_key, merge_refreshed_cookie,
+    },
+    tls::fetch::{FetchRequest, HttpFetch},
+};
 
 #[derive(Debug, Clone)]
 pub struct TokenEntry {
@@ -70,11 +76,12 @@ pub async fn exchange_session(
 
     let set_cookie = resp.header("set-cookie");
     let refreshed = merge_refreshed_cookie(cookie, set_cookie.as_deref());
-    let data: SessionResponse = serde_json::from_slice(&resp.body).unwrap_or(SessionResponse {
-        access_token: None,
-        expires: None,
-        user: None,
-    });
+    let data: SessionResponse =
+        serde_json::from_slice(&resp.body).unwrap_or(SessionResponse {
+            access_token: None,
+            expires: None,
+            user: None,
+        });
     let access_token = data
         .access_token
         .ok_or_else(|| Error::SessionAuth("missing accessToken".into()))?;

@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub fn build_non_streaming_response(model: &str, content: &str) -> Value {
     let created = chrono::Utc::now().timestamp();
@@ -39,8 +39,9 @@ pub fn content_is_valid_json(response: &Value) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     fn assistant_response(content: &str) -> Value {
         json!({
@@ -78,8 +79,6 @@ mod tests {
 
     #[test]
     fn rejects_truncated_json() {
-        assert!(!content_is_valid_json(&assistant_response(
-            r#"{"ok":true"#
-        )));
+        assert!(!content_is_valid_json(&assistant_response(r#"{"ok":true"#)));
     }
 }

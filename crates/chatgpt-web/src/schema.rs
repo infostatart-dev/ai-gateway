@@ -56,9 +56,7 @@ pub fn check_structured_response(
         Err(_) => return Some(StructuredOutputIssue::InvalidJson),
     };
 
-    let Some(spec) = spec else {
-        return None;
-    };
+    let spec = spec?;
 
     if content_matches_schema(&parsed, &spec.schema) {
         None
@@ -76,8 +74,9 @@ pub fn content_matches_schema(instance: &Value, schema: &Value) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     fn assistant(content: &str) -> Value {
         json!({ "choices": [{ "message": { "content": content } }] })
@@ -115,11 +114,13 @@ mod tests {
     #[test]
     fn accepts_json_matching_schema() {
         let spec = status_schema_spec();
-        assert!(check_structured_response(
-            &assistant(r#"{"status":"ok"}"#),
-            Some(&spec),
-        )
-        .is_none());
+        assert!(
+            check_structured_response(
+                &assistant(r#"{"status":"ok"}"#),
+                Some(&spec),
+            )
+            .is_none()
+        );
     }
 
     #[test]

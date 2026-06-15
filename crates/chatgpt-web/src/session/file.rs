@@ -3,9 +3,11 @@ use std::path::{Path, PathBuf};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::constants::SESSION_ENV;
-use crate::session::cookie::{build_session_cookie_header, normalize_cookie_blob};
-use crate::Error;
+use crate::{
+    Error,
+    constants::SESSION_ENV,
+    session::cookie::{build_session_cookie_header, normalize_cookie_blob},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SessionFile {
@@ -32,7 +34,10 @@ pub async fn load_session(path: &Path) -> Result<SessionFile, Error> {
     serde_json::from_str(&raw).map_err(Error::from)
 }
 
-pub async fn save_session(path: &Path, session: &SessionFile) -> Result<(), Error> {
+pub async fn save_session(
+    path: &Path,
+    session: &SessionFile,
+) -> Result<(), Error> {
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
@@ -51,17 +56,15 @@ mod tests {
 
     #[tokio::test]
     async fn roundtrip_session_file() {
-        let path = std::env::temp_dir().join(format!("cgpt-session-{}.json", uuid::Uuid::new_v4()));
+        let path = std::env::temp_dir()
+            .join(format!("cgpt-session-{}.json", uuid::Uuid::new_v4()));
         let session = SessionFile {
             cookie: "eyJtest".into(),
             saved_at: Utc::now(),
         };
         save_session(&path, &session).await.unwrap();
         let loaded = load_session(&path).await.unwrap();
-        assert_eq!(
-            loaded.cookie,
-            "__Secure-next-auth.session-token=eyJtest"
-        );
+        assert_eq!(loaded.cookie, "__Secure-next-auth.session-token=eyJtest");
         let _ = tokio::fs::remove_file(path).await;
     }
 }

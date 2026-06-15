@@ -134,26 +134,25 @@ mod tests {
     #[test]
     fn cumulative_content() {
         let raw = "\
-data: {\"message\":{\"id\":\"m1\",\"author\":{\"role\":\"assistant\"},\"content\":{\"parts\":[\"Hel\"]},\"status\":\"in_progress\"}}\n\
-\n\
-data: {\"message\":{\"id\":\"m1\",\"author\":{\"role\":\"assistant\"},\"content\":{\"parts\":[\"Hello\"]},\"status\":\"in_progress\"}}\n\
-\n\
-data: {\"message\":{\"id\":\"m1\",\"author\":{\"role\":\"assistant\"},\"content\":{\"parts\":[\"Hello\"]},\"status\":\"finished_successfully\"}}\n\
-\n\
-data: [DONE]\n\
-";
+data: {\"message\":{\"id\":\"m1\",\"author\":{\"role\":\"assistant\"},\"\
+                   content\":{\"parts\":[\"Hel\"]},\"status\":\"in_progress\"\
+                   }}\n\ndata: \
+                   {\"message\":{\"id\":\"m1\",\"author\":{\"role\":\"\
+                   assistant\"},\"content\":{\"parts\":[\"Hello\"]},\"status\"\
+                   :\"in_progress\"}}\n\ndata: \
+                   {\"message\":{\"id\":\"m1\",\"author\":{\"role\":\"\
+                   assistant\"},\"content\":{\"parts\":[\"Hello\"]},\"status\"\
+                   :\"finished_successfully\"}}\n\ndata: [DONE]\n";
         assert_eq!(collect_sse_content(raw).unwrap(), "Hello");
     }
 
     #[test]
     fn ignores_null_error_events() {
         let raw = "\
-data: {\"error\":null}\n\
-\n\
-data: {\"message\":{\"id\":\"m1\",\"author\":{\"role\":\"assistant\"},\"content\":{\"parts\":[\"Hi\"]},\"status\":\"finished_successfully\"}}\n\
-\n\
-data: [DONE]\n\
-";
+data: {\"error\":null}\n\ndata: \
+                   {\"message\":{\"id\":\"m1\",\"author\":{\"role\":\"\
+                   assistant\"},\"content\":{\"parts\":[\"Hi\"]},\"status\":\"\
+                   finished_successfully\"}}\n\ndata: [DONE]\n";
         assert_eq!(collect_sse_content(raw).unwrap(), "Hi");
     }
 }

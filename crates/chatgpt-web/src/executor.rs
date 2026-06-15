@@ -3,25 +3,32 @@ use std::sync::Arc;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-use crate::constants::{CONV_URL, JSON_RETRY_SUFFIX, SCHEMA_RETRY_SUFFIX};
-use crate::conversation::{
-    build_conversation_body, build_non_streaming_response, collect_sse_content,
-    parse_openai_messages,
+use crate::{
+    Error,
+    constants::{CONV_URL, JSON_RETRY_SUFFIX, SCHEMA_RETRY_SUFFIX},
+    conversation::{
+        build_conversation_body, build_non_streaming_response,
+        collect_sse_content, parse_openai_messages,
+    },
+    headers::{browser_headers, oai_headers},
+    models::map_model,
+    schema::{
+        StructuredOutputIssue, check_structured_response,
+        parse_json_schema_spec,
+    },
+    sentinel::{
+        dpl::{build_prekey_config, fallback_dpl, fetch_dpl},
+        pow::solve_proof_of_work,
+        prepare::{PrepareChatInput, prepare_chat_requirements},
+    },
+    session::{
+        cookie::build_session_cookie_header,
+        exchange::{exchange_session, invalidate_token_cache},
+        file::{SessionFile, save_session},
+        warmup::run_session_warmup,
+    },
+    tls::fetch::{FetchRequest, HttpFetch, default_fetch},
 };
-use crate::headers::{browser_headers, oai_headers};
-use crate::models::map_model;
-use crate::schema::{
-    check_structured_response, parse_json_schema_spec, StructuredOutputIssue,
-};
-use crate::sentinel::dpl::{build_prekey_config, fallback_dpl, fetch_dpl};
-use crate::sentinel::pow::solve_proof_of_work;
-use crate::sentinel::prepare::prepare_chat_requirements;
-use crate::session::cookie::build_session_cookie_header;
-use crate::session::exchange::{exchange_session, invalidate_token_cache};
-use crate::session::file::{save_session, SessionFile};
-use crate::session::warmup::run_session_warmup;
-use crate::tls::fetch::{default_fetch, FetchRequest, HttpFetch};
-use crate::Error;
 
 const MAX_STRUCTURED_RETRIES: u32 = 2;
 
@@ -56,7 +63,10 @@ impl Executor {
         Self { fetch }
     }
 
-    pub async fn execute(&self, req: ExecuteRequest) -> Result<ExecuteResult, Error> {
+    pub async fn execute(
+        &self,
+        req: ExecuteRequest,
+    ) -> Result<ExecuteResult, Error> {
         let model = req
             .body
             .get("model")
@@ -74,7 +84,8 @@ impl Executor {
         }
 
         let schema_spec = parse_json_schema_spec(&req.body);
-        let structured_required = req.json_schema_required || schema_spec.is_some();
+        let structured_required =
+            req.json_schema_required || schema_spec.is_some();
         let mut cookie = req.cookie.clone();
         let mut structured_attempt = 0u32;
         let mut last_issue = None;
@@ -103,20 +114,21 @@ impl Executor {
                         }
                     }
 
-                    if structured_required {
-                        if let Some(issue) =
-                            check_structured_response(&response, schema_spec.as_ref())
-                        {
-                            last_issue = Some(issue);
-                            if structured_attempt < MAX_STRUCTURED_RETRIES {
-                                structured_attempt += 1;
-                                continue;
-                            }
-                            return Ok(error_body(
-                                502,
-                                structured_failure_message(issue),
-                            ));
+                    if structured_required
+                        && let Some(issue) = check_structured_response(
+                            &response,
+                            schema_spec.as_ref(),
+                        )
+                    {
+                        last_issue = Some(issue);
+                        if structured_attempt < MAX_STRUCTURED_RETRIES {
+                            structured_attempt += 1;
+                            continue;
                         }
+                        return Ok(error_body(
+                            502,
+                            structured_failure_message(issue),
+                        ));
                     }
 
                     return Ok(ExecuteResult {
@@ -142,10 +154,11 @@ impl Executor {
             .clone()
             .unwrap_or_else(|| cookie.to_string());
 
-        let (dpl, script_src) = match fetch_dpl(self.fetch.as_ref(), &cookie).await {
-            Ok(v) => v,
-            Err(_) => fallback_dpl(),
-        };
+        let (dpl, script_src) =
+            match fetch_dpl(self.fetch.as_ref(), &cookie).await {
+                Ok(v) => v,
+                Err(_) => fallback_dpl(),
+            };
 
         let session_id = uuid::Uuid::new_v4().to_string();
         let device_id = device_id_for(&cookie);
@@ -162,13 +175,15 @@ impl Executor {
 
         let reqs = prepare_chat_requirements(
             self.fetch.as_ref(),
-            &token.access_token,
-            token.account_id.as_deref(),
-            &session_id,
-            &device_id,
-            &cookie,
-            &dpl,
-            &script_src,
+            PrepareChatInput {
+                access_token: &token.access_token,
+                account_id: token.account_id.as_deref(),
+                session_id: &session_id,
+                device_id: &device_id,
+                cookie: &cookie,
+                dpl: &dpl,
+                script_src: &script_src,
+            },
         )
         .await?;
 
@@ -184,13 +199,15 @@ impl Executor {
                     &dpl,
                     &script_src,
                 );
-                Some(tokio::task::spawn_blocking({
-                    let seed = seed.clone();
-                    let diff = diff.clone();
-                    move || solve_proof_of_work(&seed, &diff, config)
-                })
-                .await
-                .map_err(|e| Error::Other(e.to_string()))?)
+                Some(
+                    tokio::task::spawn_blocking({
+                        let seed = seed.clone();
+                        let diff = diff.clone();
+                        move || solve_proof_of_work(&seed, &diff, config)
+                    })
+                    .await
+                    .map_err(|e| Error::Other(e.to_string()))?,
+                )
             } else {
                 None
             }
@@ -209,19 +226,26 @@ impl Executor {
 
         let parent_message_id = uuid::Uuid::new_v4().to_string();
         let model_slug = map_model(model);
-        let cgpt_body = build_conversation_body(&parsed, &model_slug, &parent_message_id);
+        let cgpt_body =
+            build_conversation_body(&parsed, &model_slug, &parent_message_id);
 
         let mut headers = browser_headers();
         headers.extend(oai_headers(&session_id, &device_id));
         headers.push(("Content-Type".into(), "application/json".into()));
         headers.push(("Accept".into(), "text/event-stream".into()));
-        headers.push(("Authorization".into(), format!("Bearer {}", token.access_token)));
+        headers.push((
+            "Authorization".into(),
+            format!("Bearer {}", token.access_token),
+        ));
         headers.push(("Cookie".into(), build_session_cookie_header(&cookie)));
         if let Some(id) = &token.account_id {
             headers.push(("chatgpt-account-id".into(), id.clone()));
         }
         if let Some(t) = &reqs.token {
-            headers.push(("openai-sentinel-chat-requirements-token".into(), t.clone()));
+            headers.push((
+                "openai-sentinel-chat-requirements-token".into(),
+                t.clone(),
+            ));
         }
         if let Some(t) = &reqs.prepare_token {
             headers.push((
@@ -288,7 +312,8 @@ fn structured_failure_message(issue: StructuredOutputIssue) -> &'static str {
             "ChatGPT response was not valid JSON after retries"
         }
         StructuredOutputIssue::SchemaMismatch => {
-            "ChatGPT response did not match the required JSON schema after retries"
+            "ChatGPT response did not match the required JSON schema after \
+             retries"
         }
     }
 }

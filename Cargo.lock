@@ -53,7 +53,7 @@ dependencies = [
 
 [[package]]
 name = "ai-gateway"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 dependencies = [
  "anthropic-ai-sdk",
  "async-openai",
@@ -1250,7 +1250,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chatgpt-web"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 dependencies = [
  "base64 0.22.1",
  "chromiumoxide",
@@ -1968,7 +1968,7 @@ checksum = "1c7a8fb8a9fbf66c1f703fe16184d10ca0ee9d23be5b4436400408ba54a95005"
 
 [[package]]
 name = "dynamic-router"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 dependencies = [
  "futures",
  "http 1.4.0",
@@ -3503,7 +3503,7 @@ dependencies = [
 
 [[package]]
 name = "latency-router"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 dependencies = [
  "futures",
  "http 1.4.0",
@@ -3732,7 +3732,7 @@ dependencies = [
 
 [[package]]
 name = "mock-server"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 dependencies = [
  "ai-gateway",
  "axum",
@@ -6334,7 +6334,7 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "telemetry"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 dependencies = [
  "http 1.4.0",
  "log-panics",
@@ -6620,12 +6620,10 @@ checksum = "8f72a05e828585856dacd553fba484c242c46e391fb0e58917c942ee9202915c"
 dependencies = [
  "futures-util",
  "log",
- "rustls 0.23.39",
- "rustls-pki-types",
+ "native-tls",
  "tokio",
- "tokio-rustls 0.26.2",
+ "tokio-native-tls",
  "tungstenite 0.29.0",
- "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -6986,9 +6984,8 @@ dependencies = [
  "http 1.4.0",
  "httparse",
  "log",
+ "native-tls",
  "rand 0.9.1",
- "rustls 0.23.39",
- "rustls-pki-types",
  "sha1",
  "thiserror 2.0.18",
  "url",
@@ -7437,7 +7434,7 @@ dependencies = [
 
 [[package]]
 name = "weighted-balance"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 dependencies = [
  "futures",
  "pin-project-lite",

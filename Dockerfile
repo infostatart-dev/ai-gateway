@@ -18,7 +18,7 @@ RUN cargo build --release -p ai-gateway \
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl \
+    ca-certificates curl openssl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /tmp/ai-gateway /usr/local/bin/ai-gateway

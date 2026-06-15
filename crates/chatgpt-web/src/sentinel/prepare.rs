@@ -1,12 +1,13 @@
 use serde::Deserialize;
 
-use crate::constants::{SENTINEL_CR_URL, SENTINEL_PREPARE_URL};
-use crate::headers::{browser_headers, oai_headers};
-use crate::sentinel::dpl::build_prekey_config;
-use crate::sentinel::pow::build_prepare_token;
-use crate::session::cookie::build_session_cookie_header;
-use crate::tls::fetch::{FetchRequest, HttpFetch};
-use crate::Error;
+use crate::{
+    Error,
+    constants::{SENTINEL_CR_URL, SENTINEL_PREPARE_URL},
+    headers::{browser_headers, oai_headers},
+    sentinel::{dpl::build_prekey_config, pow::build_prepare_token},
+    session::cookie::build_session_cookie_header,
+    tls::fetch::{FetchRequest, HttpFetch},
+};
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct ChatRequirements {
@@ -22,16 +23,30 @@ pub struct ProofOfWork {
     pub difficulty: Option<String>,
 }
 
+pub struct PrepareChatInput<'a> {
+    pub access_token: &'a str,
+    pub account_id: Option<&'a str>,
+    pub session_id: &'a str,
+    pub device_id: &'a str,
+    pub cookie: &'a str,
+    pub dpl: &'a str,
+    pub script_src: &'a str,
+}
+
 pub async fn prepare_chat_requirements(
     fetch: &dyn HttpFetch,
-    access_token: &str,
-    account_id: Option<&str>,
-    session_id: &str,
-    device_id: &str,
-    cookie: &str,
-    dpl: &str,
-    script_src: &str,
+    input: PrepareChatInput<'_>,
 ) -> Result<ChatRequirements, Error> {
+    let PrepareChatInput {
+        access_token,
+        account_id,
+        session_id,
+        device_id,
+        cookie,
+        dpl,
+        script_src,
+    } = input;
+
     let config = build_prekey_config(
         crate::constants::CHATGPT_USER_AGENT,
         dpl,
@@ -54,7 +69,9 @@ pub async fn prepare_chat_requirements(
             url: SENTINEL_PREPARE_URL.into(),
             method: "POST".into(),
             headers: headers.clone(),
-            body: Some(serde_json::json!({ "p": prekey }).to_string().into_bytes()),
+            body: Some(
+                serde_json::json!({ "p": prekey }).to_string().into_bytes(),
+            ),
             timeout_ms: 30_000,
         })
         .await?;

@@ -1,6 +1,8 @@
-use crate::headers::{browser_headers, oai_headers};
-use crate::session::cookie::build_session_cookie_header;
-use crate::tls::fetch::{FetchRequest, HttpFetch};
+use crate::{
+    headers::{browser_headers, oai_headers},
+    session::cookie::build_session_cookie_header,
+    tls::fetch::{FetchRequest, HttpFetch},
+};
 
 const WARMUP_URLS: &[&str] = &[
     "https://chatgpt.com/backend-api/me",
@@ -8,7 +10,8 @@ const WARMUP_URLS: &[&str] = &[
     "https://chatgpt.com/backend-api/models?history_and_training_disabled=false",
 ];
 
-/// Best-effort browser-like warmup before sentinel (OmniRoute `runSessionWarmup`).
+/// Best-effort browser-like warmup before sentinel (OmniRoute
+/// `runSessionWarmup`).
 pub async fn run_session_warmup(
     fetch: &dyn HttpFetch,
     access_token: &str,

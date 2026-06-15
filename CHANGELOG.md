@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0-beta.6] - 2026-06-15
+
+### Fixes
+
+- Restore native-tls for workspace HTTP clients to fix CI linker failures
+- Add OpenSSL to the runtime Docker image
+- Format chatgpt-web sources for rustfmt CI
+- Resolve chatgpt-web clippy violations and reduce sentinel prepare arity
+
 ## [0.3.0-beta.5] - 2026-06-15
 
 ### CI

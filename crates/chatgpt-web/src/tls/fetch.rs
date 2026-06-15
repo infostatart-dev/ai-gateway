@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex, OnceLock};
 
-use crate::tls::client::shared_client;
-use crate::Error;
+use crate::{Error, tls::client::shared_client};
 
 #[derive(Debug, Clone)]
 pub struct FetchRequest {
@@ -34,7 +33,11 @@ pub trait HttpFetch: Send + Sync {
         &'a self,
         req: FetchRequest,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<FetchResponse, Error>> + Send + 'a>,
+        Box<
+            dyn std::future::Future<Output = Result<FetchResponse, Error>>
+                + Send
+                + 'a,
+        >,
     >;
 }
 
@@ -45,7 +48,11 @@ impl HttpFetch for RquestFetch {
         &'a self,
         req: FetchRequest,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<FetchResponse, Error>> + Send + 'a>,
+        Box<
+            dyn std::future::Future<Output = Result<FetchResponse, Error>>
+                + Send
+                + 'a,
+        >,
     > {
         Box::pin(async move {
             let client = shared_client()?;
@@ -123,7 +130,11 @@ impl HttpFetch for MockFetch {
         &'a self,
         _req: FetchRequest,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<FetchResponse, Error>> + Send + 'a>,
+        Box<
+            dyn std::future::Future<Output = Result<FetchResponse, Error>>
+                + Send
+                + 'a,
+        >,
     > {
         Box::pin(async move {
             let mut calls = self.calls.lock().unwrap();
