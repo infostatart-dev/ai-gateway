@@ -330,10 +330,8 @@ impl Executor {
                     build_non_streaming_response(model, &meta.content),
                 ));
             }
-            conversation_id = meta
-                .conversation_id
-                .or(conversation_id)
-                .or_else(|| {
+            conversation_id =
+                meta.conversation_id.or(conversation_id).or_else(|| {
                     cgpt_body
                         .get("conversation_id")
                         .and_then(|v| v.as_str())

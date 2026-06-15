@@ -1,8 +1,8 @@
 //! Budget-ranked routing with cooldown-aware ordering and failover.
 
-mod credential_balance;
 mod call;
 mod cooldown;
+mod credential_balance;
 mod dispatch;
 mod factory;
 mod failover_integration;

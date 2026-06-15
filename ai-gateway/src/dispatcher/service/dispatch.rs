@@ -74,7 +74,8 @@ impl Dispatcher {
             endpoint_metrics.incr_req_count();
         }
 
-        let credential_id = req.extensions().get::<ProviderCredentialId>().cloned();
+        let credential_id =
+            req.extensions().get::<ProviderCredentialId>().cloned();
         let _pacing_permit = crate::router::pacing::acquire_upstream_pacing(
             &self.app_state,
             target_provider,

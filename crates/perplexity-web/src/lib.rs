@@ -15,9 +15,9 @@ pub use errors::Error;
 pub use messages::{
     build_turn_query, plan_perplexity_turns, prepare_turn_plan_from_messages,
 };
-pub use probe::{probe_query, ProbeResult};
+pub use probe::{ProbeResult, probe_query};
 pub use session::file::{
-    load_session, save_session, session_path_from_env, SessionFile,
+    SessionFile, load_session, save_session, session_path_from_env,
 };
 
 #[cfg(feature = "login")]

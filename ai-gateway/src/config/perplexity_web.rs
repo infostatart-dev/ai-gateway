@@ -20,7 +20,8 @@ pub fn session_valid(path: &Path) -> bool {
 #[must_use]
 pub fn load_session_cookie(path: &Path) -> Option<String> {
     let raw = std::fs::read_to_string(path).ok()?;
-    let session: perplexity_web::SessionFile = serde_json::from_str(&raw).ok()?;
+    let session: perplexity_web::SessionFile =
+        serde_json::from_str(&raw).ok()?;
     let cookie = session.normalized_cookie();
     perplexity_web::session::cookie::has_session_token(&cookie)
         .then_some(cookie)
@@ -29,7 +30,8 @@ pub fn load_session_cookie(path: &Path) -> Option<String> {
 /// Session file path for a credential slot (`AI_GATEWAY_CREDENTIAL_<ID>`).
 #[must_use]
 pub fn session_path_for_credential(credential_id: &str) -> Option<PathBuf> {
-    let from_slot = crate::config::credential_env::credential_env_var_name(credential_id);
+    let from_slot =
+        crate::config::credential_env::credential_env_var_name(credential_id);
     if let Ok(path) = std::env::var(&from_slot) {
         let path = PathBuf::from(path);
         if session_valid(&path) {

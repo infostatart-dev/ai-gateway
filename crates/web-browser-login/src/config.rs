@@ -7,10 +7,7 @@ pub struct BrowserLoginTarget {
 }
 
 impl BrowserLoginTarget {
-    pub const fn new(
-        login_url: &'static str,
-        home_url: &'static str,
-    ) -> Self {
+    pub const fn new(login_url: &'static str, home_url: &'static str) -> Self {
         Self {
             login_url,
             home_url,

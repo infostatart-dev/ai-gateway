@@ -2,14 +2,15 @@
 
 use chrono::Utc;
 use web_browser_login::{
-    BrowserLoginTarget, PollOptions, perplexity_domain, poll_session_cookie_with_options,
+    BrowserLoginTarget, PollOptions, perplexity_domain,
+    poll_session_cookie_with_options,
 };
 
 use crate::{
     Error,
     session::{
         cookie::{build_session_cookie_header, format_login_cookie_pairs},
-        file::{save_session, session_path_from_env, SessionFile},
+        file::{SessionFile, save_session, session_path_from_env},
     },
 };
 

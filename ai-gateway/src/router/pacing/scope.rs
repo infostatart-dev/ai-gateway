@@ -1,8 +1,13 @@
 use crate::{
     config::{
-        chatgpt_web::{is_chatgpt_web, session_path_for_credential as chatgpt_session_path},
+        chatgpt_web::{
+            is_chatgpt_web, session_path_for_credential as chatgpt_session_path,
+        },
         credentials::ProviderCredentialId,
-        perplexity_web::{is_perplexity_web, session_path_for_credential as perplexity_session_path},
+        perplexity_web::{
+            is_perplexity_web,
+            session_path_for_credential as perplexity_session_path,
+        },
     },
     types::provider::InferenceProvider,
 };

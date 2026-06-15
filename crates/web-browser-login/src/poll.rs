@@ -5,9 +5,7 @@ use chromiumoxide::browser::Browser;
 use futures::StreamExt;
 
 use crate::{
-    browser::browser_config,
-    config::BrowserLoginTarget,
-    options::PollOptions,
+    browser::browser_config, config::BrowserLoginTarget, options::PollOptions,
 };
 
 const MIN_LOGIN_MS: u64 = 5_000;
@@ -50,15 +48,15 @@ pub async fn poll_session_cookie_with_options(
     should_navigate_home: impl Fn(&str) -> bool,
     options: PollOptions,
 ) -> Result<String, String> {
-    let config = browser_config(options.user_data_dir, options.chrome_executable)?;
+    let config =
+        browser_config(options.user_data_dir, options.chrome_executable)?;
 
     let (mut browser, mut handler) = Browser::launch(config)
         .await
         .map_err(|e| format!("failed to launch browser: {e}"))?;
 
-    let handle = tokio::spawn(async move {
-        while handler.next().await.is_some() {}
-    });
+    let handle =
+        tokio::spawn(async move { while handler.next().await.is_some() {} });
 
     let page = browser
         .new_page(target.login_url)
@@ -85,7 +83,8 @@ pub async fn poll_session_cookie_with_options(
                 let url = match page.url().await {
                     Ok(u) => u.unwrap_or_default(),
                     Err(e) if e.to_string().contains("receiver is gone") => {
-                        tokio::time::sleep(Duration::from_millis(POLL_MS)).await;
+                        tokio::time::sleep(Duration::from_millis(POLL_MS))
+                            .await;
                         continue;
                     }
                     Err(e) => return Err(e.to_string()),
@@ -98,7 +97,8 @@ pub async fn poll_session_cookie_with_options(
                 let browser_cookies = match browser.get_cookies().await {
                     Ok(c) => c,
                     Err(e) if e.to_string().contains("receiver is gone") => {
-                        tokio::time::sleep(Duration::from_millis(POLL_MS)).await;
+                        tokio::time::sleep(Duration::from_millis(POLL_MS))
+                            .await;
                         continue;
                     }
                     Err(e) => return Err(e.to_string()),
@@ -116,7 +116,9 @@ pub async fn poll_session_cookie_with_options(
                     .collect();
                 let pairs = merge_cookie_pairs(&browser_pairs, &page_pairs);
 
-                if last_status.elapsed() >= Duration::from_millis(STATUS_EVERY_MS) {
+                if last_status.elapsed()
+                    >= Duration::from_millis(STATUS_EVERY_MS)
+                {
                     if let Some(fmt) = options.status_line {
                         eprintln!("Waiting for login… {}", fmt(&pairs));
                     }
@@ -136,7 +138,9 @@ pub async fn poll_session_cookie_with_options(
     match cookie {
         Ok(cookie) if options.keep_browser_open => {
             std::mem::forget(browser);
-            eprintln!("Session captured — close the browser when you are done.");
+            eprintln!(
+                "Session captured — close the browser when you are done."
+            );
             Ok(cookie)
         }
         Ok(cookie) => {

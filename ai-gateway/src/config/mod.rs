@@ -1,7 +1,6 @@
 pub mod balance;
 pub mod cache;
 pub mod chatgpt_web;
-pub mod perplexity_web;
 pub mod cloudflare;
 pub mod control_plane;
 pub mod credential_env;
@@ -15,6 +14,7 @@ pub mod minio;
 pub mod model_capability;
 pub mod model_mapping;
 pub mod monitor;
+pub mod perplexity_web;
 pub mod provider_limits;
 pub mod providers;
 pub mod rate_limit;

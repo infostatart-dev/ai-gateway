@@ -208,12 +208,13 @@ mod tests {
         );
         assert!(plan.turns.len() >= 2);
         assert!(!plan.turns[0].system_msg.contains("MANDATORY strict mode"));
-        assert!(plan
-            .turns
-            .last()
-            .unwrap()
-            .system_msg
-            .contains("MANDATORY strict mode"));
+        assert!(
+            plan.turns
+                .last()
+                .unwrap()
+                .system_msg
+                .contains("MANDATORY strict mode")
+        );
     }
 }
 
@@ -224,5 +225,8 @@ pub fn fits_single_turn(
     schema_instruction: Option<&str>,
     budget: MessageBudget,
 ) -> bool {
-    plan_web_chunks(parsed, base_system, schema_instruction, budget).turns.len() == 1
+    plan_web_chunks(parsed, base_system, schema_instruction, budget)
+        .turns
+        .len()
+        == 1
 }

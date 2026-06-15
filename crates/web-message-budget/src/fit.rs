@@ -28,7 +28,9 @@ pub fn fit_parsed(parsed: &mut ParsedChat, budget: MessageBudget) -> FitReport {
         .saturating_sub(estimate_tokens(&parsed.current_msg))
         .saturating_sub(estimate_tokens(&parsed.system_msg));
 
-    while !parsed.history.is_empty() && history_tokens(&parsed.history) > remaining {
+    while !parsed.history.is_empty()
+        && history_tokens(&parsed.history) > remaining
+    {
         parsed.history.remove(0);
         report.dropped_history_turns += 1;
     }
@@ -53,7 +55,11 @@ pub fn fit_parsed(parsed: &mut ParsedChat, budget: MessageBudget) -> FitReport {
 fn history_tokens(history: &[(String, String)]) -> usize {
     history
         .iter()
-        .map(|(role, content)| estimate_tokens(content) + estimate_tokens(role) + HISTORY_TURN_OVERHEAD_TOKENS)
+        .map(|(role, content)| {
+            estimate_tokens(content)
+                + estimate_tokens(role)
+                + HISTORY_TURN_OVERHEAD_TOKENS
+        })
         .sum()
 }
 
@@ -63,7 +69,11 @@ fn total_tokens(parsed: &ParsedChat) -> usize {
         + history_tokens(&parsed.history)
 }
 
-fn shrink_until_within(parsed: &mut ParsedChat, budget: usize, report: &mut FitReport) {
+fn shrink_until_within(
+    parsed: &mut ParsedChat,
+    budget: usize,
+    report: &mut FitReport,
+) {
     while total_tokens(parsed) > budget {
         if !parsed.history.is_empty() {
             parsed.history.remove(0);
@@ -71,8 +81,10 @@ fn shrink_until_within(parsed: &mut ParsedChat, budget: usize, report: &mut FitR
             continue;
         }
         if estimate_tokens(&parsed.current_msg) > budget / 2 {
-            parsed.current_msg =
-                trim_tail_tokens(&parsed.current_msg, budget.saturating_sub(256).max(1));
+            parsed.current_msg = trim_tail_tokens(
+                &parsed.current_msg,
+                budget.saturating_sub(256).max(1),
+            );
             report.trimmed_current = true;
             break;
         }

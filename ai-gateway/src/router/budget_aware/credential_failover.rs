@@ -223,7 +223,8 @@ mod tests {
 
         let mut identities = Vec::new();
         for _ in 0..4 {
-            let candidates = router.credential_round_robin.balance(ranked.clone());
+            let candidates =
+                router.credential_round_robin.balance(ranked.clone());
             let response = run_failover_candidates(
                 test_router(&app_state),
                 parts.clone(),

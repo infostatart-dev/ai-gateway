@@ -36,7 +36,10 @@ pub async fn load_session(path: &Path) -> Result<SessionFile, Error> {
     serde_json::from_str(&raw).map_err(Error::from)
 }
 
-pub async fn save_session(path: &Path, session: &SessionFile) -> Result<(), Error> {
+pub async fn save_session(
+    path: &Path,
+    session: &SessionFile,
+) -> Result<(), Error> {
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
@@ -64,9 +67,11 @@ mod tests {
         };
         save_session(&path, &session).await.unwrap();
         let loaded = load_session(&path).await.unwrap();
-        assert!(loaded
-            .normalized_cookie()
-            .contains("__Secure-next-auth.session-token="));
+        assert!(
+            loaded
+                .normalized_cookie()
+                .contains("__Secure-next-auth.session-token=")
+        );
         let _ = tokio::fs::remove_file(&path).await;
     }
 }

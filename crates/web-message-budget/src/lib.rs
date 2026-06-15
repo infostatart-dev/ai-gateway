@@ -11,7 +11,9 @@ pub use chunk::{
 };
 pub use fit::fit_parsed;
 pub use parse::parse_openai_messages;
-pub use token::{estimate_tokens, trim_tail_tokens, TRUNCATION_PREFIX, CHARS_PER_TOKEN};
+pub use token::{
+    CHARS_PER_TOKEN, TRUNCATION_PREFIX, estimate_tokens, trim_tail_tokens,
+};
 pub use types::{
     ChunkPlan, FitReport, MessageBudget, ParsedChat, WebTurn, WebTurnKind,
 };

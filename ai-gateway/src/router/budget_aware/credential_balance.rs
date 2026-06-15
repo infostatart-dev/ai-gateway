@@ -23,7 +23,10 @@ impl CredentialRoundRobin {
         Arc::new(Self::default())
     }
 
-    pub(super) fn balance(&self, ranked: Vec<BudgetCandidate>) -> Vec<BudgetCandidate> {
+    pub(super) fn balance(
+        &self,
+        ranked: Vec<BudgetCandidate>,
+    ) -> Vec<BudgetCandidate> {
         let mut counters = self
             .inner
             .lock()
@@ -54,15 +57,16 @@ pub(super) fn balance_credentials_among_accounts(
             .push(candidate);
     }
 
-    let mut balanced = Vec::with_capacity(
-        pools.values().map(std::vec::Vec::len).sum(),
-    );
+    let mut balanced =
+        Vec::with_capacity(pools.values().map(std::vec::Vec::len).sum());
     for (key, mut accounts) in pools {
         accounts.sort_by(|left, right| {
             left.credential_budget_rank
                 .cmp(&right.credential_budget_rank)
                 .then_with(|| {
-                    left.credential_id.to_string().cmp(&right.credential_id.to_string())
+                    left.credential_id
+                        .to_string()
+                        .cmp(&right.credential_id.to_string())
                 })
         });
         if accounts.len() <= 1 {

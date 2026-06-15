@@ -1,7 +1,7 @@
 use serde_json::Value;
 use web_message_budget::{
-    plan_web_chunks, ChunkPlan, MessageBudget, ParsedChat,
-    CHATGPT_WEB_CONTEXT_TOKENS,
+    CHATGPT_WEB_CONTEXT_TOKENS, ChunkPlan, MessageBudget, ParsedChat,
+    plan_web_chunks,
 };
 
 pub use web_message_budget::ParsedChat as ParsedMessages;
@@ -74,9 +74,8 @@ mod tests {
 
     #[test]
     fn single_turn_when_payload_small() {
-        let parsed = parse_openai_messages(&[
-            json!({"role":"user","content":"hi"}),
-        ]);
+        let parsed =
+            parse_openai_messages(&[json!({"role":"user","content":"hi"})]);
         let plan = plan_conversation_turns(&parsed, "", None, 4_096);
         assert_eq!(plan.turns.len(), 1);
     }
@@ -84,21 +83,20 @@ mod tests {
     #[test]
     fn huge_dossier_splits_into_uploads_not_truncation() {
         let dossier = "word ".repeat(157_000 * 3);
-        let parsed = parse_openai_messages(&[
-            json!({"role":"user","content":dossier}),
-        ]);
+        let parsed =
+            parse_openai_messages(&[json!({"role":"user","content":dossier})]);
         let plan = plan_conversation_turns(&parsed, "", None, 4_096);
         assert!(plan.turns.len() > 1);
         assert!(matches!(
             plan.turns[0].kind,
             WebTurnKind::ContextUpload { part: 1, .. }
         ));
-        assert!(matches!(plan.turns.last().unwrap().kind, WebTurnKind::Final));
-        let joined: String = plan
-            .turns
-            .iter()
-            .map(|t| t.user_msg.clone())
-            .collect();
+        assert!(matches!(
+            plan.turns.last().unwrap().kind,
+            WebTurnKind::Final
+        ));
+        let joined: String =
+            plan.turns.iter().map(|t| t.user_msg.clone()).collect();
         assert!(joined.contains("word "));
         assert!(!joined.contains("truncated"));
     }
@@ -115,8 +113,8 @@ mod tests {
                 }
             }
         });
-        let schema = parse_json_schema_spec(&body)
-            .map(|s| build_schema_instruction(&s));
+        let schema =
+            parse_json_schema_spec(&body).map(|s| build_schema_instruction(&s));
         let huge = "word ".repeat(400_000 * 3);
         let parsed = parse_openai_messages(&[
             json!({"role":"system","content":"base rules"}),
@@ -130,11 +128,12 @@ mod tests {
         );
         assert!(plan.turns.len() >= 2);
         assert!(!plan.turns[0].system_msg.contains("MANDATORY strict mode"));
-        assert!(plan
-            .turns
-            .last()
-            .unwrap()
-            .system_msg
-            .contains("MANDATORY strict mode"));
+        assert!(
+            plan.turns
+                .last()
+                .unwrap()
+                .system_msg
+                .contains("MANDATORY strict mode")
+        );
     }
 }

@@ -5,7 +5,10 @@ use std::{
 
 use super::{gate::PacingGate, limits::PacingLimits, scope::gate_scope_key};
 use crate::{
-    config::{credentials::ProviderCredentialId, provider_limits::ProviderLimitCatalog},
+    config::{
+        credentials::ProviderCredentialId,
+        provider_limits::ProviderLimitCatalog,
+    },
     types::provider::InferenceProvider,
 };
 
@@ -40,7 +43,10 @@ impl PacingRegistry {
         credential_id: Option<&ProviderCredentialId>,
     ) -> Option<Arc<PacingGate>> {
         let limits = self.limits_for(provider)?;
-        let key = (provider.to_string(), gate_scope_key(provider, credential_id));
+        let key = (
+            provider.to_string(),
+            gate_scope_key(provider, credential_id),
+        );
         let mut gates =
             self.gates.lock().expect("pacing registry mutex poisoned");
         Some(
@@ -64,7 +70,9 @@ mod tests {
     fn registry_reuses_gate_for_same_credential_scope() {
         let registry = PacingRegistry::new(ProviderLimitCatalog::default());
         let provider = InferenceProvider::Named("chatgpt-web".into());
-        let gate_a = registry.gate_for(&provider, None).expect("chatgpt-web pacing");
+        let gate_a = registry
+            .gate_for(&provider, None)
+            .expect("chatgpt-web pacing");
         let gate_b = registry.gate_for(&provider, None).expect("gate");
         assert!(Arc::ptr_eq(&gate_a, &gate_b));
     }
@@ -91,12 +99,10 @@ mod tests {
         let provider = InferenceProvider::Named("chatgpt-web".into());
         let cred_a = ProviderCredentialId::new("chatgpt-web-a");
         let cred_b = ProviderCredentialId::new("chatgpt-web-b");
-        let gate_a = registry
-            .gate_for(&provider, Some(&cred_a))
-            .expect("gate a");
-        let gate_b = registry
-            .gate_for(&provider, Some(&cred_b))
-            .expect("gate b");
+        let gate_a =
+            registry.gate_for(&provider, Some(&cred_a)).expect("gate a");
+        let gate_b =
+            registry.gate_for(&provider, Some(&cred_b)).expect("gate b");
         assert!(!Arc::ptr_eq(&gate_a, &gate_b));
 
         unsafe {

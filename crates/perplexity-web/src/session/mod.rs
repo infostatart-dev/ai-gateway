@@ -6,7 +6,7 @@ pub use cookie::{
     format_login_cookie_pairs, has_session_token, normalize_cookie_blob,
 };
 pub use file::{
-    load_session, save_session, session_path_from_env, SessionFile,
+    SessionFile, load_session, save_session, session_path_from_env,
 };
 
 #[cfg(feature = "login")]

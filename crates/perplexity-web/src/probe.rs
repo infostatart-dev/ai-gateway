@@ -1,12 +1,12 @@
 //! Minimal SSE probe against Perplexity web API (session required).
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::{
+    Error,
     constants::{API_VERSION, SSE_URL, USER_AGENT},
     session::cookie::has_session_token,
     tls::shared_client,
-    Error,
 };
 
 #[derive(Debug, Clone)]
@@ -15,7 +15,10 @@ pub struct ProbeResult {
     pub answer: String,
 }
 
-pub async fn probe_query(query: &str, cookie: &str) -> Result<ProbeResult, Error> {
+pub async fn probe_query(
+    query: &str,
+    cookie: &str,
+) -> Result<ProbeResult, Error> {
     if !has_session_token(cookie) {
         return Err(Error::SessionAuth(
             "missing __Secure-next-auth.session-token — run perplexity login or import"
@@ -60,10 +63,7 @@ pub async fn probe_query(query: &str, cookie: &str) -> Result<ProbeResult, Error
         .await
         .map_err(|e| Error::Tls(e.to_string()))?;
     let status = resp.status().as_u16();
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| Error::Tls(e.to_string()))?;
+    let bytes = resp.bytes().await.map_err(|e| Error::Tls(e.to_string()))?;
 
     if status == 401 || status == 403 {
         let snippet = String::from_utf8_lossy(&bytes);
@@ -75,7 +75,10 @@ pub async fn probe_query(query: &str, cookie: &str) -> Result<ProbeResult, Error
     if status >= 400 {
         return Err(Error::Upstream {
             status,
-            message: String::from_utf8_lossy(&bytes).chars().take(300).collect(),
+            message: String::from_utf8_lossy(&bytes)
+                .chars()
+                .take(300)
+                .collect(),
         });
     }
 
@@ -111,7 +114,8 @@ fn extract_answer_from_sse(body: &[u8]) -> Result<String, Error> {
                 let Some(mb) = block.get("markdown_block") else {
                     continue;
                 };
-                if let Some(chunks) = mb.get("chunks").and_then(Value::as_array) {
+                if let Some(chunks) = mb.get("chunks").and_then(Value::as_array)
+                {
                     let joined: String =
                         chunks.iter().filter_map(Value::as_str).collect();
                     if joined.len() > full.len() {

@@ -1,7 +1,7 @@
 use serde_json::Value;
 use web_message_budget::{
-    plan_web_chunks, parse_openai_messages, ChunkPlan, MessageBudget, ParsedChat,
-    CHATGPT_WEB_CONTEXT_TOKENS,
+    CHATGPT_WEB_CONTEXT_TOKENS, ChunkPlan, MessageBudget, ParsedChat,
+    parse_openai_messages, plan_web_chunks,
 };
 
 /// Build Perplexity wire query for one turn of a chunk plan.
@@ -56,7 +56,8 @@ mod tests {
 
     #[test]
     fn first_message_wraps_context_upload_header() {
-        let parsed = parse_openai_messages(&[json!({"role":"user","content":"hello"})]);
+        let parsed =
+            parse_openai_messages(&[json!({"role":"user","content":"hello"})]);
         let plan = plan_perplexity_turns(&parsed, "", None, 4_096);
         assert_eq!(plan.turns.len(), 1);
         assert!(matches!(plan.turns[0].kind, WebTurnKind::Final));
@@ -87,12 +88,7 @@ mod tests {
             4_096,
         );
         assert!(!plan.turns[0].system_msg.contains("MANDATORY"));
-        assert!(plan
-            .turns
-            .last()
-            .unwrap()
-            .system_msg
-            .contains("MANDATORY"));
+        assert!(plan.turns.last().unwrap().system_msg.contains("MANDATORY"));
     }
 
     #[test]

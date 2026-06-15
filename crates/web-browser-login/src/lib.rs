@@ -9,7 +9,9 @@ mod config;
 mod options;
 mod poll;
 
-pub use browser::{default_user_data_dir, system_chrome_executable, wipe_user_data_dir};
+pub use browser::{
+    default_user_data_dir, system_chrome_executable, wipe_user_data_dir,
+};
 pub use config::{
     BrowserLoginTarget, chatgpt_domain, chatgpt_left_login, perplexity_domain,
     perplexity_left_login,
