@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0-beta.5] - 2026-06-15
+
+### CI
+
+- Replace cargo-dist release workflow with native Linux, macOS, and Windows binary builds
+- Publish GitHub Releases on version tags with stripped platform artifacts
+- Docker workflow builds and pushes to a configurable private registry on main and tags
+- Refresh Dockerfile for Rust 1.91, slimmer runtime image, and explicit service entrypoint
+
+### Fixes
+
+- Switch HTTP and WebSocket clients to rustls for OpenSSL-free container runtime
+
 ## [0.3.0-beta.4] - 2026-06-14
 
 ### Features

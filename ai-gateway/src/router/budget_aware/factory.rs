@@ -28,7 +28,6 @@ async fn push_anonymous_candidates(
     router_config: &Arc<RouterConfig>,
     provider: &InferenceProvider,
     config: &GlobalProviderConfig,
-    provider_priorities: &IndexMap<InferenceProvider, u16>,
 ) -> Result<(), InitError> {
     let credential_id =
         ProviderCredentialId::new(format!("{provider}-anonymous"));
@@ -90,7 +89,6 @@ pub(super) async fn build(
                 &router_config,
                 provider,
                 config,
-                provider_priorities,
             )
             .await?;
             continue;
