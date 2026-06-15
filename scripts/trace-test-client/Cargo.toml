@@ -8,7 +8,7 @@ authors = { workspace = true }
 autobenches = false
 default-run = "trace-test-client"
 description = "OpenTelemetry trace test client for the LLM proxy router"
-homepage = "https://docs.helicone.ai/ai-gateway"
+homepage = "https://github.com/infostatart-dev/ai-gateway"
 
 [dependencies]
 http-body-util = { workspace = true }

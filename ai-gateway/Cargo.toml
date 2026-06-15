@@ -3,10 +3,10 @@ name = "ai-gateway"
 version = { workspace = true }
 edition = { workspace = true }
 authors = { workspace = true }
-repository = "https://github.com/Helicone/ai-gateway"
+repository = "https://github.com/infostatart-dev/ai-gateway"
 default-run = "ai-gateway"
 description = "A high-performance LLM proxy router."
-homepage = "https://docs.helicone.ai/ai-gateway"
+homepage = "https://github.com/infostatart-dev/ai-gateway"
 
 [dependencies]
 openrouter-rs = "0.9.0"

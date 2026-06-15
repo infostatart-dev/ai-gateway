@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
+Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
+Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
+
 ## [0.3.0-beta.11] - 2026-06-15
 
 ### Build

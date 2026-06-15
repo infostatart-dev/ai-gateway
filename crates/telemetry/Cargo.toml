@@ -5,7 +5,7 @@ publish = false
 version = { workspace = true }
 description = "OpenTelemetry telemetry configuration and utilities for the LLM proxy router"
 authors = { workspace = true }
-homepage = "https://docs.helicone.ai/ai-gateway/overview"
+homepage = "https://github.com/infostatart-dev/ai-gateway"
 
 [dependencies]
 http = { workspace = true }

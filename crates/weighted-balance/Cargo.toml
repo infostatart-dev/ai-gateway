@@ -5,7 +5,7 @@ authors = { workspace = true }
 license = { workspace = true }
 version = { workspace = true }
 description = "Weighted load balancing algorithms for the LLM proxy router"
-homepage = "https://docs.helicone.ai/ai-gateway/overview"
+homepage = "https://github.com/infostatart-dev/ai-gateway"
 publish = false
 
 [dependencies]

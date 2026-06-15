@@ -1,16 +1,25 @@
-# 🎮 Demo Guide
+# AI Gateway local demo
 
-Here are instructions for running a demo of Helicone AI Gateway locally.
+Instructions for running a quick local demo.
 
-## Basic Setup
-1. Set up your environment as described in the [Development Setup](DEVELOPMENT.md) section
-   Make sure you've set the `HELICONE_CONTROL_PLANE_API_KEY`.
-2. Run the router locally with OpenAI/Anthropic:
+## Steps
+
+1. Set up your environment as described in [DEVELOPMENT.md](DEVELOPMENT.md).
+   Configure at least one `AI_GATEWAY_CREDENTIAL_*` variable in `.env`.
+
+2. Run the gateway:
+
    ```bash
-   cargo run -- -c ./ai-gateway/config/sidecar.yaml
+   cargo run
    ```
+
 3. Send a test request:
+
    ```bash
-   cargo run -p test test-request -a
+   cargo run -p test
    ```
-   You should see the request logged in your Helicone dashboard!
+
+4. Verify the response in your terminal (HTTP 200 and model output).
+
+For more examples, see [examples/python/README.md](examples/python/README.md) and
+[examples/typescript/README.md](examples/typescript/README.md).

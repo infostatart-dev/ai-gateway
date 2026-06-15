@@ -1,13 +1,8 @@
-1. Create Helicone account
-2. Create Helicone API Key in Helicone UI
-3. Copy template env file `cp .env.template .env`
-4. Set the following env vars in `.env` file:
-   - `HELICONE_CONTROL_PLANE_API_KEY`
-   - `OPENAI_API_KEY`
-   - `ANTHROPIC_API_KEY`
-5. Run the router locally with `cargo`:
-   `cargo run -- -c ai-gateway/config/sidecar.yaml`
-6. Run a test request:
-   `cargo run -p test`
-7. You should see a log in your Helicone account
-   requests dashboard!
+# Sidecar mode (legacy)
+
+This mode is **no longer supported** in the Infostart Lab fork.
+
+It previously required a Helicone Cloud account, `HELICONE_CONTROL_PLANE_API_KEY`,
+and running with `ai-gateway/config/sidecar.yaml`.
+
+For local development, use [DEVELOPMENT.md](DEVELOPMENT.md) instead.

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document contains performance benchmarks for the Helicone AI Gateway using k6 load testing. These benchmarks measure the gateway's ability to handle high-throughput AI inference requests.
+This document contains performance benchmarks for AI Gateway using k6 load testing. These benchmarks measure the gateway's ability to handle high-throughput AI inference requests.
 
 Additional benchmarks regarding caching latency with Redis are available in
 [cache.md](/benchmarks/cache.md)

@@ -1,0 +1,99 @@
+# Credentials
+
+The gateway loads upstream API keys from environment variables and maps them to
+**credential slots** defined in
+[`credentials.yaml`](../ai-gateway/config/embedded/credentials.yaml).
+
+Each slot represents one upstream account or billing tier (for example
+`openai-default`, `gemini-free`). The budget-aware router treats each slot as a
+separate candidate for failover and cooldown tracking.
+
+## Environment variable naming
+
+Primary convention:
+
+```
+AI_GATEWAY_CREDENTIAL_<ID>
+```
+
+The credential `id` from YAML is uppercased; hyphens become underscores.
+
+| Slot ID in YAML | Environment variable |
+|-----------------|----------------------|
+| `openai-default` | `AI_GATEWAY_CREDENTIAL_OPENAI_DEFAULT` |
+| `gemini-free` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE` |
+| `cloudflare-default` | `AI_GATEWAY_CREDENTIAL_CLOUDFLARE_DEFAULT` |
+
+See [`.env.template`](../.env.template) for a full starter list.
+
+## Resolution order
+
+For each slot, the gateway tries env vars in this order:
+
+1. `AI_GATEWAY_CREDENTIAL_<ID>` (universal)
+2. Optional `key-env` / `alt-key-envs` from YAML (if defined on the slot)
+3. Legacy `{PROVIDER}_API_KEY` — only for slots whose id ends with `-default`
+   (for example `OPENAI_API_KEY` for `openai-default`)
+4. Provider-specific legacy names (see below)
+
+If no secret is found, **the slot is skipped at startup** — no error, the
+provider simply has fewer credentials available.
+
+## Provider-specific formats
+
+### Cloudflare Workers AI
+
+Combined account and token in one value:
+
+```bash
+AI_GATEWAY_CREDENTIAL_CLOUDFLARE_DEFAULT="account_id:cfut_..."
+```
+
+Legacy fallbacks: `CLOUDFLARE_API_KEY_WITH_ACCOUNT_ID`, or separate
+`CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_KEY`.
+
+### Gemini
+
+| Slot | Legacy fallbacks |
+|------|------------------|
+| `gemini-free` | `GEMINI_FREE_TIER_API_KEY`, `GEMINI_FREE_TIER_APIKEY` |
+| `gemini-default` | `GEMINI_API_KEY` |
+
+### ChatGPT Web
+
+Not an `AI_GATEWAY_CREDENTIAL_*` slot. Uses a session file path instead — see
+[chatgpt-web.md](chatgpt-web.md).
+
+## Budget rank
+
+Each slot has a `budget-rank` in YAML. **Lower values are preferred first**
+within the same provider when the budget-aware router selects candidates.
+
+Example from embedded config: `gemini-free` (rank 0) is tried before
+`gemini-default` (rank 10).
+
+## Startup behaviour
+
+At startup, `CredentialRegistry`:
+
+1. Parses embedded `credentials.yaml`
+2. Resolves secrets from the environment
+3. Skips slots without secrets or whose provider is absent from `providers.yaml`
+4. Adds session-based credentials (ChatGPT Web) when a valid session file exists
+
+If **no credentials** resolve for any provider you need, requests to that
+provider will fail at routing time.
+
+## Adding a new slot
+
+1. Add an entry to `credentials.yaml` (or your override config if you fork
+   embedded files).
+2. Set the matching `AI_GATEWAY_CREDENTIAL_*` env var.
+3. Ensure the provider exists in `providers.yaml`.
+4. Restart the gateway.
+
+## Related
+
+- [configuration.md](configuration.md) — config file layout
+- [providers.md](providers.md) — provider catalogue
+- [routing.md](routing.md) — how credentials participate in failover

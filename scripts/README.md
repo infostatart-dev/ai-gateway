@@ -1,6 +1,6 @@
 # Scripts Directory
 
-This directory contains various testing and utility scripts for the Helicone AI Gateway project.
+This directory contains various testing and utility scripts for the AI Gateway project.
 
 ## Contents
 
@@ -10,7 +10,7 @@ A manual testing tool for tracing and propagation functionality. This tool runs 
 
 ### `test/`
 
-Integration tests and test utilities for the Helicone Router project. These tests are designed to run against a real or mocked environment.
+Integration tests and test utilities for AI Gateway. These tests are designed to run against a real or mocked environment.
 
 ## Usage
 

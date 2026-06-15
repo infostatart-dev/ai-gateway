@@ -1,13 +1,11 @@
-# Helicone AI Gateway Python Example 
+# AI Gateway TypeScript Example
 
-The following is a "hello, world!" style example for using the OpenAI TypeScript SDK
-with the Helicone AI Gateway.
+A "hello, world!" example using the OpenAI TypeScript SDK with AI Gateway.
 
 ## Instructions
 
-1. Follow the [`README`](/README.md) to run the Helicone AI Gateway
+1. Follow the [README](/README.md) to run AI Gateway locally.
 2. `cd` into the directory for a specific example.
-2. Install dependencies: `yarn install`
-3. Run the package: `yarn start`
-3. Congratulations! You should see a response printed from an LLM that was
-   routed through the Helicone AI Gateway
+3. Install dependencies: `yarn install`
+4. Run the package: `yarn start`
+5. You should see a response from an LLM routed through the gateway.
