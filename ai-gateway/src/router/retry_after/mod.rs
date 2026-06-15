@@ -7,16 +7,16 @@ mod text;
 
 use std::time::Duration;
 
+pub use body::extract_retry_after_from_body;
 use bytes::Bytes;
+use classify::classify_429;
+pub use header::extract_retry_after_from_headers;
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt;
 
-use crate::{config::router_cooldown::RouterCooldownConfig, types::response::Response};
-
-use classify::classify_429;
-
-pub use body::extract_retry_after_from_body;
-pub use header::extract_retry_after_from_headers;
+use crate::{
+    config::router_cooldown::RouterCooldownConfig, types::response::Response,
+};
 
 #[must_use]
 pub fn rate_limit_cooldown(
@@ -43,7 +43,8 @@ pub async fn cooldown_for_response(
     let status = response.status();
     if status == StatusCode::TOO_MANY_REQUESTS {
         if extract_retry_after_from_headers(response.headers()).is_some() {
-            let cooldown = rate_limit_cooldown(response.headers(), None, config);
+            let cooldown =
+                rate_limit_cooldown(response.headers(), None, config);
             return (response, cooldown);
         }
         let (parts, body) = response.into_parts();
@@ -56,13 +57,18 @@ pub async fn cooldown_for_response(
             Some(body_bytes.as_ref()),
             config,
         );
-        let response = Response::from_parts(parts, axum_core::body::Body::from(body_bytes));
+        let response = Response::from_parts(
+            parts,
+            axum_core::body::Body::from(body_bytes),
+        );
         return (response, cooldown);
     }
 
     if matches!(
         status,
-        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN | StatusCode::PAYMENT_REQUIRED
+        StatusCode::UNAUTHORIZED
+            | StatusCode::FORBIDDEN
+            | StatusCode::PAYMENT_REQUIRED
     ) {
         return (response, config.auth_error);
     }
@@ -75,9 +81,8 @@ mod tests {
     use axum_core::body::Body;
     use http::StatusCode;
 
-    use crate::config::router_cooldown::RouterCooldownConfig;
-
     use super::*;
+    use crate::config::router_cooldown::RouterCooldownConfig;
 
     #[tokio::test]
     async fn cooldown_uses_gemini_retry_delay_from_body() {
@@ -88,14 +93,24 @@ mod tests {
             .unwrap();
         let config = RouterCooldownConfig::default();
         let (_, cooldown) = cooldown_for_response(response, &config).await;
-        assert_eq!(cooldown, Duration::from_secs(16) + config.retry_after_buffer);
+        assert_eq!(
+            cooldown,
+            Duration::from_secs(16) + config.retry_after_buffer
+        );
     }
 
     #[test]
     fn quota_exhausted_uses_long_fallback_without_reset_hint() {
         let body = br#"{"error":{"message":"You exceeded your daily limit."}}"#;
         let config = RouterCooldownConfig::default();
-        let cooldown = rate_limit_cooldown(&HeaderMap::new(), Some(body.as_ref()), &config);
-        assert_eq!(cooldown, config.quota_exhausted + config.retry_after_buffer);
+        let cooldown = rate_limit_cooldown(
+            &HeaderMap::new(),
+            Some(body.as_ref()),
+            &config,
+        );
+        assert_eq!(
+            cooldown,
+            config.quota_exhausted + config.retry_after_buffer
+        );
     }
 }

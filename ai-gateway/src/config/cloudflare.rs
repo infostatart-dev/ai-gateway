@@ -1,15 +1,16 @@
 /// Preferred: `AI_GATEWAY_CREDENTIAL_CLOUDFLARE_DEFAULT=account_id:api_token`
 /// Legacy: `CLOUDFLARE_API_KEY_WITH_ACCOUNT_ID=account_id:api_token`
 /// Fallback: `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_KEY`
+#[must_use]
 pub fn credentials_from_env() -> Option<(String, String)> {
     for name in [
         "AI_GATEWAY_CREDENTIAL_CLOUDFLARE_DEFAULT",
         "CLOUDFLARE_API_KEY_WITH_ACCOUNT_ID",
     ] {
-        if let Ok(combined) = std::env::var(name) {
-            if let Some(parsed) = parse_combined(&combined) {
-                return Some(parsed);
-            }
+        if let Ok(combined) = std::env::var(name)
+            && let Some(parsed) = parse_combined(&combined)
+        {
+            return Some(parsed);
         }
     }
 

@@ -14,7 +14,8 @@ struct GateState {
     last_start: Option<Instant>,
 }
 
-/// Composite gate: concurrent semaphore + RPM window + min interval (Template Method steps).
+/// Composite gate: concurrent semaphore + RPM window + min interval (Template
+/// Method steps).
 pub struct PacingGate {
     limits: PacingLimits,
     concurrent: Arc<Semaphore>,
@@ -37,29 +38,36 @@ impl PacingGate {
     /// Blocks until a slot is available or `max_queue_wait` elapses.
     pub async fn acquire(&self) -> Result<PacingPermit, Duration> {
         let deadline = Instant::now() + self.limits.max_queue_wait;
-        let permit = loop {
-            let wait = self.next_wait(Instant::now()).await;
-            if wait > Duration::ZERO {
-                if Instant::now() + wait > deadline {
-                    return Err(deadline.saturating_duration_since(Instant::now()));
-                }
-                tokio::time::sleep(wait.min(deadline.saturating_duration_since(Instant::now())))
+        let permit =
+            loop {
+                let wait = self.next_wait(Instant::now()).await;
+                if wait > Duration::ZERO {
+                    if Instant::now() + wait > deadline {
+                        return Err(
+                            deadline.saturating_duration_since(Instant::now())
+                        );
+                    }
+                    tokio::time::sleep(wait.min(
+                        deadline.saturating_duration_since(Instant::now()),
+                    ))
                     .await;
-                continue;
-            }
-            match tokio::time::timeout_at(
-                tokio::time::Instant::from_std(deadline),
-                self.concurrent.clone().acquire_owned(),
-            )
-            .await
-            {
-                Ok(Ok(permit)) => break permit,
-                Ok(Err(_)) => return Err(Duration::ZERO),
-                Err(_) => {
-                    return Err(deadline.saturating_duration_since(Instant::now()));
+                    continue;
                 }
-            }
-        };
+                match tokio::time::timeout_at(
+                    tokio::time::Instant::from_std(deadline),
+                    self.concurrent.clone().acquire_owned(),
+                )
+                .await
+                {
+                    Ok(Ok(permit)) => break permit,
+                    Ok(Err(_)) => return Err(Duration::ZERO),
+                    Err(_) => {
+                        return Err(
+                            deadline.saturating_duration_since(Instant::now())
+                        );
+                    }
+                }
+            };
 
         let mut state = self.state.lock().await;
         let now = Instant::now();

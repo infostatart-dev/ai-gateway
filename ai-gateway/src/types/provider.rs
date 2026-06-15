@@ -256,8 +256,9 @@ impl ProviderKey {
             provider,
             InferenceProvider::Named(name) if name == "cloudflare"
         ) {
-            crate::config::cloudflare::credentials_from_env()
-                .map(|(_, api_token)| ProviderKey::Secret(Secret::from(api_token)))
+            crate::config::cloudflare::credentials_from_env().map(
+                |(_, api_token)| ProviderKey::Secret(Secret::from(api_token)),
+            )
         } else if crate::config::chatgpt_web::is_chatgpt_web(provider) {
             crate::config::chatgpt_web::session_file_available()
                 .then_some(ProviderKey::NotRequired)
@@ -362,10 +363,9 @@ impl ProviderKeyMap {
 
     pub fn from_env(providers_config: &ProvidersConfig) -> Self {
         tracing::debug!("Discovering provider credentials");
-        let registry =
-            crate::config::credentials::CredentialRegistry::build(
-                providers_config,
-            );
+        let registry = crate::config::credentials::CredentialRegistry::build(
+            providers_config,
+        );
         let mut keys = HashMap::default();
 
         for (provider, _config) in providers_config.iter() {

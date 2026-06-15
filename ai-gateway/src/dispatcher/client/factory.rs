@@ -18,7 +18,8 @@ impl Client {
     ) -> Result<Self, InitError> {
         let api_key = if provider.is_keyless() {
             None
-        } else if let Some(key) = app_state.config().credentials.default_key(&provider)
+        } else if let Some(key) =
+            app_state.config().credentials.default_key(&provider)
         {
             Some(key)
         } else {
@@ -28,15 +29,10 @@ impl Client {
                 .get_provider_key(&provider, None)
                 .await
         };
-        Self::new_with_provider_key(
-            app_state,
-            provider,
-            api_key.as_ref(),
-        )
-        .await
+        Self::new_with_provider_key(app_state, provider, api_key.as_ref())
     }
 
-    pub async fn new_with_provider_key(
+    pub fn new_with_provider_key(
         app_state: &AppState,
         provider: InferenceProvider,
         provider_key: Option<&ProviderKey>,

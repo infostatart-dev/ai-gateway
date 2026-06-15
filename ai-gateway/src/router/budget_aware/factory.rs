@@ -12,7 +12,10 @@ use super::types::{
 };
 use crate::{
     app_state::AppState,
-    config::{credentials::ProviderCredentialId, providers::GlobalProviderConfig, router::RouterConfig},
+    config::{
+        credentials::ProviderCredentialId, providers::GlobalProviderConfig,
+        router::RouterConfig,
+    },
     dispatcher::Dispatcher,
     endpoints::EndpointType,
     error::init::InitError,

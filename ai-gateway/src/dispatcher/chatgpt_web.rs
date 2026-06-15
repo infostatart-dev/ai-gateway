@@ -1,17 +1,16 @@
 use bytes::Bytes;
+use chatgpt_web::{CONV_URL, ExecuteRequest, Executor};
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt;
 use serde_json::Value;
 use tracing::Instrument;
 use url::Url;
 
-use chatgpt_web::{ExecuteRequest, Executor, CONV_URL};
-
 use crate::{
     config::chatgpt_web as chatgpt_cfg,
     dispatcher::service::{
-        outcome::{outcome_from_bytes, DispatchOutcome},
         Dispatcher,
+        outcome::{DispatchOutcome, outcome_from_bytes},
     },
     error::{api::ApiError, internal::InternalError},
     types::request::Request,
@@ -34,16 +33,18 @@ impl Dispatcher {
             .map_err(|e| InternalError::RequestBodyError(Box::new(e)))?
             .to_bytes();
         let req_body_bytes = body_bytes.clone();
-        let openai_body: Value = serde_json::from_slice(&body_bytes).map_err(|e| {
-            ApiError::Internal(InternalError::Deserialize {
-                ty: "chat completion request",
-                error: e,
-            })
-        })?;
+        let openai_body: Value =
+            serde_json::from_slice(&body_bytes).map_err(|e| {
+                ApiError::Internal(InternalError::Deserialize {
+                    ty: "chat completion request",
+                    error: e,
+                })
+            })?;
         let json_schema_required =
             chatgpt_cfg::request_requires_json_schema(&openai_body);
 
-        let target_url = Url::parse(CONV_URL).map_err(|_| InternalError::Internal)?;
+        let target_url =
+            Url::parse(CONV_URL).map_err(|_| InternalError::Internal)?;
 
         let result = match Executor::default()
             .execute(ExecuteRequest {
@@ -62,7 +63,7 @@ impl Dispatcher {
                 return outcome_from_bytes(
                     status,
                     HeaderMap::new(),
-                    body,
+                    &body,
                     target_url,
                     req_body_bytes,
                     request_headers,
@@ -78,10 +79,11 @@ impl Dispatcher {
             http::header::CONTENT_TYPE,
             http::HeaderValue::from_static("application/json"),
         );
+        let response_body = Bytes::from(result.body);
         outcome_from_bytes(
             status,
             headers,
-            Bytes::from(result.body),
+            &response_body,
             target_url,
             req_body_bytes,
             request_headers,
@@ -90,7 +92,9 @@ impl Dispatcher {
     }
 }
 
-fn chatgpt_error_body(error: chatgpt_web::Error) -> Result<(StatusCode, Bytes), InternalError> {
+fn chatgpt_error_body(
+    error: chatgpt_web::Error,
+) -> Result<(StatusCode, Bytes), InternalError> {
     let (status, message, error_type, code) = match error {
         chatgpt_web::Error::SessionAuth(message) => (
             StatusCode::UNAUTHORIZED,
@@ -99,12 +103,9 @@ fn chatgpt_error_body(error: chatgpt_web::Error) -> Result<(StatusCode, Bytes), 
             Some("invalid_session"),
         ),
         chatgpt_web::Error::Other(message)
-        | chatgpt_web::Error::SentinelBlocked(message) => (
-            StatusCode::BAD_GATEWAY,
-            message,
-            "server_error",
-            None,
-        ),
+        | chatgpt_web::Error::SentinelBlocked(message) => {
+            (StatusCode::BAD_GATEWAY, message, "server_error", None)
+        }
         chatgpt_web::Error::Upstream { status, message } => (
             StatusCode::from_u16(status).unwrap_or(StatusCode::BAD_GATEWAY),
             message,

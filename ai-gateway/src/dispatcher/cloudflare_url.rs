@@ -1,8 +1,7 @@
 use url::Url;
 
 use crate::{
-    error::internal::InternalError,
-    types::provider::InferenceProvider,
+    error::internal::InternalError, types::provider::InferenceProvider,
 };
 
 pub fn join_provider_path(
@@ -24,16 +23,15 @@ fn cloudflare_ai_base(
     if provider != &InferenceProvider::Named("cloudflare".into()) {
         return Ok(base_url.clone());
     }
-    let account_id =
-        crate::config::cloudflare::credentials_from_env()
-            .map(|(account_id, _)| account_id)
-            .ok_or_else(|| {
-                tracing::error!(
-                    "CLOUDFLARE_API_KEY_WITH_ACCOUNT_ID or CLOUDFLARE_ACCOUNT_ID \
-                     is required when cloudflare provider is configured"
-                );
-                InternalError::ProviderNotConfigured(provider.clone())
-            })?;
+    let account_id = crate::config::cloudflare::credentials_from_env()
+        .map(|(account_id, _)| account_id)
+        .ok_or_else(|| {
+            tracing::error!(
+                "CLOUDFLARE_API_KEY_WITH_ACCOUNT_ID or CLOUDFLARE_ACCOUNT_ID \
+                 is required when cloudflare provider is configured"
+            );
+            InternalError::ProviderNotConfigured(provider.clone())
+        })?;
     base_url.join(&format!("{account_id}/ai/")).map_err(|error| {
         tracing::error!(%error, account_id, "invalid cloudflare base URL join");
         InternalError::Internal

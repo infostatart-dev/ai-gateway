@@ -155,7 +155,11 @@ impl ProviderFailoverRouter {
         response: Response,
         elapsed: Duration,
     ) {
-        let config = self.app_state.config().provider_limits.cooldown_for(provider);
+        let config = self
+            .app_state
+            .config()
+            .provider_limits
+            .cooldown_for(provider);
         let (_, cooldown) = cooldown_for_response(response, &config).await;
         let mut states = lock_provider_states(&self.states);
         let state = states.entry(provider.clone()).or_default();
@@ -212,12 +216,8 @@ impl Service<Request> for ProviderFailoverRouter {
                             crate::metrics::router::status_class(status),
                         );
                     }
-                    this.record_failure(
-                        &candidate.provider,
-                        response,
-                        elapsed,
-                    )
-                    .await;
+                    this.record_failure(&candidate.provider, response, elapsed)
+                        .await;
                     tracing::warn!(
                         provider = %candidate.provider,
                         status = %status,

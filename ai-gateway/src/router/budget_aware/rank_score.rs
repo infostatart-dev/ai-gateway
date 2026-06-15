@@ -30,7 +30,9 @@ impl BudgetAwareRouter {
             .provider_priorities
             .get(&candidate.capability.provider)
             .copied()
-            .unwrap_or_else(|| rank::default_budget_rank(&candidate.capability));
+            .unwrap_or_else(|| {
+                rank::default_budget_rank(&candidate.capability)
+            });
         candidate
             .credential_budget_rank
             .saturating_mul(100)

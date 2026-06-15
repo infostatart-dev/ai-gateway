@@ -5,15 +5,28 @@ use http_body_util::BodyExt;
 use tracing::{Instrument, info_span};
 
 use super::{
+    Dispatcher,
     outcome::{DispatchOutcome, FinalizeDispatchContext},
     retry::dispatch_stream_with_retry,
-    Dispatcher,
 };
 use crate::{
     dispatcher::client::ProviderClient,
     error::{api::ApiError, internal::InternalError},
     types::{body::Body, request::Request},
 };
+
+struct UpstreamProxyDispatch<'a> {
+    req: Request,
+    auth_ctx: Option<&'a crate::types::extensions::AuthContext>,
+    target_provider: &'a crate::types::provider::InferenceProvider,
+    extracted_path_and_query: &'a str,
+    is_stream: bool,
+    api_endpoint: Option<crate::endpoints::ApiEndpoint>,
+    router_runtime_labels:
+        Option<crate::types::extensions::RouterRuntimeLabels>,
+    req_ctx: &'a crate::types::extensions::RequestContext,
+    request_kind: crate::types::extensions::RequestKind,
+}
 
 impl Dispatcher {
     #[allow(clippy::too_many_lines)]
@@ -66,39 +79,43 @@ impl Dispatcher {
         )
         .await?;
 
-        let outcome = if crate::config::chatgpt_web::is_chatgpt_web(target_provider) {
-            let headers = req.headers().clone();
-            self.dispatch_chatgpt_web(req, headers).await?
-        } else {
-            self.dispatch_via_upstream_proxy(
-                req,
-                auth_ctx,
-                target_provider,
-                extracted_path_and_query.as_str(),
-                mapper_ctx.is_stream,
-                api_endpoint.clone(),
-                router_runtime_labels.clone(),
-                &req_ctx,
-                request_kind,
-            )
-            .await?
-        };
+        let outcome =
+            if crate::config::chatgpt_web::is_chatgpt_web(target_provider) {
+                let headers = req.headers().clone();
+                self.dispatch_chatgpt_web(req, headers).await?
+            } else {
+                self.dispatch_via_upstream_proxy(UpstreamProxyDispatch {
+                    req,
+                    auth_ctx,
+                    target_provider,
+                    extracted_path_and_query: extracted_path_and_query.as_str(),
+                    is_stream: mapper_ctx.is_stream,
+                    api_endpoint: api_endpoint.clone(),
+                    router_runtime_labels: router_runtime_labels.clone(),
+                    req_ctx: &req_ctx,
+                    request_kind,
+                })
+                .await?
+            };
 
         self.finalize_dispatch(outcome, finalize_ctx).await
     }
 
     async fn dispatch_via_upstream_proxy(
         &self,
-        mut req: Request,
-        auth_ctx: Option<&crate::types::extensions::AuthContext>,
-        target_provider: &crate::types::provider::InferenceProvider,
-        extracted_path_and_query: &str,
-        is_stream: bool,
-        api_endpoint: Option<crate::endpoints::ApiEndpoint>,
-        router_runtime_labels: Option<crate::types::extensions::RouterRuntimeLabels>,
-        req_ctx: &crate::types::extensions::RequestContext,
-        request_kind: crate::types::extensions::RequestKind,
+        dispatch: UpstreamProxyDispatch<'_>,
     ) -> Result<DispatchOutcome, ApiError> {
+        let UpstreamProxyDispatch {
+            mut req,
+            auth_ctx,
+            target_provider,
+            extracted_path_and_query,
+            is_stream,
+            api_endpoint,
+            router_runtime_labels,
+            req_ctx,
+            request_kind,
+        } = dispatch;
         {
             let h = req.headers_mut();
             h.remove(http::header::HOST);
@@ -142,7 +159,8 @@ impl Dispatcher {
             .await?;
 
         let metrics_for_stream = self.app_state.0.endpoint_metrics.clone();
-        let (client_response, response_body_for_logger, tfft_rx) = if is_stream {
+        let (client_response, response_body_for_logger, tfft_rx) = if is_stream
+        {
             dispatch_stream_with_retry(
                 &self.app_state,
                 self.provider.clone(),

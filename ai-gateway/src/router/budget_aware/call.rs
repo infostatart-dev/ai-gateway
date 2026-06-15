@@ -10,8 +10,10 @@ use crate::{
 
 #[cfg(all(test, feature = "testing"))]
 mod test_hooks {
-    use std::collections::VecDeque;
-    use std::sync::{Mutex, OnceLock};
+    use std::{
+        collections::VecDeque,
+        sync::{Mutex, OnceLock},
+    };
 
     use super::{ApiError, Response};
 
@@ -38,7 +40,9 @@ mod test_hooks {
 }
 
 #[cfg(all(test, feature = "testing"))]
-pub use test_hooks::{clear as clear_test_call_responses, push as push_test_call_response};
+pub use test_hooks::{
+    clear as clear_test_call_responses, push as push_test_call_response,
+};
 
 pub(super) async fn call_candidate(
     candidate: &BudgetCandidate,

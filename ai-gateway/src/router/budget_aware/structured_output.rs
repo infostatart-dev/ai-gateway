@@ -27,7 +27,11 @@ pub(super) fn structured_output_valid(
         return false;
     };
 
-    check_structured_response(&response, parse_json_schema_spec(&request).as_ref()).is_none()
+    check_structured_response(
+        &response,
+        parse_json_schema_spec(&request).as_ref(),
+    )
+    .is_none()
 }
 
 pub(super) fn request_is_stream(request_body: &Bytes) -> bool {
@@ -43,9 +47,10 @@ pub(super) fn request_is_stream(request_body: &Bytes) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
     use crate::types::{model_id::ModelId, provider::InferenceProvider};
-    use serde_json::json;
 
     fn json_schema_request(stream: bool, strict: bool) -> Bytes {
         Bytes::from(format!(
@@ -143,7 +148,8 @@ mod tests {
             json_schema_required: true,
             ..RequestRequirements::default()
         };
-        let response = Bytes::from(r#"{"choices":[{"message":{"content":""}}]}"#);
+        let response =
+            Bytes::from(r#"{"choices":[{"message":{"content":""}}]}"#);
         assert!(!structured_output_valid(
             &requirements,
             &capability(true),
@@ -158,7 +164,8 @@ mod tests {
             json_schema_required: true,
             ..RequestRequirements::default()
         };
-        let response = Bytes::from(r#"{"choices":[{"message":{"content":"not json"}}]}"#);
+        let response =
+            Bytes::from(r#"{"choices":[{"message":{"content":"not json"}}]}"#);
         assert!(structured_output_valid(
             &requirements,
             &capability(true),
@@ -173,7 +180,8 @@ mod tests {
             json_schema_required: true,
             ..RequestRequirements::default()
         };
-        let response = Bytes::from(r#"{"choices":[{"message":{"content":"nope"}}]}"#);
+        let response =
+            Bytes::from(r#"{"choices":[{"message":{"content":"nope"}}]}"#);
         assert!(structured_output_valid(
             &requirements,
             &capability(false),

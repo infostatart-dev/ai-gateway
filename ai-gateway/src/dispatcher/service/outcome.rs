@@ -34,14 +34,15 @@ pub struct DispatchOutcome {
 pub fn outcome_from_bytes(
     status: StatusCode,
     response_headers: HeaderMap,
-    body: Bytes,
+    body: &Bytes,
     target_url: Url,
     req_body_bytes: Bytes,
     request_headers: HeaderMap,
 ) -> Result<DispatchOutcome, crate::error::internal::InternalError> {
     let stream =
         futures::stream::once(futures::future::ok::<_, ApiError>(body.clone()));
-    let (resp_body, body_reader, tfft_rx) = BodyReader::wrap_stream(stream, false);
+    let (resp_body, body_reader, tfft_rx) =
+        BodyReader::wrap_stream(stream, false);
     let mut response = http::Response::builder()
         .status(status)
         .body(resp_body)
@@ -72,7 +73,8 @@ pub struct FinalizeDispatchContext<'a> {
 }
 
 impl Dispatcher {
-    /// Shared observability tail for every provider backend (proxy or embedded).
+    /// Shared observability tail for every provider backend (proxy or
+    /// embedded).
     pub(super) async fn finalize_dispatch(
         &self,
         mut outcome: DispatchOutcome,
@@ -196,14 +198,16 @@ mod tests {
 
     #[tokio::test]
     async fn outcome_from_bytes_wraps_body_for_logging_pipeline() {
-        let target = Url::parse("https://chatgpt.com/backend-api/f/conversation").unwrap();
+        let target =
+            Url::parse("https://chatgpt.com/backend-api/f/conversation")
+                .unwrap();
         let body = Bytes::from_static(br#"{"ok":true}"#);
         let req = Bytes::from_static(br#"{"model":"gpt-5.5-instant"}"#);
 
         let outcome = outcome_from_bytes(
             StatusCode::OK,
             HeaderMap::new(),
-            body.clone(),
+            &body,
             target.clone(),
             req.clone(),
             HeaderMap::new(),
@@ -235,7 +239,7 @@ mod finalize_tests {
     use http::{HeaderMap, StatusCode};
     use url::Url;
 
-    use super::{outcome_from_bytes, FinalizeDispatchContext};
+    use super::{FinalizeDispatchContext, outcome_from_bytes};
     use crate::{
         app_state::AppState,
         dispatcher::{client::Client, service::Dispatcher},
@@ -264,11 +268,14 @@ mod finalize_tests {
     async fn finalize_dispatch_attaches_observability_extensions() {
         let app_state = AppState::test_default().await;
         let dispatcher = test_dispatcher(app_state).await;
-        let target = Url::parse("https://chatgpt.com/backend-api/f/conversation").unwrap();
+        let target =
+            Url::parse("https://chatgpt.com/backend-api/f/conversation")
+                .unwrap();
+        let body = Bytes::from_static(b"{\"choices\":[]}");
         let outcome = outcome_from_bytes(
             StatusCode::OK,
             HeaderMap::new(),
-            Bytes::from_static(b"{\"choices\":[]}"),
+            &body,
             target,
             Bytes::from_static(b"{}"),
             HeaderMap::new(),
@@ -294,8 +301,12 @@ mod finalize_tests {
                     mapper_ctx: mapper_ctx.clone(),
                     req_ctx: &req_ctx,
                     api_endpoint: None,
-                    inference_provider: InferenceProvider::Named("chatgpt-web".into()),
-                    router_id: Some(RouterId::Named(CompactString::new("autodefault"))),
+                    inference_provider: InferenceProvider::Named(
+                        "chatgpt-web".into(),
+                    ),
+                    router_id: Some(RouterId::Named(CompactString::new(
+                        "autodefault",
+                    ))),
                     start_instant: tokio::time::Instant::now(),
                     start_time: Utc::now(),
                     request_kind: RequestKind::Router,

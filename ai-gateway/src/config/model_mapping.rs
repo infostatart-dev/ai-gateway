@@ -62,7 +62,10 @@ gpt-5-mini:
         );
 
         let first = mappings.first();
-        assert_eq!(first.inference_provider(), Some(InferenceProvider::OpenRouter));
+        assert_eq!(
+            first.inference_provider(),
+            Some(InferenceProvider::OpenRouter)
+        );
         assert!(
             first.to_string().contains("gpt-oss-120b"),
             "first openrouter fallback must follow yaml order, got {}",
@@ -81,15 +84,18 @@ gpt-5-mini:
         let openrouter_models: Vec<_> = mappings
             .iter()
             .filter(|model| {
-                model.inference_provider() == Some(InferenceProvider::OpenRouter)
+                model.inference_provider()
+                    == Some(InferenceProvider::OpenRouter)
             })
             .map(|model| model.to_string())
             .collect();
 
-        let first_openrouter = openrouter_models.first().expect("openrouter entry");
+        let first_openrouter =
+            openrouter_models.first().expect("openrouter entry");
         assert!(
             first_openrouter.contains("gpt-oss-120b:free"),
-            "first openrouter fallback must be gpt-oss-120b:free, got {first_openrouter}"
+            "first openrouter fallback must be gpt-oss-120b:free, got \
+             {first_openrouter}"
         );
     }
 }

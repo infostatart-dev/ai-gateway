@@ -19,8 +19,11 @@ pub fn write_decision_status(
     } else {
         ("disabled", "\x1b[90m")
     };
-    writeln!(out, "  Decision engine         : {color}{engine_label}\x1b[0m")
-        .expect("write to String");
+    writeln!(
+        out,
+        "  Decision engine         : {color}{engine_label}\x1b[0m"
+    )
+    .expect("write to String");
 
     if !router_config.decision.enabled {
         return;
@@ -28,13 +31,13 @@ pub fn write_decision_status(
 
     let start_tier = Tier::from(config.decision.default_policy.tier);
     let (cascade, cascade_source) =
-        resolved_tier_cascade(config, &router_config.decision);
+        resolved_tier_cascade(config, router_config.decision);
     let chain = cascade_chain(start_tier, cascade);
 
     writeln!(
         out,
-        "  Default policy tier     : \x1b[33m{}\x1b[0m \
-         (starting slot pool for requests without a per-key policy)",
+        "  Default policy tier     : \x1b[33m{}\x1b[0m (starting slot pool \
+         for requests without a per-key policy)",
         tier_label(config.decision.default_policy.tier)
     )
     .expect("write to String");
@@ -42,7 +45,8 @@ pub fn write_decision_status(
     let (mode, mode_hint) = cascade_mode(cascade);
     writeln!(
         out,
-        "  Tier cascade            : \x1b[33m{mode}\x1b[0m ({cascade_source}) — {mode_hint}"
+        "  Tier cascade            : \x1b[33m{mode}\x1b[0m ({cascade_source}) \
+         — {mode_hint}"
     )
     .expect("write to String");
 
@@ -62,7 +66,7 @@ pub fn write_decision_status(
 
 fn resolved_tier_cascade(
     config: &Config,
-    router_decision: &crate::config::decision::RouterDecisionConfig,
+    router_decision: crate::config::decision::RouterDecisionConfig,
 ) -> (TierCascade, &'static str) {
     if let Some(cascade) = router_decision.tier_cascade {
         (cascade, "this router")
@@ -85,10 +89,9 @@ fn cascade_mode(cascade: TierCascade) -> (&'static str, &'static str) {
             "only-tier",
             "no escalation; reject when the start tier is full",
         ),
-        TierCascade::PaidDown => (
-            "paid-down",
-            "try cheaper tiers when the start tier is full",
-        ),
+        TierCascade::PaidDown => {
+            ("paid-down", "try cheaper tiers when the start tier is full")
+        }
         TierCascade::FreeUp => (
             "free-up",
             "try more expensive tiers when the start tier is full",
@@ -149,19 +152,13 @@ mod tests {
     #[test]
     fn free_free_up_chain_includes_all_tiers() {
         let chain = cascade_chain(Tier::Free, TierCascade::FreeUp);
-        assert_eq!(
-            format_cascade_chain(&chain),
-            "free → freemium → paid"
-        );
+        assert_eq!(format_cascade_chain(&chain), "free → freemium → paid");
     }
 
     #[test]
     fn only_tier_shows_single_tier() {
         let chain = cascade_chain(Tier::Freemium, TierCascade::OnlyTier);
-        assert_eq!(
-            format_cascade_chain(&chain),
-            "freemium only (no cascade)"
-        );
+        assert_eq!(format_cascade_chain(&chain), "freemium only (no cascade)");
     }
 
     #[test]

@@ -126,8 +126,7 @@ fn flatten_message_content(
                 ) => Some(text.text.clone()),
                 _ => None,
             })
-            .collect::<Vec<_>>()
-            .join("");
+            .collect::<String>();
         user.content =
             async_openai::types::chat::ChatCompletionRequestUserMessageContent::Text(
                 text,
@@ -156,7 +155,8 @@ mod tests {
         openai_chat_response::normalize_chat_completion(&mut value);
         openai_chat_response::ensure_non_empty_choices(&value).unwrap();
         let response: CreateChatCompletionResponse =
-            serde_json::from_value(value).expect("cloudflare map content must deserialize");
+            serde_json::from_value(value)
+                .expect("cloudflare map content must deserialize");
         assert_eq!(
             response.choices[0].message.content.as_ref().unwrap(),
             "reasoned answer"

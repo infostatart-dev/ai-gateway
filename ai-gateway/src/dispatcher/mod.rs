@@ -1,8 +1,8 @@
 pub mod anthropic_client;
-pub mod chatgpt_web;
-pub mod cloudflare_url;
 mod bedrock_client;
+pub mod chatgpt_web;
 pub mod client;
+pub mod cloudflare_url;
 mod extensions;
 pub mod ollama_client;
 pub mod openai_compatible_client;

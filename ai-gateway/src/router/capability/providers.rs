@@ -134,7 +134,7 @@ mod groq {
 }
 
 mod mistral {
-    /// Live-probed on La Plateforme (2026-06-13): strict json_schema works.
+    /// Live-probed on La Plateforme (2026-06-13): strict `json_schema` works.
     const JSON_SCHEMA_MODELS: &[&str] = &[
         "mistral-small",
         "mistral-medium",
@@ -157,7 +157,8 @@ mod mistral {
 }
 
 mod cerebras {
-    /// Live-probed + docs (2026-06-13): structured outputs with strict json_schema.
+    /// Live-probed + docs (2026-06-13): structured outputs with strict
+    /// `json_schema`.
     const JSON_SCHEMA_MODELS: &[&str] = &["gpt-oss-120b", "zai-glm-4.7"];
 
     const REASONING_MODELS: &[&str] = &["gpt-oss-120b"];
@@ -178,18 +179,15 @@ fn chatgpt_web(cap: &mut ModelCapability) {
 }
 
 mod opencode {
-    /// Verified against https://opencode.ai/zen/v1 on 2026-06-13.
+    /// Verified against <https://opencode.ai/zen/v1> on 2026-06-13.
     const JSON_SCHEMA_MODELS: &[&str] =
         &["mimo-v2.5-free", "nemotron-3-ultra-free"];
 
-    /// Models that return `reasoning` / `reasoning_details` on OpenCode Zen.
-    const REASONING_MODELS: &[&str] =
-        &["nemotron-3-ultra-free", "big-pickle"];
+    /// Models that return `reasoning` / `reasoning_details` on `OpenCode` Zen.
+    const REASONING_MODELS: &[&str] = &["nemotron-3-ultra-free", "big-pickle"];
 
     pub fn supports_json_schema(model_name: &str) -> bool {
-        JSON_SCHEMA_MODELS
-            .iter()
-            .any(|m| model_name.contains(m))
+        JSON_SCHEMA_MODELS.iter().any(|m| model_name.contains(m))
     }
 
     pub fn supports_reasoning(model_name: &str) -> bool {
@@ -209,9 +207,7 @@ mod cloudflare {
     const REASONING_MODELS: &[&str] = &["deepseek-r1-distill-qwen-32b"];
 
     pub fn supports_json_schema(model_name: &str) -> bool {
-        JSON_SCHEMA_MODELS
-            .iter()
-            .any(|m| model_name.contains(m))
+        JSON_SCHEMA_MODELS.iter().any(|m| model_name.contains(m))
     }
 
     pub fn supports_reasoning(model_name: &str) -> bool {
@@ -223,8 +219,7 @@ mod cloudflare {
 mod tests {
     use super::*;
     use crate::{
-        router::capability::ModelCapability,
-        types::model_id::ModelId,
+        router::capability::ModelCapability, types::model_id::ModelId,
     };
 
     #[test]

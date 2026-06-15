@@ -6,9 +6,9 @@ use indexmap::IndexMap;
 use nonempty_collections::nes;
 
 use super::{
+    BudgetAwareRouter,
     factory::build,
     types::{BudgetCandidate, CandidateSelectionMode},
-    BudgetAwareRouter,
 };
 use crate::{
     app_state::AppState,
@@ -22,7 +22,8 @@ fn ensure_chatgpt_session_env() {
     if std::env::var(SESSION_ENV).is_ok() {
         return;
     }
-    let session = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dev/session.json");
+    let session =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dev/session.json");
     if session.exists() {
         unsafe {
             std::env::set_var(SESSION_ENV, session);
@@ -61,10 +62,8 @@ async fn chatgpt_only_router() -> BudgetAwareRouter {
 async fn matches_any_client_model_without_yaml_mapping() {
     let router = chatgpt_only_router().await;
     let source = client_model("gpt-5.5-instant");
-    let candidate: &BudgetCandidate = router
-        .candidates
-        .first()
-        .expect("chatgpt-web candidate");
+    let candidate: &BudgetCandidate =
+        router.candidates.first().expect("chatgpt-web candidate");
     let requirements = RequestRequirements {
         json_schema_required: true,
         ..RequestRequirements::default()

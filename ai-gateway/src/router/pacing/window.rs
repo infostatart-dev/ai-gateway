@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const RPM_WINDOW: Duration = Duration::from_secs(60);
+const RPM_WINDOW: Duration = Duration::from_mins(1);
 
 #[derive(Debug, Default)]
 pub struct RpmWindow {

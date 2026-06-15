@@ -46,9 +46,7 @@ mod credential_failover {
         http::Response::builder()
             .status(StatusCode::OK)
             .header(http::header::CONTENT_TYPE, "application/json")
-            .body(Body::from(
-                r#"{"choices":[{"message":{"content":"ok"}}]}"#,
-            ))
+            .body(Body::from(r#"{"choices":[{"message":{"content":"ok"}}]}"#))
             .unwrap()
     }
 
@@ -61,9 +59,11 @@ mod credential_failover {
         let provider = InferenceProvider::GoogleGemini;
         let router_id = RouterId::Named("credential-failover-test".into());
         let router_config = Arc::new(RouterConfig::default());
-        let model_id =
-            ModelId::from_str_and_provider(provider.clone(), "gemini-2.5-flash")
-                .unwrap();
+        let model_id = ModelId::from_str_and_provider(
+            provider.clone(),
+            "gemini-2.5-flash",
+        )
+        .unwrap();
         let service = Dispatcher::new_with_model_id_and_provider_key_without_rate_limit_events(
             app_state.clone(),
             &router_id,
@@ -118,7 +118,8 @@ mod credential_failover {
 
         let candidates = vec![
             gemini_candidate(&app_state, "gemini-free", 0, "free-key").await,
-            gemini_candidate(&app_state, "gemini-default", 10, "paid-key").await,
+            gemini_candidate(&app_state, "gemini-default", 10, "paid-key")
+                .await,
         ];
 
         let parts = Request::builder()
@@ -144,9 +145,6 @@ mod credential_failover {
             .headers()
             .get(REAL_MODE_MODEL_AND_PROVIDER)
             .expect("routed identity header");
-        assert_eq!(
-            header.to_str().unwrap(),
-            "gemini-default/gemini-2.5-flash"
-        );
+        assert_eq!(header.to_str().unwrap(), "gemini-default/gemini-2.5-flash");
     }
 }

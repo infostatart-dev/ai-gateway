@@ -6,12 +6,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     config::providers::ProvidersConfig,
-    types::{
-        provider::{InferenceProvider, ProviderKey},
-    },
+    types::provider::{InferenceProvider, ProviderKey},
 };
 
-const CREDENTIALS_YAML: &str = include_str!("../../config/embedded/credentials.yaml");
+const CREDENTIALS_YAML: &str =
+    include_str!("../../config/embedded/credentials.yaml");
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -118,7 +117,6 @@ impl CredentialRegistry {
             .any(|credential| &credential.provider == provider)
     }
 
-    #[must_use]
     pub fn for_provider(
         &self,
         provider: &InferenceProvider,
@@ -178,7 +176,7 @@ impl CredentialRegistry {
             let Some(key) = ProviderKey::from_env(provider) else {
                 continue;
             };
-            let id = ProviderCredentialId::new(format!("{}-default", provider));
+            let id = ProviderCredentialId::new(format!("{provider}-default"));
             self.push(ProviderCredential {
                 id,
                 provider: provider.clone(),
@@ -240,12 +238,21 @@ mod tests {
             std::env::set_var("GEMINI_API_KEY", "paid-key");
         }
         let registry = CredentialRegistry::build(&providers());
-        let gemini: Vec<_> = registry.for_provider(&InferenceProvider::GoogleGemini).collect();
+        let gemini: Vec<_> = registry
+            .for_provider(&InferenceProvider::GoogleGemini)
+            .collect();
         assert_eq!(gemini.len(), 2);
         assert_eq!(gemini[0].id.0, "gemini-free");
         assert_eq!(gemini[0].tier, "free");
         assert_eq!(gemini[1].id.0, "gemini-default");
-        assert_eq!(registry.default_for(&InferenceProvider::GoogleGemini).unwrap().id.0, "gemini-free");
+        assert_eq!(
+            registry
+                .default_for(&InferenceProvider::GoogleGemini)
+                .unwrap()
+                .id
+                .0,
+            "gemini-free"
+        );
         unsafe {
             std::env::remove_var("GEMINI_FREE_TIER_APIKEY");
             std::env::remove_var("GEMINI_API_KEY");
@@ -283,7 +290,8 @@ mod tests {
     fn credential_id_display() {
         let id = ProviderCredentialId::new("gemini-free");
         assert_eq!(id.to_string(), "gemini-free");
-        let parsed = ProviderCredentialId(CompactString::from_str("x").unwrap());
+        let parsed =
+            ProviderCredentialId(CompactString::from_str("x").unwrap());
         assert_eq!(parsed.0, "x");
     }
 }

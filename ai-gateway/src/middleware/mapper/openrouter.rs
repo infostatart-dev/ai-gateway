@@ -71,11 +71,8 @@ impl TryConvert<Value, CreateChatCompletionResponse> for OpenRouterConverter {
     }
 }
 
-impl
-    TryConvertStreamData<
-        Value,
-        CreateChatCompletionStreamResponse,
-    > for OpenRouterConverter
+impl TryConvertStreamData<Value, CreateChatCompletionStreamResponse>
+    for OpenRouterConverter
 {
     type Error = MapperError;
 
@@ -126,7 +123,8 @@ mod tests {
 
         openai_chat_response::normalize_chat_completion(&mut value);
         let response: CreateChatCompletionResponse =
-            serde_json::from_value(value).expect("response must deserialize after normalization");
+            serde_json::from_value(value)
+                .expect("response must deserialize after normalization");
 
         assert!(response.id.starts_with("chatcmpl-"));
         assert_eq!(response.object, "chat.completion");

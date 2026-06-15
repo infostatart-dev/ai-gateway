@@ -93,7 +93,10 @@ fn capability_fit_score_prefers_reasoning_and_json_schema_matches() {
     };
     let full = ModelCapability {
         provider: InferenceProvider::OpenRouter,
-        model: test_model(InferenceProvider::OpenRouter, "openai/gpt-oss-120b:free"),
+        model: test_model(
+            InferenceProvider::OpenRouter,
+            "openai/gpt-oss-120b:free",
+        ),
         context_window: Some(131_072),
         supports_tools: true,
         supports_json_schema: true,
@@ -106,7 +109,8 @@ fn capability_fit_score_prefers_reasoning_and_json_schema_matches() {
     };
 
     assert!(
-        capability_fit_score(&reqs, &full) > capability_fit_score(&reqs, &json_only)
+        capability_fit_score(&reqs, &full)
+            > capability_fit_score(&reqs, &json_only)
     );
 }
 

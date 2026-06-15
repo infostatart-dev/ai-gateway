@@ -43,7 +43,7 @@ struct Cli {
 enum Command {
     /// Run the AI gateway HTTP server (default).
     Serve,
-    /// ChatGPT web session utilities.
+    /// `ChatGPT` web session utilities.
     #[cfg(feature = "chatgpt-login")]
     Chatgpt {
         #[command(subcommand)]
@@ -54,11 +54,13 @@ enum Command {
 #[derive(Debug, Subcommand)]
 #[cfg(feature = "chatgpt-login")]
 enum ChatgptAction {
-    /// Open a browser to log in and save session cookies to CHATGPT_BROWSER_CLI path.
+    /// Open a browser to log in and save session cookies to
+    /// `CHATGPT_BROWSER_CLI` path.
     Login,
-    /// Paste Cookie header from Firefox/Chrome DevTools.
+    /// Paste Cookie header from Firefox/Chrome `DevTools`.
     Import {
-        /// Full cookie string, e.g. `Cookie: __Secure-next-auth.session-token=...; cf_clearance=...`
+        /// Full cookie string, e.g. `Cookie:
+        /// __Secure-next-auth.session-token=...; cf_clearance=...`
         #[arg(long)]
         cookie: String,
     },
@@ -76,7 +78,9 @@ async fn main() -> Result<(), RuntimeError> {
     #[cfg(feature = "chatgpt-login")]
     if let Some(Command::Chatgpt { action }) = cli.command {
         let result = match action {
-            ChatgptAction::Login => ai_gateway::cli::chatgpt_login::run_login().await,
+            ChatgptAction::Login => {
+                ai_gateway::cli::chatgpt_login::run_login().await
+            }
             ChatgptAction::Import { cookie } => {
                 ai_gateway::cli::chatgpt_login::run_import(cookie).await
             }
@@ -125,8 +129,8 @@ fn load_and_validate_config(
         && ai_gateway::config::chatgpt_web::session_path_from_env().is_some()
     {
         eprintln!(
-            "CHATGPT_BROWSER_CLI is set but session file is missing. \
-             Run: cargo run --features chatgpt-login -- chatgpt login"
+            "CHATGPT_BROWSER_CLI is set but session file is missing. Run: \
+             cargo run --features chatgpt-login -- chatgpt login"
         );
     }
 

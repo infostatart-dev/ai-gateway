@@ -5,12 +5,15 @@ use std::{
 
 use super::{gate::PacingGate, limits::PacingLimits};
 use crate::{
-    config::chatgpt_web::{is_chatgpt_web, session_path_from_env},
-    config::provider_limits::ProviderLimitCatalog,
+    config::{
+        chatgpt_web::{is_chatgpt_web, session_path_from_env},
+        provider_limits::ProviderLimitCatalog,
+    },
     types::provider::InferenceProvider,
 };
 
-/// Factory + cache: one [`PacingGate`] per `(provider, scope key)` (Registry pattern).
+/// Factory + cache: one [`PacingGate`] per `(provider, scope key)` (Registry
+/// pattern).
 #[derive(Debug)]
 pub struct PacingRegistry {
     gates: Mutex<HashMap<(String, String), Arc<PacingGate>>>,
@@ -27,17 +30,21 @@ impl PacingRegistry {
     }
 
     #[must_use]
-    pub fn limits_for(&self, provider: &InferenceProvider) -> Option<PacingLimits> {
+    pub fn limits_for(
+        &self,
+        provider: &InferenceProvider,
+    ) -> Option<PacingLimits> {
         self.catalog.pacing_limits_for(provider)
     }
 
-    pub fn gate_for(&self, provider: &InferenceProvider) -> Option<Arc<PacingGate>> {
+    pub fn gate_for(
+        &self,
+        provider: &InferenceProvider,
+    ) -> Option<Arc<PacingGate>> {
         let limits = self.limits_for(provider)?;
         let key = (provider.to_string(), gate_scope_key(provider));
-        let mut gates = self
-            .gates
-            .lock()
-            .expect("pacing registry mutex poisoned");
+        let mut gates =
+            self.gates.lock().expect("pacing registry mutex poisoned");
         Some(
             gates
                 .entry(key)
@@ -49,9 +56,10 @@ impl PacingRegistry {
 
 fn gate_scope_key(provider: &InferenceProvider) -> String {
     if is_chatgpt_web(provider) {
-        session_path_from_env()
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "missing-session".into())
+        session_path_from_env().map_or_else(
+            || "missing-session".into(),
+            |p| p.display().to_string(),
+        )
     } else {
         "default".into()
     }

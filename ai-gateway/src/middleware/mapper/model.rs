@@ -119,7 +119,7 @@ impl ModelMapper {
             return Ok(source_model.clone());
         }
 
-        if let Some(openrouter_model) = self.try_openrouter_upstream(
+        if let Some(openrouter_model) = Self::try_openrouter_upstream(
             source_model,
             target_provider,
             models_offered_by_target_provider,
@@ -189,13 +189,14 @@ impl ModelMapper {
         if models_offered_by_target_provider
             .contains(&source_model_w_out_version)
         {
-            let capability = self.model_capability(target_provider, source_model);
+            let capability =
+                self.model_capability(target_provider, source_model);
             if supports(requirements, &capability) {
                 return Ok(source_model.clone());
             }
         }
 
-        if let Some(openrouter_model) = self.try_openrouter_upstream(
+        if let Some(openrouter_model) = Self::try_openrouter_upstream(
             source_model,
             target_provider,
             models_offered_by_target_provider,
@@ -231,7 +232,8 @@ impl ModelMapper {
             if candidate.inference_provider() != Some(target_provider.clone()) {
                 continue;
             }
-            let possible_mapping = ModelIdWithoutVersion::from(candidate.clone());
+            let possible_mapping =
+                ModelIdWithoutVersion::from(candidate.clone());
             if !models_offered_by_target_provider.contains(&possible_mapping) {
                 continue;
             }
@@ -240,9 +242,10 @@ impl ModelMapper {
                 continue;
             }
             let fit = capability_fit_score(requirements, &capability);
-            let replace = best.as_ref().is_none_or(|(best_fit, best_idx, _)| {
-                fit > *best_fit || (fit == *best_fit && index < *best_idx)
-            });
+            let replace =
+                best.as_ref().is_none_or(|(best_fit, best_idx, _)| {
+                    fit > *best_fit || (fit == *best_fit && index < *best_idx)
+                });
             if replace {
                 best = Some((fit, index, candidate.clone()));
             }
@@ -268,7 +271,6 @@ impl ModelMapper {
     }
 
     fn try_openrouter_upstream(
-        &self,
         source_model: &ModelId,
         target_provider: &InferenceProvider,
         offered: &HashSet<ModelIdWithoutVersion>,
@@ -276,6 +278,9 @@ impl ModelMapper {
         if target_provider != &InferenceProvider::OpenRouter {
             return None;
         }
-        super::openrouter_upstream::resolve_upstream_model(source_model, offered)
+        super::openrouter_upstream::resolve_upstream_model(
+            source_model,
+            offered,
+        )
     }
 }

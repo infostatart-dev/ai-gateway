@@ -9,7 +9,8 @@ pub fn extract_retry_after_from_headers(headers: &HeaderMap) -> Option<u64> {
     parse_retry_after_header(value).map(cap_duration_secs)
 }
 
-/// OmniRoute `parseRetryAfter`: Groq `60s`/`5m`/`2h` before plain integer parse.
+/// `OmniRoute` `parseRetryAfter`: Groq `60s`/`5m`/`2h` before plain integer
+/// parse.
 #[must_use]
 pub fn parse_retry_after_header(value: &str) -> Option<u64> {
     let trimmed = value.trim();
@@ -22,8 +23,10 @@ pub fn parse_retry_after_header(value: &str) -> Option<u64> {
     if let Ok(secs) = trimmed.parse::<u64>() {
         return Some(secs);
     }
-    if let Ok(dt) = DateTime::parse_from_str(trimmed, "%a, %d %b %Y %H:%M:%S GMT") {
-        let now = Utc::now().timestamp().max(0) as u64;
+    if let Ok(dt) =
+        DateTime::parse_from_str(trimmed, "%a, %d %b %Y %H:%M:%S GMT")
+    {
+        let now = u64::try_from(Utc::now().timestamp()).unwrap_or(0);
         let target = u64::try_from(dt.timestamp()).ok()?;
         return Some(target.saturating_sub(now));
     }

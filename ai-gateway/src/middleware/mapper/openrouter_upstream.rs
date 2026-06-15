@@ -1,21 +1,22 @@
-use std::borrow::Cow;
-
-use rustc_hash::FxHashSet as HashSet;
+use std::{borrow::Cow, collections::HashSet, hash::BuildHasher};
 
 use crate::types::{
     model_id::{ModelId, ModelIdWithoutVersion},
     provider::InferenceProvider,
 };
 
-/// Resolve a source model to an OpenRouter slug registered in `providers.yaml`.
+/// Resolve a source model to an `OpenRouter` slug registered in
+/// `providers.yaml`.
 ///
 /// Namespace is derived from the source provider. Only vendors whose gateway id
-/// differs from OpenRouter's slug need an entry in `NAMESPACE_OVERRIDES`; every
-/// other `Named` provider passes through its id. The slug must exist in the
-/// configured OpenRouter model list — no hand-maintained vendor whitelist.
-pub fn resolve_upstream_model(
+/// differs from `OpenRouter`'s slug need an entry in `NAMESPACE_OVERRIDES`;
+/// every other `Named` provider passes through its id. The slug must exist in
+/// the configured `OpenRouter` model list — no hand-maintained vendor
+/// whitelist.
+#[must_use]
+pub fn resolve_upstream_model<S: BuildHasher>(
     source_model: &ModelId,
-    offered: &HashSet<ModelIdWithoutVersion>,
+    offered: &HashSet<ModelIdWithoutVersion, S>,
 ) -> Option<ModelId> {
     let provider = source_model.inference_provider()?;
     namespace_candidates(&provider)
@@ -23,10 +24,10 @@ pub fn resolve_upstream_model(
         .find_map(|namespace| try_slug(source_model, &namespace, offered))
 }
 
-fn try_slug(
+fn try_slug<S: BuildHasher>(
     source_model: &ModelId,
     namespace: &str,
-    offered: &HashSet<ModelIdWithoutVersion>,
+    offered: &HashSet<ModelIdWithoutVersion, S>,
 ) -> Option<ModelId> {
     let candidate = ModelId::from_str_and_provider(
         InferenceProvider::OpenRouter,
@@ -38,7 +39,9 @@ fn try_slug(
         .then_some(candidate)
 }
 
-fn namespace_candidates(provider: &InferenceProvider) -> Vec<Cow<'static, str>> {
+fn namespace_candidates(
+    provider: &InferenceProvider,
+) -> Vec<Cow<'static, str>> {
     match provider {
         InferenceProvider::OpenAI => vec![Cow::Borrowed("openai")],
         InferenceProvider::Anthropic => vec![Cow::Borrowed("anthropic")],
@@ -56,10 +59,13 @@ fn namespace_candidates(provider: &InferenceProvider) -> Vec<Cow<'static, str>> 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::str::FromStr;
 
-    fn offered(slugs: &[&str]) -> HashSet<ModelIdWithoutVersion> {
+    use rustc_hash::FxHashSet;
+
+    use super::*;
+
+    fn offered(slugs: &[&str]) -> FxHashSet<ModelIdWithoutVersion> {
         slugs
             .iter()
             .map(|slug| {

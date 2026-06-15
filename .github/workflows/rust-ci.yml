@@ -14,12 +14,13 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Use nightly rustfmt
         run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
       - name: Output rustup and cargo version for educational purposes
@@ -29,7 +30,7 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: Swatinem/rust-cache@v2
         with:
           cache-targets: "false"
@@ -50,7 +51,7 @@ jobs:
         ports:
           - 6340:6379
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: Swatinem/rust-cache@v2
         with:
           cache-targets: "false"

@@ -29,7 +29,7 @@ fn parse_iso_timestamp_seconds(text: &str) -> Option<u64> {
     let parsed = DateTime::parse_from_rfc3339(raw)
         .or_else(|_| DateTime::parse_from_str(raw, "%Y-%m-%dT%H:%M:%SZ"))
         .ok()?;
-    let now = Utc::now().timestamp().max(0) as u64;
+    let now = u64::try_from(Utc::now().timestamp()).unwrap_or(0);
     let target = u64::try_from(parsed.timestamp()).ok()?;
     (target > now).then_some(target - now)
 }
@@ -39,7 +39,9 @@ fn parse_hms_phrase(text: &str, marker: &str) -> Option<u64> {
     let start = lower.find(marker)? + marker.len();
     let rest = text[start..].trim();
     let end = rest
-        .find(|c: char| !matches!(c, '0'..='9' | 'h' | 'm' | 's' | 'H' | 'M' | 'S'))
+        .find(|c: char| {
+            !matches!(c, '0'..='9' | 'h' | 'm' | 's' | 'H' | 'M' | 'S')
+        })
         .unwrap_or(rest.len());
     parse_hms_groups_seconds(&rest[..end])
 }

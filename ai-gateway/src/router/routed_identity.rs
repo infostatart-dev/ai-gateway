@@ -2,10 +2,7 @@ use http::{HeaderValue, Response};
 
 use crate::{
     config::credentials::ProviderCredentialId,
-    types::{
-        extensions::RoutedModelAndProvider,
-        model_id::ModelId,
-    },
+    types::{extensions::RoutedModelAndProvider, model_id::ModelId},
 };
 
 pub const REAL_MODE_MODEL_AND_PROVIDER: &str = "X-RealMode-Model-And-Provider";

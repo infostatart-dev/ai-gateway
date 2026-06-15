@@ -55,7 +55,9 @@ impl AppState {
     }
 
     #[must_use]
-    pub fn upstream_pacing(&self) -> &Arc<crate::router::pacing::PacingRegistry> {
+    pub fn upstream_pacing(
+        &self,
+    ) -> &Arc<crate::router::pacing::PacingRegistry> {
         &self.0.upstream_pacing
     }
 }

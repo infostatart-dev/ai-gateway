@@ -40,11 +40,16 @@ impl BudgetAwareRouter {
         response: Response,
         elapsed: Duration,
     ) -> Response {
-        let config = self.app_state.config().provider_limits.cooldown_for(provider);
+        let config = self
+            .app_state
+            .config()
+            .provider_limits
+            .cooldown_for(provider);
         let status = response.status();
-        let (response, cooldown) = cooldown_for_response(response, &config).await;
-        let mut states = lock_credential_states(&self.states);
-        let state = states.entry(credential_id.clone()).or_default();
+        let (response, cooldown) =
+            cooldown_for_response(response, &config).await;
+        let mut credential_states = lock_credential_states(&self.states);
+        let state = credential_states.entry(credential_id.clone()).or_default();
         state.latency = Some(smoothed_latency(state.latency, elapsed));
         state.failures = state.failures.saturating_add(1);
         let prev_cooldown = state.cooldown_until;

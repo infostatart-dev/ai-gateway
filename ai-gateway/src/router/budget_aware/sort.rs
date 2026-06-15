@@ -22,11 +22,9 @@ impl BudgetAwareRouter {
             self.effective_budget_rank(left, left_state, now)
                 .cmp(&self.effective_budget_rank(right, right_state, now))
                 .then_with(|| {
-                    capability_fit_score(requirements, &right.capability)
-                        .cmp(&capability_fit_score(
-                            requirements,
-                            &left.capability,
-                        ))
+                    capability_fit_score(requirements, &right.capability).cmp(
+                        &capability_fit_score(requirements, &left.capability),
+                    )
                 })
                 .then_with(|| {
                     let left_failures = left_state.map_or(0, |s| s.failures);

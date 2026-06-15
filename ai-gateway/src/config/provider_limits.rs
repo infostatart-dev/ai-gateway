@@ -7,7 +7,9 @@ use serde::{
 };
 
 use crate::{
-    config::router_cooldown::{ProviderCooldownOverrides, RouterCooldownConfig},
+    config::router_cooldown::{
+        ProviderCooldownOverrides, RouterCooldownConfig,
+    },
     types::provider::InferenceProvider,
 };
 
@@ -31,7 +33,10 @@ impl Default for ProviderLimitCatalog {
 
 impl ProviderLimitCatalog {
     #[must_use]
-    pub fn cooldown_for(&self, provider: &InferenceProvider) -> RouterCooldownConfig {
+    pub fn cooldown_for(
+        &self,
+        provider: &InferenceProvider,
+    ) -> RouterCooldownConfig {
         let overrides = self
             .provider(provider)
             .map(|config| config.cooldown)
@@ -82,7 +87,10 @@ pub struct ProviderLimitConfig {
     pub source: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<String>,
-    #[serde(default, skip_serializing_if = "ProviderCooldownOverrides::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "ProviderCooldownOverrides::is_empty"
+    )]
     pub cooldown: ProviderCooldownOverrides,
     #[serde(skip_serializing_if = "IndexMap::is_empty")]
     pub runtime_sources: IndexMap<String, RuntimeLimitSource>,
@@ -408,8 +416,14 @@ mod tests {
     #[test]
     fn catalog_contains_gemini_free_search_grounding_limits() {
         let catalog = ProviderLimitCatalog::default();
-        let gemini = catalog.provider(&InferenceProvider::GoogleGemini).unwrap();
-        let search = gemini.tier("free").unwrap().tools.get("search-grounding").unwrap();
+        let gemini =
+            catalog.provider(&InferenceProvider::GoogleGemini).unwrap();
+        let search = gemini
+            .tier("free")
+            .unwrap()
+            .tools
+            .get("search-grounding")
+            .unwrap();
         let gemini_3 = search.get("gemini-3").unwrap();
 
         assert_eq!(gemini_3.limits.rpd, QuotaValue::Limited(500));
@@ -549,21 +563,23 @@ mod tests {
     #[test]
     fn catalog_contains_chatgpt_web_session_limits() {
         let catalog = ProviderLimitCatalog::default();
-        let provider =
-            catalog.provider(&InferenceProvider::Named("chatgpt-web".into()))
-                .expect("chatgpt-web limits");
+        let provider = catalog
+            .provider(&InferenceProvider::Named("chatgpt-web".into()))
+            .expect("chatgpt-web limits");
         let limits = &provider.tier("plus-single-session").unwrap().limits;
 
         assert_eq!(limits.rpm, QuotaValue::Limited(12));
         assert_eq!(limits.concurrent, Some(2));
         assert_eq!(limits.min_interval_ms, Some(3000));
         assert_eq!(
-            catalog.cooldown_for(&InferenceProvider::Named("chatgpt-web".into()))
+            catalog
+                .cooldown_for(&InferenceProvider::Named("chatgpt-web".into()))
                 .rate_limit,
             Duration::from_secs(120)
         );
         assert_eq!(
-            catalog.cooldown_for(&InferenceProvider::Named("chatgpt-web".into()))
+            catalog
+                .cooldown_for(&InferenceProvider::Named("chatgpt-web".into()))
                 .auth_error,
             Duration::from_secs(30 * 60)
         );
@@ -593,7 +609,9 @@ mod tests {
         }
 
         assert_eq!(
-            catalog.cooldown_for(&InferenceProvider::OpenRouter).provider_error,
+            catalog
+                .cooldown_for(&InferenceProvider::OpenRouter)
+                .provider_error,
             Duration::from_secs(30)
         );
         assert_eq!(
@@ -609,7 +627,9 @@ mod tests {
             Duration::from_secs(20)
         );
         assert_eq!(
-            catalog.cooldown_for(&InferenceProvider::Named("groq".into())).provider_error,
+            catalog
+                .cooldown_for(&InferenceProvider::Named("groq".into()))
+                .provider_error,
             defaults.provider_error
         );
     }

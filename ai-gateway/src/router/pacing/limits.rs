@@ -1,8 +1,11 @@
 use std::time::Duration;
 
-use crate::config::provider_limits::{ProviderLimitCatalog, QuotaLimits, QuotaValue};
+use crate::config::provider_limits::{
+    ProviderLimitCatalog, QuotaLimits, QuotaValue,
+};
 
-/// Effective upstream pacing derived from `provider-limits.yaml` (Strategy input).
+/// Effective upstream pacing derived from `provider-limits.yaml` (Strategy
+/// input).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PacingLimits {
     pub concurrent: usize,
@@ -25,19 +28,19 @@ impl PacingLimits {
             .unwrap_or(1);
         let min_interval = limits
             .min_interval_ms
-            .map(|ms| Duration::from_millis(ms))
-            .unwrap_or(Duration::ZERO);
+            .map_or(Duration::ZERO, Duration::from_millis);
         Some(Self {
             concurrent,
             rpm,
             min_interval,
-            max_queue_wait: Duration::from_secs(120),
+            max_queue_wait: Duration::from_mins(2),
         })
     }
 }
 
 impl ProviderLimitCatalog {
-    /// First tier with an explicit RPM limit and optional session pacing fields.
+    /// First tier with an explicit RPM limit and optional session pacing
+    /// fields.
     #[must_use]
     pub fn pacing_limits_for(
         &self,

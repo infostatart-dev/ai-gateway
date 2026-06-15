@@ -1,4 +1,5 @@
-//! Upstream pacing: catalog-driven concurrent / RPM / min-interval gates per provider scope.
+//! Upstream pacing: catalog-driven concurrent / RPM / min-interval gates per
+//! provider scope.
 
 mod gate;
 mod limits;
@@ -14,7 +15,8 @@ use crate::{
     types::provider::InferenceProvider,
 };
 
-/// Acquire pacing permit before upstream dispatch (shared by proxy and embedded executors).
+/// Acquire pacing permit before upstream dispatch (shared by proxy and embedded
+/// executors).
 pub async fn acquire_upstream_pacing(
     app_state: &AppState,
     provider: &InferenceProvider,

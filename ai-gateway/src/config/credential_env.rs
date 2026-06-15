@@ -18,6 +18,7 @@ pub fn legacy_provider_env_var_name(provider: &InferenceProvider) -> String {
     format!("{}_API_KEY", provider.to_string().to_ascii_uppercase())
 }
 
+#[must_use]
 pub fn resolve_credential_secret(
     credential_id: &str,
     provider: &InferenceProvider,
@@ -62,12 +63,14 @@ fn credential_env_names(
     names
 }
 
-fn read_secret_from_env(names: impl IntoIterator<Item = String>) -> Option<ProviderKey> {
+fn read_secret_from_env(
+    names: impl IntoIterator<Item = String>,
+) -> Option<ProviderKey> {
     for name in names {
-        if let Ok(value) = std::env::var(&name) {
-            if !value.is_empty() {
-                return Some(ProviderKey::Secret(Secret::from(value)));
-            }
+        if let Ok(value) = std::env::var(&name)
+            && !value.is_empty()
+        {
+            return Some(ProviderKey::Secret(Secret::from(value)));
         }
     }
     None
@@ -75,10 +78,10 @@ fn read_secret_from_env(names: impl IntoIterator<Item = String>) -> Option<Provi
 
 fn read_cloudflare_key(names: Vec<String>) -> Option<ProviderKey> {
     for name in names {
-        if let Ok(value) = std::env::var(&name) {
-            if let Some(key) = cloudflare_token_from_combined(&value) {
-                return Some(key);
-            }
+        if let Ok(value) = std::env::var(&name)
+            && let Some(key) = cloudflare_token_from_combined(&value)
+        {
+            return Some(key);
         }
     }
 
@@ -114,7 +117,10 @@ mod tests {
     #[serial_test::serial(env)]
     fn universal_env_takes_precedence_over_legacy() {
         unsafe {
-            std::env::set_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE", "universal-key");
+            std::env::set_var(
+                "AI_GATEWAY_CREDENTIAL_GEMINI_FREE",
+                "universal-key",
+            );
             std::env::set_var("GEMINI_FREE_TIER_APIKEY", "legacy-key");
         }
         let key = resolve_credential_secret(

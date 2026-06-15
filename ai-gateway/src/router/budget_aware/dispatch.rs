@@ -25,7 +25,11 @@ pub(super) fn budget_aware_call(
             this.ordered_candidates(&requirements, source_model.as_ref())?;
 
         failover_loop::run_failover_candidates(
-            this, parts, body_bytes, candidates, requirements,
+            this,
+            parts,
+            body_bytes,
+            candidates,
+            requirements,
         )
         .await
     })

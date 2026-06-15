@@ -59,7 +59,8 @@ where
 
     let mut futures = FuturesUnordered::new();
     let router_id = parts.extensions.get::<RouterId>();
-    let hasher = get_hasher(&parts, &body_bytes, ctx.seed.as_deref(), router_id);
+    let hasher =
+        get_hasher(&parts, &body_bytes, ctx.seed.as_deref(), router_id);
     let mut bucket_indices: Vec<u8> = (0..buckets).collect();
     {
         use rand::seq::SliceRandom;

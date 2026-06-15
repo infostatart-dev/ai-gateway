@@ -7,21 +7,21 @@ use crate::{
 
 pub(super) fn budget_then_capability_candidates(
     router: &BudgetAwareRouter,
-    requirements: RequestRequirements,
+    requirements: &RequestRequirements,
     source_model: Option<&ModelId>,
 ) -> Result<Vec<BudgetCandidate>, InternalError> {
     let mut candidates = router.candidates.as_ref().clone();
-    router.rank_candidates(&mut candidates, &requirements);
+    router.rank_candidates(&mut candidates, requirements);
 
     let candidates = candidates
         .into_iter()
         .filter(|candidate| {
-            supports(&requirements, &candidate.capability)
+            supports(requirements, &candidate.capability)
                 && source_model.is_none_or(|source_model| {
                     router.matches_source_model(
                         source_model,
                         candidate,
-                        &requirements,
+                        requirements,
                     )
                 })
         })

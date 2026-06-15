@@ -122,13 +122,11 @@ where
             }
         }
 
-        if !response
-            .headers()
-            .contains_key(crate::router::routed_identity::REAL_MODE_MODEL_AND_PROVIDER)
-            && let Some(routed) =
-                response.extensions().get::<RoutedModelAndProvider>()
-            && let Ok(header_value) =
-                http::HeaderValue::from_str(&routed.0)
+        if !response.headers().contains_key(
+            crate::router::routed_identity::REAL_MODE_MODEL_AND_PROVIDER,
+        ) && let Some(routed) =
+            response.extensions().get::<RoutedModelAndProvider>()
+            && let Ok(header_value) = http::HeaderValue::from_str(&routed.0)
         {
             response.headers_mut().insert(
                 http::HeaderName::from_static("x-realmode-model-and-provider"),

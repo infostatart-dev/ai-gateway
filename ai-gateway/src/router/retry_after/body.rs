@@ -19,7 +19,7 @@ pub fn extract_retry_after_from_body(body: &[u8]) -> Option<u64> {
 
 #[must_use]
 pub fn upstream_hint_secs(body: Option<&[u8]>) -> Option<u64> {
-    body.and_then(|bytes| extract_retry_after_from_body(bytes))
+    body.and_then(extract_retry_after_from_body)
 }
 
 #[must_use]
@@ -30,13 +30,15 @@ pub fn resolve_429_base_secs(
     rate_limit_fallback: u64,
     quota_exhausted_fallback: u64,
 ) -> u64 {
-    let text_reset = body
-        .and_then(|bytes| parse_retry_from_error_text(std::str::from_utf8(bytes).unwrap_or("")));
+    let text_reset = body.and_then(|bytes| {
+        parse_retry_from_error_text(std::str::from_utf8(bytes).unwrap_or(""))
+    });
     let body_hint = upstream_hint_secs(body);
 
     match failure_kind {
         FailureKind::QuotaExhausted => text_reset
-            .or(header_secs.filter(|secs| *secs >= quota_exhausted_fallback / 2))
+            .or(header_secs
+                .filter(|secs| *secs >= quota_exhausted_fallback / 2))
             .or(body_hint.filter(|secs| *secs >= quota_exhausted_fallback / 2))
             .unwrap_or(quota_exhausted_fallback),
         FailureKind::RateLimit => header_secs
@@ -52,7 +54,9 @@ fn retry_after_from_json(value: &Value) -> Option<u64> {
             if let Some(delay) = map.get("retryDelay").and_then(Value::as_str) {
                 return parse_retry_delay_seconds(delay);
             }
-            if let Some(delay) = map.get("retry_after").and_then(parse_json_number) {
+            if let Some(delay) =
+                map.get("retry_after").and_then(parse_json_number)
+            {
                 return Some(delay);
             }
             for nested in map.values() {
@@ -74,9 +78,11 @@ fn retry_after_from_json(value: &Value) -> Option<u64> {
 }
 
 fn parse_json_number(value: &Value) -> Option<u64> {
-    value
-        .as_u64()
-        .or_else(|| value.as_f64().map(|n| n.ceil() as u64))
+    value.as_u64().or_else(|| {
+        value
+            .as_f64()
+            .and_then(super::duration::finite_secs_f64_to_u64)
+    })
 }
 
 #[cfg(test)]

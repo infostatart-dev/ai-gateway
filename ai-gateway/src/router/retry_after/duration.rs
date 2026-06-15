@@ -1,29 +1,45 @@
 use super::constants::cap_duration_secs;
 
 #[must_use]
+pub(super) fn finite_secs_f64_to_u64(value: f64) -> Option<u64> {
+    if !value.is_finite() || value < 0.0 {
+        return None;
+    }
+    let ceiled = value.ceil();
+    if ceiled >= 2f64.powi(64) {
+        return Some(u64::MAX);
+    }
+    format!("{ceiled:.0}").parse().ok()
+}
+
+#[must_use]
 pub fn parse_retry_delay_seconds(raw: &str) -> Option<u64> {
     let raw = raw.trim();
     if raw.is_empty() {
         return None;
     }
-    if let Some(ms) = raw.strip_suffix("ms").or_else(|| raw.strip_suffix("MS")) {
+    if let Some(ms) = raw.strip_suffix("ms").or_else(|| raw.strip_suffix("MS"))
+    {
         let ms: u64 = ms.trim().parse().ok()?;
         return Some(cap_duration_secs(ms.div_ceil(1000).max(1)));
     }
-    if let Some(seconds) = raw.strip_suffix('s').or_else(|| raw.strip_suffix('S')) {
+    if let Some(seconds) =
+        raw.strip_suffix('s').or_else(|| raw.strip_suffix('S'))
+    {
         return parse_decimal_seconds(seconds).map(cap_duration_secs);
     }
-    if let Some(hours) = raw.strip_suffix('h').or_else(|| raw.strip_suffix('H')) {
+    if let Some(hours) = raw.strip_suffix('h').or_else(|| raw.strip_suffix('H'))
+    {
         let hours: u64 = hours.trim().parse().ok()?;
         return Some(cap_duration_secs(hours.saturating_mul(3600)));
     }
-    if let Some(minutes) = raw.strip_suffix('m').or_else(|| raw.strip_suffix('M')) {
+    if let Some(minutes) =
+        raw.strip_suffix('m').or_else(|| raw.strip_suffix('M'))
+    {
         let minutes: u64 = minutes.trim().parse().ok()?;
         return Some(cap_duration_secs(minutes.saturating_mul(60)));
     }
-    raw.parse::<u64>()
-        .ok()
-        .map(cap_duration_secs)
+    raw.parse::<u64>().ok().map(cap_duration_secs)
 }
 
 #[must_use]
@@ -41,7 +57,7 @@ pub fn parse_try_again_in_seconds(text: &str) -> Option<u64> {
 #[must_use]
 pub fn parse_decimal_seconds(raw: &str) -> Option<u64> {
     let value: f64 = raw.trim().parse().ok()?;
-    (value.is_finite() && value >= 0.0).then_some(value.ceil() as u64)
+    finite_secs_f64_to_u64(value).map(cap_duration_secs)
 }
 
 #[must_use]
@@ -81,7 +97,8 @@ mod tests {
 
     #[test]
     fn parses_groq_try_again_message() {
-        let text = "Rate limit reached... Please try again in 54.918s. Need more tokens?";
+        let text = "Rate limit reached... Please try again in 54.918s. Need \
+                    more tokens?";
         assert_eq!(parse_try_again_in_seconds(text), Some(55));
     }
 }

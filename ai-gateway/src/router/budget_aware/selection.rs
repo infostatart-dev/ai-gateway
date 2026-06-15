@@ -21,14 +21,11 @@ impl BudgetAwareRouter {
 
         match self.selection_mode {
             CandidateSelectionMode::CapabilityThenBudget => self
-                .capability_then_budget_candidates(
-                    &requirements,
-                    source_model,
-                ),
+                .capability_then_budget_candidates(&requirements, source_model),
             CandidateSelectionMode::BudgetThenCapability => {
                 selection_mode::budget_then_capability_candidates(
                     self,
-                    requirements,
+                    &requirements,
                     source_model,
                 )
             }
@@ -160,7 +157,9 @@ mod autodefault_scenario_tests {
         ModelId::from_str("openai/gpt-5-mini").expect("source model")
     }
 
-    fn candidate_key(candidate: &BudgetCandidate) -> (InferenceProvider, String) {
+    fn candidate_key(
+        candidate: &BudgetCandidate,
+    ) -> (InferenceProvider, String) {
         (
             candidate.capability.provider.clone(),
             candidate.capability.model.to_string(),
@@ -168,8 +167,8 @@ mod autodefault_scenario_tests {
     }
 
     #[tokio::test]
-    async fn budget_then_capability_json_schema_prefers_cheapest_capable_providers(
-    ) {
+    async fn budget_then_capability_json_schema_prefers_cheapest_capable_providers()
+     {
         let router = autodefault_budget_router().await;
         let requirements = RequestRequirements {
             json_schema_required: true,
@@ -196,7 +195,8 @@ mod autodefault_scenario_tests {
         );
         assert!(
             ordered[0].1.contains("nemotron-3-ultra-free"),
-            "json_schema + gpt-5-mini reasoning profile must pick nemotron on opencode, got {}",
+            "json_schema + gpt-5-mini reasoning profile must pick nemotron on \
+             opencode, got {}",
             ordered[0].1
         );
 
@@ -220,7 +220,8 @@ mod autodefault_scenario_tests {
             .expect("cerebras json_schema candidate");
         assert!(
             cerebras.1.contains("gpt-oss-120b"),
-            "cerebras must map to gpt-oss-120b for gpt-5-mini json_schema, got {}",
+            "cerebras must map to gpt-oss-120b for gpt-5-mini json_schema, \
+             got {}",
             cerebras.1
         );
 
@@ -233,7 +234,8 @@ mod autodefault_scenario_tests {
             .expect("mistral json_schema candidate");
         assert!(
             mistral.1.contains("magistral-medium-latest"),
-            "mistral must map to magistral-medium-latest for gpt-5-mini json_schema+reasoning, got {}",
+            "mistral must map to magistral-medium-latest for gpt-5-mini \
+             json_schema+reasoning, got {}",
             mistral.1
         );
 
@@ -245,7 +247,8 @@ mod autodefault_scenario_tests {
             .expect("cloudflare json_schema candidate");
         assert!(
             cloudflare.1.contains("deepseek-r1-distill-qwen-32b"),
-            "cloudflare must map to reasoning+json_schema model for gpt-5-mini, got {}",
+            "cloudflare must map to reasoning+json_schema model for \
+             gpt-5-mini, got {}",
             cloudflare.1
         );
 
@@ -271,22 +274,23 @@ mod autodefault_scenario_tests {
     }
 
     #[tokio::test]
-    async fn budget_then_capability_plain_chat_keeps_budget_order_with_mapping(
-    ) {
+    async fn budget_then_capability_plain_chat_keeps_budget_order_with_mapping()
+    {
         let router = autodefault_budget_router().await;
         let candidates = router
-            .ordered_candidates(&RequestRequirements::default(), Some(&gpt_5_mini()))
+            .ordered_candidates(
+                &RequestRequirements::default(),
+                Some(&gpt_5_mini()),
+            )
             .expect("plain chat candidates");
 
         let ordered: Vec<_> = candidates.iter().map(candidate_key).collect();
 
-        assert_eq!(
-            ordered[0].0,
-            InferenceProvider::Named("opencode".into())
-        );
+        assert_eq!(ordered[0].0, InferenceProvider::Named("opencode".into()));
         assert!(
             ordered[0].1.contains("nemotron-3-ultra-free"),
-            "reasoning profile must pick nemotron (reasoning+json_schema) on opencode, got {}",
+            "reasoning profile must pick nemotron (reasoning+json_schema) on \
+             opencode, got {}",
             ordered[0].1
         );
         assert!(

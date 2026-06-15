@@ -34,7 +34,10 @@ fn ensure_openai_envelope(value: &mut Value, object: &str) {
     if !obj.contains_key("id") {
         obj.insert(
             "id".to_string(),
-            Value::String(format!("chatcmpl-{}", uuid::Uuid::new_v4().simple())),
+            Value::String(format!(
+                "chatcmpl-{}",
+                uuid::Uuid::new_v4().simple()
+            )),
         );
     }
     if !obj.contains_key("object") {
@@ -43,17 +46,14 @@ fn ensure_openai_envelope(value: &mut Value, object: &str) {
     if !obj.contains_key("created") {
         let created = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_secs())
-            .unwrap_or(0);
-        obj.insert(
-            "created".to_string(),
-            Value::Number(created.into()),
-        );
+            .map_or(0, |duration| duration.as_secs());
+        obj.insert("created".to_string(), Value::Number(created.into()));
     }
 }
 
 fn flatten_choice_message_content(value: &mut Value) {
-    let Some(choices) = value.get_mut("choices").and_then(Value::as_array_mut) else {
+    let Some(choices) = value.get_mut("choices").and_then(Value::as_array_mut)
+    else {
         return;
     };
     for choice in choices {
@@ -82,14 +82,10 @@ fn flatten_message_content_field(message: &mut Value) {
         return;
     }
     if content.is_null()
-        && let Some(reasoning) = obj
-            .get("reasoning_content")
-            .and_then(Value::as_str)
+        && let Some(reasoning) =
+            obj.get("reasoning_content").and_then(Value::as_str)
     {
-        obj.insert(
-            "content".to_string(),
-            Value::String(reasoning.to_string()),
-        );
+        obj.insert("content".to_string(), Value::String(reasoning.to_string()));
     }
 }
 
@@ -97,10 +93,8 @@ pub fn json_content_to_string(value: &Value) -> Option<String> {
     match value {
         Value::String(text) => Some(text.clone()),
         Value::Array(parts) => {
-            let text: String = parts
-                .iter()
-                .filter_map(content_part_to_text)
-                .collect();
+            let text: String =
+                parts.iter().filter_map(content_part_to_text).collect();
             (!text.is_empty()).then_some(text)
         }
         Value::Object(map) => map
@@ -138,10 +132,7 @@ mod tests {
             }]
         });
         normalize_chat_completion(&mut value);
-        assert_eq!(
-            value["choices"][0]["message"]["content"],
-            "hello"
-        );
+        assert_eq!(value["choices"][0]["message"]["content"], "hello");
     }
 
     #[test]

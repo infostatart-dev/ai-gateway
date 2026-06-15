@@ -271,9 +271,9 @@ impl EndpointConverterRegistryInner {
             endpoints::openai::ChatCompletions,
             super::cloudflare::CloudflareChatCompletions,
             super::cloudflare::CloudflareConverter,
-        >::new(super::cloudflare::CloudflareConverter::new(
-            model_mapper.clone(),
-        ));
+        >::new(
+            super::cloudflare::CloudflareConverter::new(model_mapper.clone()),
+        );
         registry.register_converter(key, converter);
 
         let key = RegistryKey::new(

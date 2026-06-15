@@ -44,15 +44,13 @@ impl Dispatcher {
                 status,
                 StatusCode::TOO_MANY_REQUESTS | StatusCode::SERVICE_UNAVAILABLE
             ) && extract_retry_after(&headers).is_none()
+                && let Some(secs) =
+                    extract_retry_after_from_body(body.as_bytes())
+                && let Ok(value) =
+                    http::HeaderValue::from_str(&secs.to_string())
             {
-                if let Some(secs) = extract_retry_after_from_body(body.as_bytes())
-                {
-                    if let Ok(value) = http::HeaderValue::from_str(&secs.to_string())
-                    {
-                        headers.insert(http::header::RETRY_AFTER, value);
-                        *resp_builder.headers_mut().unwrap() = headers;
-                    }
-                }
+                headers.insert(http::header::RETRY_AFTER, value);
+                *resp_builder.headers_mut().unwrap() = headers;
             }
             tracing::warn!(
                 upstream_status = %status,

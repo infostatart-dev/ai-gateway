@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0-beta.7] - 2026-06-15
+
+### Fixes
+
+- Run rustfmt across ai-gateway and resolve remaining clippy violations
+- Refactor failover loop, dispatch, and retry-after helpers for CI lint rules
+
+### CI
+
+- Upgrade GitHub Actions checkout to v5 and opt into Node.js 24 for JavaScript actions
+
 ## [0.3.0-beta.6] - 2026-06-15
 
 ### Fixes

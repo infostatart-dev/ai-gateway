@@ -18,10 +18,7 @@ use crate::{
         router::RouterConfig,
     },
     endpoints::EndpointType,
-    types::{
-        provider::InferenceProvider,
-        secret::Secret,
-    },
+    types::{provider::InferenceProvider, secret::Secret},
 };
 
 impl Config {
@@ -115,7 +112,10 @@ fn build_autodefault_router(config: &Config) -> Option<RouterConfig> {
     let providers = nonempty_collections::NESet::try_from_set(
         providers.into_iter().collect::<HashSet<_>>(),
     )?;
-    Some(build_autodefault_router_config(providers, provider_priorities))
+    Some(build_autodefault_router_config(
+        providers,
+        provider_priorities,
+    ))
 }
 
 fn autodefault_provider_order() -> Vec<InferenceProvider> {
@@ -231,7 +231,8 @@ mod tests {
                 &config.providers,
                 &config.credentials,
             ),
-            "opencode must be omitted from autodefault without OPENCODE_API_KEY"
+            "opencode must be omitted from autodefault without \
+             OPENCODE_API_KEY"
         );
 
         unsafe {

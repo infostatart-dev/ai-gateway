@@ -117,16 +117,15 @@ mod structured_output_failover {
         let router_config = Arc::new(RouterConfig::default());
         let model_id =
             ModelId::from_str_and_provider(provider.clone(), model).unwrap();
-        let service =
-            Dispatcher::new_with_model_id_without_rate_limit_events(
-                app_state.clone(),
-                &router_id,
-                &router_config,
-                provider.clone(),
-                model_id.clone(),
-            )
-            .await
-            .expect("dispatcher for mock candidate");
+        let service = Dispatcher::new_with_model_id_without_rate_limit_events(
+            app_state.clone(),
+            &router_id,
+            &router_config,
+            provider.clone(),
+            model_id.clone(),
+        )
+        .await
+        .expect("dispatcher for mock candidate");
 
         BudgetCandidate {
             credential_id: ProviderCredentialId::new(format!(
@@ -223,7 +222,8 @@ mod structured_output_failover {
                 .get(&groq_credential)
                 .and_then(|state| state.cooldown_until)
                 .is_some(),
-            "first credential must be marked faulty after invalid structured output"
+            "first credential must be marked faulty after invalid structured \
+             output"
         );
         assert!(
             states
@@ -236,8 +236,8 @@ mod structured_output_failover {
 
     #[tokio::test]
     #[serial_test::serial]
-    async fn structured_output_failover_returns_provider_not_found_when_all_invalid(
-    ) {
+    async fn structured_output_failover_returns_provider_not_found_when_all_invalid()
+     {
         clear_test_call_responses();
         push_test_call_response(Ok(chat_completion("not json at all")));
         push_test_call_response(Ok(chat_completion("| table |")));
@@ -246,17 +246,17 @@ mod structured_output_failover {
         let app_state = AppState::test_default().await;
         let router = test_router(app_state.clone()).await;
         let candidates = vec![
-            candidate(&app_state, groq(), "llama-4-scout-17b-16e-instruct", None)
-                .await,
-            candidate(&app_state, mistral(), "magistral-medium-latest", None)
-                .await,
             candidate(
                 &app_state,
-                cerebras(),
-                "openai/gpt-oss-120b",
+                groq(),
+                "llama-4-scout-17b-16e-instruct",
                 None,
             )
             .await,
+            candidate(&app_state, mistral(), "magistral-medium-latest", None)
+                .await,
+            candidate(&app_state, cerebras(), "openai/gpt-oss-120b", None)
+                .await,
         ];
 
         let error = run_failover_candidates(
@@ -280,8 +280,8 @@ mod structured_output_failover {
 
     #[tokio::test]
     #[serial_test::serial]
-    async fn large_context_json_schema_order_1111799_failover_succeeds_on_third(
-    ) {
+    async fn large_context_json_schema_order_1111799_failover_succeeds_on_third()
+     {
         clear_test_call_responses();
         push_test_call_response(Ok(chat_completion("```json\n{broken")));
         push_test_call_response(Ok(chat_completion("")));
@@ -329,7 +329,9 @@ mod structured_output_failover {
             },
         )
         .await
-        .expect("third candidate should win after two structured-output failures");
+        .expect(
+            "third candidate should win after two structured-output failures",
+        );
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(

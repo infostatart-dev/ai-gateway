@@ -7,7 +7,8 @@ use rustc_hash::FxHasher;
 use url::Url;
 
 use crate::{
-    app_state::AppState, error::internal::InternalError,
+    app_state::AppState,
+    error::internal::InternalError,
     types::{response::Response, router::RouterId},
 };
 

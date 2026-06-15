@@ -29,7 +29,9 @@ impl Default for RouterCooldownConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct ProviderCooldownOverrides {
     #[serde(
@@ -99,15 +101,15 @@ pub(crate) const fn default_provider_error() -> Duration {
 }
 
 pub(crate) const fn default_rate_limit() -> Duration {
-    Duration::from_secs(60)
+    Duration::from_mins(1)
 }
 
 pub(crate) const fn default_quota_exhausted() -> Duration {
-    Duration::from_secs(3600)
+    Duration::from_hours(1)
 }
 
 pub(crate) const fn default_auth_error() -> Duration {
-    Duration::from_secs(300)
+    Duration::from_mins(5)
 }
 
 pub(crate) const fn default_retry_after_buffer() -> Duration {

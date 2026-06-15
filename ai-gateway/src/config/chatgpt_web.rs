@@ -6,10 +6,12 @@ pub fn session_path_from_env() -> Option<PathBuf> {
     std::env::var(SESSION_ENV).ok().map(PathBuf::from)
 }
 
+#[must_use]
 pub fn session_file_available() -> bool {
     session_path_from_env().is_some_and(|p| p.exists())
 }
 
+#[must_use]
 pub fn load_session_cookie() -> Option<String> {
     let path = session_path_from_env()?;
     let raw = std::fs::read_to_string(path).ok()?;
@@ -17,7 +19,7 @@ pub fn load_session_cookie() -> Option<String> {
     Some(session.normalized_cookie())
 }
 
-/// True when the client sent OpenAI `response_format.type = json_schema`.
+/// True when the client sent `OpenAI` `response_format.type = json_schema`.
 #[must_use]
 pub fn request_requires_json_schema(body: &serde_json::Value) -> bool {
     body.get("response_format")
@@ -27,13 +29,16 @@ pub fn request_requires_json_schema(body: &serde_json::Value) -> bool {
 }
 
 #[must_use]
-pub fn is_chatgpt_web(provider: &crate::types::provider::InferenceProvider) -> bool {
+pub fn is_chatgpt_web(
+    provider: &crate::types::provider::InferenceProvider,
+) -> bool {
     matches!(
         provider,
         crate::types::provider::InferenceProvider::Named(name) if name.as_str() == "chatgpt-web"
     )
 }
 
+#[must_use]
 pub fn session_path(path: &Path) -> Option<PathBuf> {
     if path.exists() {
         Some(path.to_path_buf())
@@ -44,8 +49,9 @@ pub fn session_path(path: &Path) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn detects_json_schema_strict_request() {
@@ -75,8 +81,10 @@ mod tests {
 
     #[test]
     fn identifies_chatgpt_web_provider() {
-        assert!(is_chatgpt_web(&crate::types::provider::InferenceProvider::Named(
-            "chatgpt-web".into()
-        )));
+        assert!(is_chatgpt_web(
+            &crate::types::provider::InferenceProvider::Named(
+                "chatgpt-web".into()
+            )
+        ));
     }
 }
