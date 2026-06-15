@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0-beta.10] - 2026-06-15
+
+### Build
+
+- Patch anthropic-ai-sdk to use rustls-backed reqwest and eliminate native TLS from the dependency graph
+
 ## [0.3.0-beta.9] - 2026-06-15
 
 ### Build
