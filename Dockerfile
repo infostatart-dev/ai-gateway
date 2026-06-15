@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config cmake clang libclang-dev build-essential \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=planner /app/recipe.json recipe.json
+COPY --from=planner /app/Cargo.toml Cargo.toml
+COPY --from=planner /app/Cargo.lock Cargo.lock
+COPY --from=planner /app/patches patches
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release -p ai-gateway \

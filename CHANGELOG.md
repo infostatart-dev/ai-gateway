@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0-beta.11] - 2026-06-15
+
+### Build
+
+- Copy patched dependency sources into the Docker chef cook stage before dependency compilation
+
 ## [0.3.0-beta.10] - 2026-06-15
 
 ### Build
