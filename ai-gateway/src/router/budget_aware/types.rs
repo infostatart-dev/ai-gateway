@@ -6,6 +6,7 @@ use std::{
 
 use indexmap::IndexMap;
 
+use super::credential_balance::CredentialRoundRobin;
 use crate::{
     app_state::AppState,
     config::credentials::ProviderCredentialId,
@@ -43,4 +44,5 @@ pub struct BudgetAwareRouter {
     pub(super) default_latency: Duration,
     pub(super) max_cooldown_wait: Duration,
     pub(super) selection_mode: CandidateSelectionMode,
+    pub(super) credential_round_robin: Arc<CredentialRoundRobin>,
 }

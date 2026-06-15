@@ -1,9 +1,10 @@
 //! Upstream pacing: catalog-driven concurrent / RPM / min-interval gates per
-//! provider scope.
+//! provider account scope.
 
 mod gate;
 mod limits;
 mod registry;
+mod scope;
 mod window;
 
 pub use gate::PacingPermit;
@@ -11,6 +12,7 @@ pub use registry::PacingRegistry;
 
 use crate::{
     app_state::AppState,
+    config::credentials::ProviderCredentialId,
     error::{api::ApiError, invalid_req::InvalidRequestError},
     types::provider::InferenceProvider,
 };
@@ -20,8 +22,12 @@ use crate::{
 pub async fn acquire_upstream_pacing(
     app_state: &AppState,
     provider: &InferenceProvider,
+    credential_id: Option<&ProviderCredentialId>,
 ) -> Result<Option<PacingPermit>, ApiError> {
-    let Some(gate) = app_state.upstream_pacing().gate_for(provider) else {
+    let Some(gate) = app_state
+        .upstream_pacing()
+        .gate_for(provider, credential_id)
+    else {
         return Ok(None);
     };
     let rpm = gate.limits().rpm;

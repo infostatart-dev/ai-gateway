@@ -10,6 +10,7 @@ use super::{
     retry::dispatch_stream_with_retry,
 };
 use crate::{
+    config::credentials::ProviderCredentialId,
     dispatcher::client::ProviderClient,
     error::{api::ApiError, internal::InternalError},
     types::{body::Body, request::Request},
@@ -73,9 +74,11 @@ impl Dispatcher {
             endpoint_metrics.incr_req_count();
         }
 
+        let credential_id = req.extensions().get::<ProviderCredentialId>().cloned();
         let _pacing_permit = crate::router::pacing::acquire_upstream_pacing(
             &self.app_state,
             target_provider,
+            credential_id.as_ref(),
         )
         .await?;
 

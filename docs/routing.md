@@ -39,7 +39,9 @@ just providers). Each candidate carries:
 - `budget-rank` from `credentials.yaml`
 
 When an upstream call fails or returns rate-limit signals, the router tries the
-next candidate. Cooldowns are tracked **per credential id**, so one exhausted
+next candidate. Multiple credential slots for the same provider and model are
+**load-balanced** (round-robin) and grouped for failover before the next
+provider. Cooldowns are tracked **per credential id**, so one exhausted
 OpenRouter key does not block another slot.
 
 ## Structured JSON failover

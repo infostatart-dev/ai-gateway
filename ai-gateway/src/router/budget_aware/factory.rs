@@ -7,6 +7,7 @@ use std::{
 use indexmap::IndexMap;
 use nonempty_collections::NESet;
 
+use super::credential_balance::CredentialRoundRobin;
 use super::types::{
     BudgetAwareRouter, BudgetCandidate, CandidateSelectionMode,
 };
@@ -49,6 +50,7 @@ async fn push_anonymous_candidates(
             provider.clone(),
             model.clone(),
             None,
+            Some(&credential_id),
         )
         .await?;
         candidates.push(BudgetCandidate {
@@ -111,6 +113,7 @@ pub(super) async fn build(
                     provider.clone(),
                     model.clone(),
                     Some(&credential.key),
+                    Some(&credential.id),
                 )
                 .await?;
                 candidates.push(BudgetCandidate {
@@ -138,5 +141,6 @@ pub(super) async fn build(
         default_latency,
         max_cooldown_wait,
         selection_mode,
+        credential_round_robin: CredentialRoundRobin::new_shared(),
     })
 }

@@ -36,5 +36,5 @@ pub(super) fn budget_then_capability_candidates(
         return Err(InternalError::ProviderNotFound);
     }
 
-    Ok(candidates)
+    Ok(router.credential_round_robin.balance(candidates))
 }

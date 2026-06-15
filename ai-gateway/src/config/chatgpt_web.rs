@@ -1,9 +1,27 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub const SESSION_ENV: &str = "CHATGPT_BROWSER_CLI";
+pub const DEFAULT_CREDENTIAL_ID: &str = "chatgpt-web-default";
 
 pub fn session_path_from_env() -> Option<PathBuf> {
     std::env::var(SESSION_ENV).ok().map(PathBuf::from)
+}
+
+/// Session file path for a credential slot (`AI_GATEWAY_CREDENTIAL_<ID>`).
+#[must_use]
+pub fn session_path_for_credential(credential_id: &str) -> Option<PathBuf> {
+    let from_slot =
+        crate::config::credential_env::credential_env_var_name(credential_id);
+    if let Ok(path) = std::env::var(&from_slot) {
+        let path = PathBuf::from(path);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+    if credential_id == DEFAULT_CREDENTIAL_ID {
+        return session_path_from_env().filter(|p| p.exists());
+    }
+    None
 }
 
 #[must_use]
@@ -34,12 +52,13 @@ pub fn is_chatgpt_web(
 ) -> bool {
     matches!(
         provider,
-        crate::types::provider::InferenceProvider::Named(name) if name.as_str() == "chatgpt-web"
+        crate::types::provider::InferenceProvider::Named(name)
+            if name.as_str() == "chatgpt-web"
     )
 }
 
 #[must_use]
-pub fn session_path(path: &Path) -> Option<PathBuf> {
+pub fn session_path(path: &std::path::Path) -> Option<PathBuf> {
     if path.exists() {
         Some(path.to_path_buf())
     } else {

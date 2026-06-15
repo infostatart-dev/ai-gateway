@@ -63,7 +63,7 @@ impl BudgetAwareRouter {
         }
 
         self.rank_candidates(&mut candidates, requirements);
-        Ok(candidates)
+        Ok(self.credential_round_robin.balance(candidates))
     }
 
     pub(super) fn matches_source_model(

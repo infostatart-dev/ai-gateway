@@ -5,12 +5,15 @@ use tower::{Layer, Service};
 use typed_builder::TypedBuilder;
 
 use crate::types::{provider::InferenceProvider, router::RouterId};
+use crate::config::credentials::ProviderCredentialId;
 
 /// [`Layer`] to add all required request extensions.
 #[derive(Clone, Debug, TypedBuilder)]
 pub struct AddExtensionsLayer {
     inference_provider: InferenceProvider,
     router_id: Option<RouterId>,
+    #[builder(default, setter(strip_option))]
+    credential_id: Option<ProviderCredentialId>,
 }
 
 impl<S> Layer<S> for AddExtensionsLayer {
@@ -21,6 +24,7 @@ impl<S> Layer<S> for AddExtensionsLayer {
             inner,
             inference_provider: self.inference_provider.clone(),
             router_id: self.router_id.clone(),
+            credential_id: self.credential_id.clone(),
         }
     }
 }
@@ -30,6 +34,7 @@ pub struct AddExtensions<S> {
     inner: S,
     inference_provider: InferenceProvider,
     router_id: Option<RouterId>,
+    credential_id: Option<ProviderCredentialId>,
 }
 
 impl<ResBody, ReqBody, S> Service<Request<ReqBody>> for AddExtensions<S>
@@ -53,6 +58,9 @@ where
         extensions.insert(self.inference_provider.clone());
         if let Some(router_id) = self.router_id.clone() {
             extensions.insert(router_id);
+        }
+        if let Some(credential_id) = self.credential_id.clone() {
+            extensions.insert(credential_id);
         }
         self.inner.call(req)
     }

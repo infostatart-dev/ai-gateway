@@ -104,6 +104,7 @@ mod structured_output_failover {
             default_latency: Duration::from_millis(10),
             max_cooldown_wait: Duration::from_secs(0),
             selection_mode: CandidateSelectionMode::BudgetThenCapability,
+            credential_round_robin: super::super::credential_balance::CredentialRoundRobin::new_shared(),
         }
     }
 

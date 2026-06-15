@@ -85,9 +85,13 @@ CLI writes to `PERPLEXITY_BROWSER_CLI` (default account path).
 
 Each slot has a `budget-rank` in YAML. **Lower values are preferred first**
 within the same provider when the budget-aware router selects candidates.
+Multiple slots with the same provider and model are **round-robin balanced**
+across requests; on failure the router tries sibling accounts before moving to
+the next provider.
 
 Example from embedded config: `gemini-free` (rank 0) is tried before
-`gemini-default` (rank 10).
+`gemini-default` (rank 10) when both are eligible, but both receive traffic when
+configured together.
 
 ## Startup behaviour
 

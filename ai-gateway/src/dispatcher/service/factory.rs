@@ -6,7 +6,7 @@ use tower::ServiceBuilder;
 use super::{Dispatcher, DispatcherService, DispatcherServiceWithoutMapper};
 use crate::{
     app_state::AppState,
-    config::router::RouterConfig,
+    config::{credentials::ProviderCredentialId, router::RouterConfig},
     dispatcher::client::Client,
     error::init::InitError,
     middleware::{
@@ -100,6 +100,7 @@ impl Dispatcher {
             provider,
             model_id,
             None,
+            None,
         )
         .await
     }
@@ -111,6 +112,7 @@ impl Dispatcher {
         provider: InferenceProvider,
         model_id: ModelId,
         provider_key: Option<&ProviderKey>,
+        credential_id: Option<&ProviderCredentialId>,
     ) -> Result<DispatcherService, InitError> {
         let model_mapper = ModelMapper::new_with_model_id(
             app_state.clone(),
@@ -124,6 +126,7 @@ impl Dispatcher {
             model_mapper,
             None,
             provider_key,
+            credential_id,
         )
         .await
     }
@@ -135,6 +138,7 @@ impl Dispatcher {
         model_mapper: ModelMapper,
         rate_limit_tx: Option<Sender<RateLimitEvent>>,
         provider_key: Option<&ProviderKey>,
+        credential_id: Option<&ProviderCredentialId>,
     ) -> Result<DispatcherService, InitError> {
         let client = if let Some(key) = provider_key {
             Client::new_with_provider_key(
@@ -153,10 +157,17 @@ impl Dispatcher {
             rate_limit_tx,
         };
         let converter_registry = EndpointConverterRegistry::new(&model_mapper);
-        let extensions_layer = AddExtensionsLayer::builder()
-            .inference_provider(provider.clone())
-            .router_id(Some(router_id.clone()))
-            .build();
+        let extensions_layer = match credential_id {
+            Some(id) => AddExtensionsLayer::builder()
+                .inference_provider(provider.clone())
+                .router_id(Some(router_id.clone()))
+                .credential_id(id.clone())
+                .build(),
+            None => AddExtensionsLayer::builder()
+                .inference_provider(provider.clone())
+                .router_id(Some(router_id.clone()))
+                .build(),
+        };
 
         Ok(ServiceBuilder::new()
             .layer(extensions_layer)
