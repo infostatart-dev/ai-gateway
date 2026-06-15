@@ -1,3 +1,52 @@
 [tools]
-rust = { version = "1.91.1", profile = "default", components = "clippy, rustfrmt" }
+rust = [
+  { version = "1.91.1", profile = "default", components = "clippy, rustfmt" },
+  { version = "nightly", components = "rustfmt" },
+]
+node = "24"
+"npm:@fission-ai/openspec" = "1.4.1"
 "cargo:cargo-outdated" = "latest"
+
+[env]
+# Stable default when nightly is also installed (mise discussion #6254)
+RUSTUP_TOOLCHAIN = "1.91.1"
+
+[tasks."predeploy:fmt"]
+description = "Check formatting with nightly rustfmt (matches rust-ci.yml)"
+tools = { rust = "nightly" }
+env = { RUSTUP_TOOLCHAIN = "nightly" }
+run = "cargo fmt --all -- --check"
+
+[tasks."predeploy:clippy"]
+description = "Clippy with CI settings — incremental compile OK, no release build"
+run = "cargo ci-clippy"
+
+[tasks."predeploy:test-lib"]
+description = "Lib unit tests — incremental compile OK"
+run = "cargo test --all-features --lib"
+
+[tasks."predeploy:rust"]
+description = "Rust diff gate: fmt + clippy + lib tests (local sanity only)"
+depends = ["predeploy:fmt", "predeploy:clippy", "predeploy:test-lib"]
+
+[tasks."openspec:validate-changes"]
+description = "Validate active OpenSpec changes"
+run = "openspec validate --changes"
+
+[tasks."predeploy:tooling"]
+description = "Tooling/docs/openspec diff — no cargo"
+depends = ["openspec:validate-changes"]
+
+# Default alias kept for rust changes; agent picks rust vs tooling per skill
+[tasks.predeploy-check]
+description = "Rust pre-deploy (use predeploy:tooling when diff has no *.rs)"
+depends = ["predeploy:rust"]
+alias = "predeploy"
+
+[tasks."openspec:validate"]
+description = "Validate OpenSpec (strict, single item or interactive)"
+run = "openspec validate --strict"
+
+[tasks."openspec:list"]
+description = "List active OpenSpec changes"
+run = "openspec list"

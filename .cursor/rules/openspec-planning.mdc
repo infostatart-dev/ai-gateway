@@ -1,0 +1,16 @@
+---
+description: OpenSpec planning workflow for this repo (replaces Task Magic .ai/)
+alwaysApply: true
+---
+
+# OpenSpec planning
+
+Planning lives in **`openspec/`**, not `.ai/` or `.todos/`.
+
+- Index: [openspec/changes/README.md](openspec/changes/README.md)
+- Guide: [docs/planning.md](docs/planning.md)
+- CLI: `mise exec -- openspec list` / `openspec validate --strict`
+
+Before implementing a feature, check for an active change. Decision changes must record the chosen option in `design.md` before code lands.
+
+Cursor: `/opsx:propose`, `/opsx:apply`, `/opsx:archive`.

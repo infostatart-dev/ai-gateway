@@ -49,8 +49,9 @@ npx/
 # Exclude logs
 **/*.log
 
-# Exclude AI stuff
-.ai/
+# Exclude local agent/planning tooling (not needed in container)
 .cursor/
 .claude/
+.codex/
+openspec/changes/
 CLAUDE.md

@@ -1,0 +1,132 @@
+name: Release latest binaries
+
+on:
+  workflow_run:
+    workflows: ["Rust CI"]
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  RELEASE_CHANNEL: latest
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event.workflow_run.conclusion == 'success'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            platform: linux
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            platform: darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform: windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-latest-${{ matrix.target }}
+
+      - name: Install system dependencies (Linux)
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            pkg-config \
+            libssl-dev \
+            cmake \
+            clang \
+            libclang-dev
+
+      - name: Build
+        run: cargo build --release -p ai-gateway
+
+      - name: Install llvm-tools (Windows)
+        if: matrix.os == 'windows-latest'
+        run: rustup component add llvm-tools-preview
+
+      - name: Strip binary
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            LLVM_STRIP=$(rustc --print sysroot)/lib/rustlib/${{ matrix.target }}/bin/llvm-strip
+            if [ -x "$LLVM_STRIP" ]; then
+              "$LLVM_STRIP" target/release/ai-gateway.exe || true
+            fi
+          else
+            strip target/release/ai-gateway || true
+          fi
+
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          name="ai-gateway-${{ env.RELEASE_CHANNEL }}-${{ matrix.platform }}"
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp target/release/ai-gateway.exe "artifacts/${name}.exe"
+          else
+            cp target/release/ai-gateway "artifacts/${name}"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-gateway-${{ env.RELEASE_CHANNEL }}-${{ matrix.platform }}
+          path: artifacts/*
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release (latest)
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest (main)
+          target_commitish: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          prerelease: true
+          make_latest: false
+          body: |
+            Rolling build from `main`.
+
+            Commit: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+            | Platform | Asset |
+            | --- | --- |
+            | Linux | `ai-gateway-latest-linux` |
+            | macOS | `ai-gateway-latest-darwin` |
+            | Windows | `ai-gateway-latest-windows.exe` |
+          files: artifacts/**
