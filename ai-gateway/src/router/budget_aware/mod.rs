@@ -7,8 +7,10 @@ mod dispatch;
 mod factory;
 mod failover_integration;
 mod failover_loop;
+mod failure;
 mod health;
 mod new_router;
+mod payload;
 mod rank;
 mod rank_score;
 mod selection;
@@ -16,6 +18,7 @@ mod selection_mode;
 mod sort;
 mod structured_output;
 mod tower;
+mod trace;
 mod types;
 
 #[cfg(test)]

@@ -208,12 +208,21 @@ impl Service<Request> for ProviderFailoverRouter {
                         let next_provider =
                             candidates.get(index + 1).map(|c| &c.provider);
                         this.app_state.runtime_metrics().record_failover(
-                            &this.router_id,
-                            this.endpoint_type.as_ref(),
-                            this.strategy,
-                            &candidate.provider,
-                            next_provider,
-                            crate::metrics::router::status_class(status),
+                            &crate::metrics::router::FailoverEvent {
+                                router_id: &this.router_id,
+                                endpoint_type: this.endpoint_type.as_ref(),
+                                strategy: this.strategy,
+                                from_provider: &candidate.provider,
+                                to_provider: next_provider,
+                                reason: crate::metrics::router::status_class(
+                                    status,
+                                ),
+                                credential: candidate.provider.as_ref(),
+                                quota_metric:
+                                    crate::router::retry_after::quota_metric_from_status(
+                                        status,
+                                    ),
+                            },
                         );
                     }
                     this.record_failure(&candidate.provider, response, elapsed)

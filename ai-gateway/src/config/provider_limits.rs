@@ -74,6 +74,24 @@ impl ProviderLimitCatalog {
             .tier(tier)?
             .endpoint_model(endpoint, model)
     }
+
+    /// Per-request token ceiling for `(provider, tier, model)`: the model's
+    /// per-minute token budget (TPM). A single request that alone exceeds TPM
+    /// is guaranteed to fail upstream (e.g. groq `413`), so the router treats
+    /// it as a hard per-request cap. `None` when the limit is unknown
+    /// (fail-open).
+    #[must_use]
+    pub fn per_request_token_cap(
+        &self,
+        provider: &InferenceProvider,
+        tier: &str,
+        model: &str,
+    ) -> Option<u32> {
+        match self.model(provider, tier, model)?.limits.tpm {
+            QuotaValue::Limited(value) => u32::try_from(value).ok(),
+            QuotaValue::Unlimited | QuotaValue::Unknown => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{cmp::Ordering, time::Instant};
 
 use super::types::BudgetAwareRouter;
 use crate::router::{
@@ -21,6 +21,16 @@ impl BudgetAwareRouter {
 
             self.effective_budget_rank(left, left_state, now)
                 .cmp(&self.effective_budget_rank(right, right_state, now))
+                .then_with(|| {
+                    if requirements.json_schema_required {
+                        right
+                            .capability
+                            .json_schema_rank
+                            .cmp(&left.capability.json_schema_rank)
+                    } else {
+                        Ordering::Equal
+                    }
+                })
                 .then_with(|| {
                     capability_fit_score(requirements, &right.capability).cmp(
                         &capability_fit_score(requirements, &left.capability),

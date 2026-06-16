@@ -81,6 +81,8 @@ pub struct ModelCapability {
     pub supports_json_schema: bool,
     pub supports_vision: bool,
     pub reasoning: bool,
+    /// Secondary `json_schema` ordering signal (higher = more reliable).
+    pub json_schema_rank: i8,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -94,12 +96,16 @@ pub struct RequestRequirements {
 }
 
 pub fn extract_requirements(req_body: &Bytes) -> RequestRequirements {
-    let Ok(value): Result<serde_json::Value, _> =
-        serde_json::from_slice(req_body)
-    else {
-        return RequestRequirements::default();
-    };
+    serde_json::from_slice(req_body)
+        .ok()
+        .as_ref()
+        .map(extract_requirements_from_value)
+        .unwrap_or_default()
+}
 
+pub fn extract_requirements_from_value(
+    value: &serde_json::Value,
+) -> RequestRequirements {
     let tools_required = value
         .get("tools")
         .and_then(|v| v.as_array())
@@ -136,6 +142,15 @@ pub fn extract_requirements(req_body: &Bytes) -> RequestRequirements {
         vision_required,
         reasoning_preferred: reasoning_preferred_for_model_name(model_name),
     }
+}
+
+/// Attach payload footprint to requirements after a single token estimate in
+/// the router dispatch path (D1).
+pub fn apply_payload_estimate(
+    requirements: &mut RequestRequirements,
+    estimate: crate::router::token_estimate::PayloadEstimate,
+) {
+    requirements.min_context_tokens = Some(estimate.total());
 }
 
 fn reasoning_preferred_for_model_name(model_name: &str) -> bool {
@@ -188,6 +203,12 @@ pub(crate) fn enrich_requirements_from_source_model(
 
 pub(crate) fn extract_source_model(req_body: &Bytes) -> Option<ModelId> {
     let value: serde_json::Value = serde_json::from_slice(req_body).ok()?;
+    extract_source_model_from_value(&value)
+}
+
+pub(crate) fn extract_source_model_from_value(
+    value: &serde_json::Value,
+) -> Option<ModelId> {
     let model = value.get("model").and_then(|v| v.as_str())?;
 
     ModelId::from_str(model)
@@ -197,7 +218,7 @@ pub(crate) fn extract_source_model(req_body: &Bytes) -> Option<ModelId> {
         .ok()
 }
 
-pub fn supports(
+pub fn capability_supports(
     requirements: &RequestRequirements,
     model: &ModelCapability,
 ) -> bool {
@@ -210,13 +231,53 @@ pub fn supports(
     if requirements.vision_required && !model.supports_vision {
         return false;
     }
-    if let Some(min) = requirements.min_context_tokens {
-        match model.context_window {
-            Some(window) if window >= min => {}
-            _ => return false,
-        }
-    }
     true
+}
+
+/// Capability + payload check. `effective_window` comes from the
+/// provider-limits catalog at filter time (D2); `None` fail-opens the payload
+/// gate (D3).
+#[must_use]
+pub fn supports_with_payload(
+    requirements: &RequestRequirements,
+    model: &ModelCapability,
+    effective_window: Option<u32>,
+) -> bool {
+    if !capability_supports(requirements, model) {
+        return false;
+    }
+    match requirements.min_context_tokens {
+        None => true,
+        Some(min) => !matches!(effective_window, Some(window) if window < min),
+    }
+}
+
+/// Backward-compatible alias for callers that do not yet supply an effective
+/// window (capability flags only).
+pub fn supports(
+    requirements: &RequestRequirements,
+    model: &ModelCapability,
+) -> bool {
+    capability_supports(requirements, model)
+}
+
+/// Effective per-request routing window for a candidate: the margin-adjusted
+/// minimum of the model context window and its per-minute token cap. Returns
+/// `None` when neither limit is known (caller leaves `context_window` unset so
+/// payload-aware filtering fails open).
+#[must_use]
+pub fn effective_routing_window(
+    context_window: Option<u32>,
+    token_cap: Option<u32>,
+    budget: crate::router::token_estimate::PayloadBudgetConfig,
+) -> Option<u32> {
+    let raw = match (context_window, token_cap) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    }?;
+    Some(budget.apply_margin(raw))
 }
 
 pub(crate) fn get_model_capability(
@@ -236,6 +297,7 @@ pub(crate) fn get_model_capability(
         reasoning: ["o1", "o3", "o4", "reasoner", "thinking"]
             .iter()
             .any(|&keyword| model_name.contains(keyword)),
+        json_schema_rank: 0,
     };
 
     providers::apply_provider_capabilities(&mut cap, provider, &model_name);

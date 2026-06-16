@@ -21,6 +21,17 @@ impl ProviderCredentialId {
     pub fn new(id: impl Into<CompactString>) -> Self {
         Self(id.into())
     }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for ProviderCredentialId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
 }
 
 impl fmt::Display for ProviderCredentialId {

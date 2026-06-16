@@ -102,6 +102,7 @@ fn capability_fit_score_prefers_reasoning_and_json_schema_matches() {
         supports_json_schema: true,
         supports_vision: false,
         reasoning: true,
+        json_schema_rank: 0,
     };
     let json_only = ModelCapability {
         reasoning: false,
@@ -124,6 +125,7 @@ fn test_supports_logic() {
         supports_json_schema: true,
         supports_vision: true,
         reasoning: false,
+        json_schema_rank: 0,
     };
 
     let mut reqs = RequestRequirements::default();
@@ -140,15 +142,15 @@ fn test_supports_logic() {
 
     reqs.tools_required = false;
     reqs.min_context_tokens = Some(200_000);
-    assert!(!supports(&reqs, &model));
+    assert!(supports(&reqs, &model));
+    assert!(!supports_with_payload(&reqs, &model, model.context_window));
 
-    // Strict context check: None context should NOT pass if min_context is
-    // specified
+    // Fail-open: unknown effective window must not filter the candidate.
     let model_unknown_context = ModelCapability {
         context_window: None,
         ..model.clone()
     };
-    assert!(!supports(&reqs, &model_unknown_context));
+    assert!(supports_with_payload(&reqs, &model_unknown_context, None));
 }
 
 #[test]
@@ -221,10 +223,11 @@ mod async_tests {
         assert!(!candidates.is_empty());
         assert!(candidates.iter().all(|c| c.capability.supports_vision));
 
-        // Impossible requirement: huge context window.
+        // Payload footprint filtering lives in budget-aware routers; capability
+        // router matches capability flags only.
         reqs.min_context_tokens = Some(10_000_000);
         let result = router.ordered_candidates(&reqs, None, None);
-        assert!(result.is_err());
+        assert!(result.is_ok());
     }
 
     #[tokio::test]

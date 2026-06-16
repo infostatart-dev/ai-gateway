@@ -134,6 +134,7 @@ mod structured_output_failover {
                 provider
             )),
             credential_budget_rank: 0,
+            credential_tier: "free".into(),
             capability: ModelCapability {
                 provider,
                 model: model_id,
@@ -142,6 +143,7 @@ mod structured_output_failover {
                 supports_json_schema: true,
                 supports_vision: false,
                 reasoning: true,
+                json_schema_rank: 0,
             },
             service,
         }

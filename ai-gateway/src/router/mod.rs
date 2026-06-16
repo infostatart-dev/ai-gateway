@@ -11,6 +11,7 @@ pub mod routed_identity;
 pub mod router_details;
 pub mod service;
 pub mod strategy;
+pub mod token_estimate;
 pub mod unified_api;
 
 pub(in crate::router) const FORCED_ROUTING_HEADER: http::HeaderName =

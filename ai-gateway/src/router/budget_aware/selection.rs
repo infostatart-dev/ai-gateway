@@ -5,7 +5,7 @@ use super::{
 use crate::{
     error::internal::InternalError,
     router::capability::{
-        RequestRequirements, enrich_requirements_from_source_model, supports,
+        RequestRequirements, enrich_requirements_from_source_model,
     },
     types::model_id::ModelId,
 };
@@ -37,21 +37,20 @@ impl BudgetAwareRouter {
         requirements: &RequestRequirements,
         source_model: Option<&ModelId>,
     ) -> Result<Vec<BudgetCandidate>, InternalError> {
-        let mut candidates = self
-            .candidates
-            .iter()
-            .filter(|candidate| {
-                supports(requirements, &candidate.capability)
-                    && source_model.is_none_or(|source_model| {
-                        self.matches_source_model(
-                            source_model,
-                            candidate,
-                            requirements,
-                        )
-                    })
-            })
-            .cloned()
-            .collect::<Vec<_>>();
+        let limits = &self.app_state.config().provider_limits;
+        let budget =
+            crate::router::token_estimate::PayloadBudgetConfig::default();
+        let mut candidates = super::payload::filter_payload_capable(
+            self.candidates.as_ref().clone(),
+            requirements,
+            limits,
+            budget,
+            |candidate| {
+                source_model.is_none_or(|model| {
+                    self.matches_source_model(model, candidate, requirements)
+                })
+            },
+        );
 
         if candidates.is_empty() {
             tracing::warn!(

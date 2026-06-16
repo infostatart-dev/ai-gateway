@@ -1,10 +1,17 @@
 use futures::future::BoxFuture;
 use http_body_util::BodyExt;
+use serde_json::Value;
 
 use super::{failover_loop, types::BudgetAwareRouter};
 use crate::{
     error::{api::ApiError, internal::InternalError},
-    router::capability::{extract_requirements, extract_source_model},
+    router::{
+        capability::{
+            apply_payload_estimate, extract_requirements_from_value,
+            extract_source_model_from_value,
+        },
+        token_estimate::{PayloadBudgetConfig, estimate_from_value},
+    },
     types::{request::Request, response::Response},
 };
 
@@ -19,8 +26,21 @@ pub(super) fn budget_aware_call(
             .await
             .map_err(InternalError::CollectBodyError)?
             .to_bytes();
-        let requirements = extract_requirements(&body_bytes);
-        let source_model = extract_source_model(&body_bytes);
+
+        let parsed: Option<Value> = serde_json::from_slice(&body_bytes).ok();
+        let budget = PayloadBudgetConfig::default();
+        let mut requirements = parsed
+            .as_ref()
+            .map(extract_requirements_from_value)
+            .unwrap_or_default();
+        if let Some(value) = parsed.as_ref()
+            && let Some(estimate) = estimate_from_value(value, budget)
+        {
+            apply_payload_estimate(&mut requirements, estimate);
+        }
+        let source_model =
+            parsed.as_ref().and_then(extract_source_model_from_value);
+
         let candidates =
             this.ordered_candidates(&requirements, source_model.as_ref())?;
 

@@ -109,6 +109,12 @@ Operational limits and cooldown hints per provider/tier are in
 [`provider-limits.yaml`](../ai-gateway/config/embedded/provider-limits.yaml).
 Used for pacing gates and 429 cooldown resolution — see [routing.md](routing.md).
 
+For **payload-aware routing** (autodefault fat json_schema requests), the
+budget-aware router also reads per-model **TPM** caps from this catalog at
+filter time: `effective_window = margin(min(context_window, tpm))`. Candidates
+that cannot fit the estimated request footprint (`input + reserved max_tokens`)
+are skipped before dispatch; unknown limits fail open.
+
 ## Request examples
 
 ```bash

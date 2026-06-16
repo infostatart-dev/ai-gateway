@@ -5,7 +5,7 @@ use http::request::Parts;
 use http_body_util::BodyExt;
 
 use super::{
-    call, structured_output,
+    call, failure, structured_output, trace,
     types::{BudgetAwareRouter, BudgetCandidate},
 };
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
     error::{api::ApiError, internal::InternalError},
     router::{
         capability::RequestRequirements,
-        provider_attempt::is_failoverable_status,
+        provider_attempt::is_failoverable_status, retry_after::FailoverClass,
         routed_identity::attach_routed_identity,
     },
     types::{
@@ -29,9 +29,11 @@ pub(super) async fn run_failover_candidates(
     requirements: RequestRequirements,
 ) -> Result<Response, ApiError> {
     let mut failed_credentials = HashSet::<ProviderCredentialId>::new();
+    let mut route_trace = trace::RouteTrace::new(candidates.len());
 
     for (index, candidate) in candidates.iter().enumerate() {
         if failed_credentials.contains(&candidate.credential_id) {
+            route_trace.record_skipped(1);
             continue;
         }
 
@@ -39,18 +41,20 @@ pub(super) async fn run_failover_candidates(
             .iter()
             .any(|next| !failed_credentials.contains(&next.credential_id));
         if !this.wait_for_candidate(candidate, has_next_candidate).await {
+            route_trace.record_skipped(1);
             continue;
         }
 
+        route_trace.record_attempt();
         let req =
             Request::from_parts(parts.clone(), Body::from(body_bytes.clone()));
         let start = std::time::Instant::now();
-        let mut response = call::call_candidate(candidate, req).await?;
+        let response = call::call_candidate(candidate, req).await?;
         let elapsed = start.elapsed();
         let status = response.status();
 
         if has_next_candidate && is_failoverable_status(status) {
-            fail_over_candidate(
+            let skipped = fail_over_candidate(
                 &this,
                 candidate,
                 &candidates[index + 1..],
@@ -60,11 +64,12 @@ pub(super) async fn run_failover_candidates(
                 &mut failed_credentials,
             )
             .await;
+            route_trace.record_skipped(skipped);
             continue;
         }
 
         if status.is_success() {
-            if let Some(mut response) =
+            if let Some(response) =
                 handle_successful_candidate(SuccessCandidateContext {
                     this: &this,
                     candidate,
@@ -75,38 +80,104 @@ pub(super) async fn run_failover_candidates(
                     response,
                     elapsed,
                     failed_credentials: &mut failed_credentials,
+                    route_trace: &mut route_trace,
                 })
                 .await?
             {
-                attach_routed_identity(
-                    &mut response,
-                    &candidate.credential_id,
-                    &candidate.capability.model,
-                );
-                return Ok(response);
+                return Ok(finish_success(
+                    &this,
+                    &mut route_trace,
+                    candidate,
+                    response,
+                    status,
+                ));
             }
             continue;
         }
 
-        if is_failoverable_status(status) {
-            response = this
-                .record_failure(
-                    &candidate.credential_id,
-                    &candidate.capability.provider,
-                    response,
-                    elapsed,
-                )
-                .await;
-        }
-        attach_routed_identity(
-            &mut response,
-            &candidate.credential_id,
-            &candidate.capability.model,
-        );
-        return Ok(response);
+        return Ok(finish_terminal(
+            &this,
+            &mut route_trace,
+            candidate,
+            response,
+            status,
+            elapsed,
+        )
+        .await);
     }
 
+    route_trace.emit(
+        &this.router_id,
+        this.strategy,
+        &trace::RouteOutcome {
+            label: "exhausted",
+            provider: None,
+            credential: None,
+            status: None,
+        },
+    );
     Err(ApiError::Internal(InternalError::ProviderNotFound))
+}
+
+fn finish_success(
+    this: &BudgetAwareRouter,
+    route_trace: &mut trace::RouteTrace,
+    candidate: &BudgetCandidate,
+    mut response: Response,
+    status: http::StatusCode,
+) -> Response {
+    attach_routed_identity(
+        &mut response,
+        &candidate.credential_id,
+        &candidate.capability.model,
+    );
+    route_trace.emit(
+        &this.router_id,
+        this.strategy,
+        &trace::RouteOutcome {
+            label: "success",
+            provider: Some(&candidate.capability.provider),
+            credential: Some(&candidate.credential_id),
+            status: Some(status.as_u16()),
+        },
+    );
+    response
+}
+
+async fn finish_terminal(
+    this: &BudgetAwareRouter,
+    route_trace: &mut trace::RouteTrace,
+    candidate: &BudgetCandidate,
+    mut response: Response,
+    status: http::StatusCode,
+    elapsed: std::time::Duration,
+) -> Response {
+    if is_failoverable_status(status) {
+        response = this
+            .record_failure(
+                &candidate.credential_id,
+                &candidate.capability.provider,
+                response,
+                elapsed,
+            )
+            .await;
+    }
+    attach_routed_identity(
+        &mut response,
+        &candidate.credential_id,
+        &candidate.capability.model,
+    );
+    route_trace.emit(
+        &this.router_id,
+        this.strategy,
+        &trace::RouteOutcome {
+            label: "terminal_failure",
+            provider: Some(&candidate.capability.provider),
+            credential: Some(&candidate.credential_id),
+            status: Some(status.as_u16()),
+        },
+    );
+    response
 }
 
 struct SuccessCandidateContext<'a> {
@@ -119,6 +190,7 @@ struct SuccessCandidateContext<'a> {
     response: Response,
     elapsed: std::time::Duration,
     failed_credentials: &'a mut HashSet<ProviderCredentialId>,
+    route_trace: &'a mut trace::RouteTrace,
 }
 
 async fn handle_successful_candidate(
@@ -134,6 +206,7 @@ async fn handle_successful_candidate(
         response,
         elapsed,
         failed_credentials,
+        route_trace,
     } = ctx;
     let has_next = index + 1 < candidates.len();
     if requirements.json_schema_required
@@ -158,7 +231,7 @@ async fn handle_successful_candidate(
             &response_bytes,
         ) {
             if has_next {
-                fail_over_candidate(
+                let skipped = fail_over_candidate(
                     this,
                     candidate,
                     &candidates[index + 1..],
@@ -168,6 +241,7 @@ async fn handle_successful_candidate(
                     failed_credentials,
                 )
                 .await;
+                route_trace.record_skipped(skipped);
             } else {
                 let _ = this
                     .record_failure(
@@ -182,7 +256,7 @@ async fn handle_successful_candidate(
                     credential = %candidate.credential_id,
                     provider = %candidate.capability.provider,
                     model = %candidate.capability.model,
-                    "provider returned invalid structured JSON, failing over"
+                    "provider returned invalid structured JSON on last candidate"
                 );
             }
             return Ok(None);
@@ -206,33 +280,59 @@ async fn fail_over_candidate(
     elapsed: std::time::Duration,
     reason: impl AsRef<str>,
     failed_credentials: &mut HashSet<ProviderCredentialId>,
-) {
+) -> usize {
+    let status = response.status();
+    let (response, class) = failure::record_classified_failure(
+        this,
+        &candidate.credential_id,
+        &candidate.capability.provider,
+        response,
+        elapsed,
+    )
+    .await;
+    let _ = response;
     let next_provider =
         next_distinct_provider(remaining_candidates, failed_credentials);
-    this.app_state.runtime_metrics().record_failover(
-        &this.router_id,
-        this.endpoint_type.as_ref(),
-        this.strategy,
-        &candidate.capability.provider,
+    failure::record_failover_metric(
+        this,
+        candidate,
         next_provider,
         reason.as_ref(),
+        status,
+        class,
     );
-    let _ = this
-        .record_failure(
-            &candidate.credential_id,
-            &candidate.capability.provider,
-            response,
-            elapsed,
-        )
-        .await;
     failed_credentials.insert(candidate.credential_id.clone());
-    tracing::warn!(
-        credential = %candidate.credential_id,
-        provider = %candidate.capability.provider,
-        model = %candidate.capability.model,
-        reason = reason.as_ref(),
-        "budget-aware router failed over to next candidate"
-    );
+    skip_free_siblings_on_exhaustion(
+        candidate,
+        remaining_candidates,
+        class,
+        failed_credentials,
+    )
+}
+
+fn skip_free_siblings_on_exhaustion(
+    candidate: &BudgetCandidate,
+    remaining_candidates: &[BudgetCandidate],
+    class: FailoverClass,
+    failed_credentials: &mut HashSet<ProviderCredentialId>,
+) -> usize {
+    if !matches!(
+        class,
+        FailoverClass::QuotaExhausted | FailoverClass::Overload
+    ) {
+        return 0;
+    }
+    let mut skipped = 0;
+    for sibling in remaining_candidates {
+        if sibling.capability.provider == candidate.capability.provider
+            && sibling.credential_budget_rank
+                == candidate.credential_budget_rank
+            && failed_credentials.insert(sibling.credential_id.clone())
+        {
+            skipped += 1;
+        }
+    }
+    skipped
 }
 
 fn next_distinct_provider<'a>(

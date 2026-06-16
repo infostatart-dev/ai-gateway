@@ -12,6 +12,7 @@ use std::time::Duration;
 use abuse::looks_like_abuse_block;
 pub use body::extract_retry_after_from_body;
 use bytes::Bytes;
+pub use classify::FailureKind;
 use classify::classify_429;
 pub use header::extract_retry_after_from_headers;
 use http::{HeaderMap, StatusCode};
@@ -20,6 +21,50 @@ use http_body_util::BodyExt;
 use crate::{
     config::router_cooldown::RouterCooldownConfig, types::response::Response,
 };
+
+/// How a failed candidate should influence same-provider sibling failover.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailoverClass {
+    /// Transient (RPM rate-limit, schema, generic): try the next sibling.
+    Transient,
+    /// Daily/quota exhaustion: skip remaining free siblings, go paid/next.
+    QuotaExhausted,
+    /// Upstream overload (`502`/`503`): skip remaining free siblings.
+    Overload,
+}
+
+/// Best-effort quota-dimension label inferred from the HTTP status alone, for
+/// callers that do not classify the response body (e.g. provider-level
+/// failover).
+#[must_use]
+pub fn quota_metric_from_status(status: StatusCode) -> &'static str {
+    let class = match status {
+        StatusCode::BAD_GATEWAY | StatusCode::SERVICE_UNAVAILABLE => {
+            FailoverClass::Overload
+        }
+        _ => FailoverClass::Transient,
+    };
+    quota_metric_label(status, class)
+}
+
+/// The metric label describing which quota dimension a failure hit.
+#[must_use]
+pub fn quota_metric_label(
+    status: StatusCode,
+    class: FailoverClass,
+) -> &'static str {
+    match class {
+        FailoverClass::Overload => "overload",
+        FailoverClass::QuotaExhausted => "rpd",
+        FailoverClass::Transient if status == StatusCode::TOO_MANY_REQUESTS => {
+            "rpm"
+        }
+        FailoverClass::Transient if status == StatusCode::PAYLOAD_TOO_LARGE => {
+            "tpm"
+        }
+        FailoverClass::Transient => "other",
+    }
+}
 
 #[must_use]
 pub fn rate_limit_cooldown(
@@ -58,12 +103,23 @@ pub async fn cooldown_for_response(
     response: Response,
     config: &RouterCooldownConfig,
 ) -> (Response, Duration) {
+    let (response, cooldown, _class) =
+        classify_and_cooldown(response, config).await;
+    (response, cooldown)
+}
+
+/// Like [`cooldown_for_response`] but also returns the [`FailoverClass`] so the
+/// router can decide whether to skip remaining same-provider free siblings.
+pub async fn classify_and_cooldown(
+    response: Response,
+    config: &RouterCooldownConfig,
+) -> (Response, Duration, FailoverClass) {
     let status = response.status();
     if status == StatusCode::TOO_MANY_REQUESTS {
         if extract_retry_after_from_headers(response.headers()).is_some() {
             let cooldown =
                 rate_limit_cooldown(response.headers(), None, config);
-            return (response, cooldown);
+            return (response, cooldown, FailoverClass::Transient);
         }
         let (parts, body_bytes) = collect_response_body(response).await;
         let cooldown = rate_limit_cooldown(
@@ -71,11 +127,15 @@ pub async fn cooldown_for_response(
             Some(body_bytes.as_ref()),
             config,
         );
+        let class = match classify_429(Some(body_bytes.as_ref())) {
+            FailureKind::QuotaExhausted => FailoverClass::QuotaExhausted,
+            FailureKind::RateLimit => FailoverClass::Transient,
+        };
         let response = Response::from_parts(
             parts,
             axum_core::body::Body::from(body_bytes),
         );
-        return (response, cooldown);
+        return (response, cooldown, class);
     }
 
     if matches!(
@@ -98,7 +158,7 @@ pub async fn cooldown_for_response(
             parts,
             axum_core::body::Body::from(body_bytes),
         );
-        return (response, cooldown);
+        return (response, cooldown, FailoverClass::Transient);
     }
 
     if matches!(
@@ -119,10 +179,10 @@ pub async fn cooldown_for_response(
             parts,
             axum_core::body::Body::from(body_bytes),
         );
-        return (response, cooldown);
+        return (response, cooldown, FailoverClass::Overload);
     }
 
-    (response, config.provider_error)
+    (response, config.provider_error, FailoverClass::Transient)
 }
 
 #[cfg(test)]

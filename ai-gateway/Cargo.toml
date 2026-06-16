@@ -103,6 +103,7 @@ chatgpt-web = { workspace = true }
 deepseek-web = { workspace = true }
 perplexity-web = { workspace = true }
 chromiumoxide = { workspace = true, optional = true }
+tiktoken-rs = { version = "0.12.0", default-features = false }
 
 [dev-dependencies]
 cargo-husky = { workspace = true, features = ["user-hooks"] }

@@ -36,6 +36,7 @@ async fn push_anonymous_candidates(
     let credential_id =
         ProviderCredentialId::new(format!("{provider}-anonymous"));
     let credential_budget_rank = 0;
+    let credential_tier = "free".to_string();
 
     for model in &config.models {
         let capability = get_model_capability(
@@ -56,6 +57,7 @@ async fn push_anonymous_candidates(
         candidates.push(BudgetCandidate {
             credential_id: credential_id.clone(),
             credential_budget_rank,
+            credential_tier: credential_tier.clone(),
             capability,
             service,
         });
@@ -119,6 +121,7 @@ pub(super) async fn build(
                 candidates.push(BudgetCandidate {
                     credential_id: credential.id.clone(),
                     credential_budget_rank: credential.budget_rank,
+                    credential_tier: credential.tier.clone(),
                     capability,
                     service,
                 });

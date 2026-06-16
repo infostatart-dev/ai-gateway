@@ -20,6 +20,7 @@ fn openai(cap: &mut ModelCapability, model_name: &str) {
     cap.supports_tools = true;
     cap.supports_json_schema = true;
     cap.context_window = Some(128_000);
+    cap.json_schema_rank = 2;
     cap.supports_vision = model_name.contains("vision")
         || model_name.contains("-4o")
         || model_name.contains("o1");
@@ -30,6 +31,7 @@ fn anthropic(cap: &mut ModelCapability) {
     cap.supports_json_schema = true;
     cap.supports_vision = true;
     cap.context_window = Some(200_000);
+    cap.json_schema_rank = 2;
 }
 
 fn gemini(cap: &mut ModelCapability) {
@@ -37,13 +39,15 @@ fn gemini(cap: &mut ModelCapability) {
     cap.supports_json_schema = true;
     cap.supports_vision = true;
     cap.context_window = Some(1_000_000);
+    cap.json_schema_rank = 2;
 }
 
 fn openrouter(cap: &mut ModelCapability, model_name: &str) {
     if model_name.starts_with("openai/") || model_name.starts_with("qwen/") {
         cap.supports_tools = true;
         cap.supports_json_schema = true;
-        cap.context_window = Some(128_000);
+        cap.context_window = Some(131_072);
+        cap.json_schema_rank = -1;
         cap.supports_vision =
             model_name.contains("gpt-4") || model_name.contains("o1");
     }
@@ -67,13 +71,15 @@ fn named(cap: &mut ModelCapability, n: &str, model_name: &str) {
 fn groq(cap: &mut ModelCapability, model_name: &str) {
     cap.supports_tools = true;
     cap.supports_json_schema = groq::supports_json_schema(model_name);
-    cap.context_window = Some(8_000);
+    cap.context_window = Some(131_072);
+    cap.json_schema_rank = 1;
 }
 
 fn mistral(cap: &mut ModelCapability, model_name: &str) {
     cap.supports_tools = true;
     cap.supports_json_schema = mistral::supports_json_schema(model_name);
     cap.context_window = Some(131_072);
+    cap.json_schema_rank = 1;
     if mistral::supports_reasoning(model_name) {
         cap.reasoning = true;
     }
@@ -83,6 +89,7 @@ fn cerebras(cap: &mut ModelCapability, model_name: &str) {
     cap.supports_tools = true;
     cap.supports_json_schema = cerebras::supports_json_schema(model_name);
     cap.context_window = Some(131_072);
+    cap.json_schema_rank = 1;
     if cerebras::supports_reasoning(model_name) {
         cap.reasoning = true;
     }
@@ -233,6 +240,41 @@ mod tests {
     };
 
     #[test]
+    fn openrouter_json_schema_rank_demoted_vs_groq() {
+        let mut openrouter_cap = ModelCapability {
+            provider: InferenceProvider::OpenRouter,
+            model: ModelId::from_str_and_provider(
+                InferenceProvider::OpenRouter,
+                "openai/gpt-4o-mini",
+            )
+            .unwrap(),
+            context_window: None,
+            supports_tools: false,
+            supports_json_schema: false,
+            supports_vision: false,
+            reasoning: false,
+            json_schema_rank: 0,
+        };
+        openrouter(&mut openrouter_cap, "openai/gpt-4o-mini");
+        let mut groq_cap = ModelCapability {
+            provider: InferenceProvider::Named("groq".into()),
+            model: ModelId::from_str_and_provider(
+                InferenceProvider::Named("groq".into()),
+                "llama-3.3-70b-versatile",
+            )
+            .unwrap(),
+            context_window: None,
+            supports_tools: false,
+            supports_json_schema: false,
+            supports_vision: false,
+            reasoning: false,
+            json_schema_rank: 0,
+        };
+        groq(&mut groq_cap, "llama-3.3-70b-versatile");
+        assert!(openrouter_cap.json_schema_rank < groq_cap.json_schema_rank);
+    }
+
+    #[test]
     fn cerebras_gpt_oss_supports_json_schema_and_reasoning() {
         let mut cap = ModelCapability {
             provider: InferenceProvider::Named("cerebras".into()),
@@ -246,6 +288,7 @@ mod tests {
             supports_json_schema: false,
             supports_vision: false,
             reasoning: false,
+            json_schema_rank: 0,
         };
         cerebras(&mut cap, "gpt-oss-120b");
         assert!(cap.supports_json_schema);
@@ -266,6 +309,7 @@ mod tests {
             supports_json_schema: false,
             supports_vision: false,
             reasoning: false,
+            json_schema_rank: 0,
         };
         mistral(&mut cap, "magistral-medium-latest");
         assert!(cap.supports_json_schema);

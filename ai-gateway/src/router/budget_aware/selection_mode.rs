@@ -1,7 +1,12 @@
-use super::types::{BudgetAwareRouter, BudgetCandidate};
+use super::{
+    payload,
+    types::{BudgetAwareRouter, BudgetCandidate},
+};
 use crate::{
     error::internal::InternalError,
-    router::capability::{RequestRequirements, supports},
+    router::{
+        capability::RequestRequirements, token_estimate::PayloadBudgetConfig,
+    },
     types::model_id::ModelId,
 };
 
@@ -13,19 +18,19 @@ pub(super) fn budget_then_capability_candidates(
     let mut candidates = router.candidates.as_ref().clone();
     router.rank_candidates(&mut candidates, requirements);
 
-    let candidates = candidates
-        .into_iter()
-        .filter(|candidate| {
-            supports(requirements, &candidate.capability)
-                && source_model.is_none_or(|source_model| {
-                    router.matches_source_model(
-                        source_model,
-                        candidate,
-                        requirements,
-                    )
-                })
-        })
-        .collect::<Vec<_>>();
+    let limits = &router.app_state.config().provider_limits;
+    let budget = PayloadBudgetConfig::default();
+    let candidates = payload::filter_payload_capable(
+        candidates,
+        requirements,
+        limits,
+        budget,
+        |candidate| {
+            source_model.is_none_or(|model| {
+                router.matches_source_model(model, candidate, requirements)
+            })
+        },
+    );
 
     if candidates.is_empty() {
         tracing::warn!(

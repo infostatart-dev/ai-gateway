@@ -69,6 +69,7 @@ mod tests {
             supports_json_schema,
             supports_vision: false,
             reasoning: false,
+            json_schema_rank: 0,
         }
     }
 

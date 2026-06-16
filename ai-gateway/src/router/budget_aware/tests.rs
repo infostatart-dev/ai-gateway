@@ -21,6 +21,7 @@ fn capability(provider: InferenceProvider, model: &str) -> ModelCapability {
         supports_json_schema: false,
         supports_vision: false,
         reasoning: false,
+        json_schema_rank: 0,
     }
 }
 

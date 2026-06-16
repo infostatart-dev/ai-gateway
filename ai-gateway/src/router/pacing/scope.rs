@@ -23,7 +23,7 @@ pub fn gate_scope_key(
 ) -> String {
     if is_chatgpt_web(provider) {
         return credential_id
-            .map(|id| id.0.as_str())
+            .map(ProviderCredentialId::as_str)
             .and_then(chatgpt_session_path)
             .map_or_else(
                 || "missing-session".into(),
@@ -32,7 +32,7 @@ pub fn gate_scope_key(
     }
     if is_deepseek_web(provider) {
         return credential_id
-            .map(|id| id.0.as_str())
+            .map(ProviderCredentialId::as_str)
             .and_then(deepseek_session_path)
             .map_or_else(
                 || "missing-session".into(),
@@ -41,7 +41,7 @@ pub fn gate_scope_key(
     }
     if is_perplexity_web(provider) {
         return credential_id
-            .map(|id| id.0.as_str())
+            .map(ProviderCredentialId::as_str)
             .and_then(perplexity_session_path)
             .map_or_else(
                 || "missing-session".into(),

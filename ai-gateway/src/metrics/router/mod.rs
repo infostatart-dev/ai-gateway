@@ -9,6 +9,7 @@ pub(crate) mod strategy_name;
 mod tests;
 
 pub use attrs::{base_router_kv, status_class};
+pub use events::{CooldownEvent, FailoverEvent};
 pub use layer::RouterMetricsLayer;
 use opentelemetry::metrics::{Counter, Gauge, Histogram, Meter};
 pub use strategy_name::strategy_label;

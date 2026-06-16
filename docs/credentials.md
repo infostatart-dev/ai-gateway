@@ -120,8 +120,15 @@ the next provider.
 
 Example from embedded config: all four `gemini-free*` slots (rank 0) are tried
 before `gemini-default` (rank 10) when both are eligible. Configured free
-siblings round-robin across requests; on 429/quota only the failing slot
-cooldowns and the router tries the next free sibling.
+siblings round-robin across requests. On **transient RPM** `429`, the router
+tries the next free sibling. On **daily quota exhaustion** (`429
+RESOURCE_EXHAUSTED`) or **503 overload**, remaining free siblings are skipped
+for that request and the router jumps to `gemini-default` or the next provider
+instead of burning every free key on the same body.
+
+Failover and cooldown metrics include `credential` and `quota_metric`
+(`rpm|tpm|rpd|overload`) attributes; each request emits a structured
+`budget-aware route summary` log (hops, duration, terminal outcome).
 
 ## Startup behaviour
 

@@ -21,6 +21,7 @@ use crate::{
 pub(crate) struct BudgetCandidate {
     pub credential_id: ProviderCredentialId,
     pub credential_budget_rank: u16,
+    pub credential_tier: String,
     pub capability: ModelCapability,
     pub service: DispatcherService,
 }

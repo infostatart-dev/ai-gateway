@@ -42,6 +42,22 @@ mod tests {
             .unwrap()
     }
 
+    fn daily_quota_exhausted() -> crate::types::response::Response {
+        http::Response::builder()
+            .status(StatusCode::TOO_MANY_REQUESTS)
+            .body(Body::from(
+                r#"{"error":{"message":"You exceeded your daily limit."}}"#,
+            ))
+            .unwrap()
+    }
+
+    fn overload_503() -> crate::types::response::Response {
+        http::Response::builder()
+            .status(StatusCode::SERVICE_UNAVAILABLE)
+            .body(Body::from("model is overloaded"))
+            .unwrap()
+    }
+
     fn ok_response() -> crate::types::response::Response {
         http::Response::builder()
             .status(StatusCode::OK)
@@ -100,6 +116,11 @@ mod tests {
         BudgetCandidate {
             credential_id: cred,
             credential_budget_rank: budget_rank,
+            credential_tier: if budget_rank == 0 {
+                "free".into()
+            } else {
+                "tier-3".into()
+            },
             capability: ModelCapability {
                 provider,
                 model: model_id,
@@ -108,6 +129,7 @@ mod tests {
                 supports_json_schema: true,
                 supports_vision: true,
                 reasoning: false,
+                json_schema_rank: 2,
             },
             service,
         }
@@ -138,6 +160,7 @@ mod tests {
         BudgetCandidate {
             credential_id: cred,
             credential_budget_rank: 0,
+            credential_tier: "tier-3".into(),
             capability: ModelCapability {
                 provider,
                 model: model_id,
@@ -146,6 +169,7 @@ mod tests {
                 supports_json_schema: true,
                 supports_vision: true,
                 reasoning: false,
+                json_schema_rank: 2,
             },
             service,
         }
@@ -169,6 +193,76 @@ mod tests {
             .to_str()
             .unwrap()
             .to_string()
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn gemini_daily_quota_skips_remaining_free_siblings_to_paid() {
+        clear_test_call_responses();
+        push_test_call_response(Ok(daily_quota_exhausted()));
+        push_test_call_response(Ok(ok_response()));
+
+        let app_state = AppState::test_default().await;
+        let router = test_router(&app_state);
+        let candidates = router.credential_round_robin.balance(vec![
+            gemini_candidate(&app_state, "gemini-free", 0, "free-key").await,
+            gemini_candidate(&app_state, "gemini-free-2", 0, "free-2-key")
+                .await,
+            gemini_candidate(&app_state, "gemini-free-3", 0, "free-3-key")
+                .await,
+            gemini_candidate(&app_state, "gemini-default", 10, "paid-key")
+                .await,
+        ]);
+
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            Bytes::from(r#"{"model":"gpt-4o-mini","messages":[]}"#),
+            candidates,
+            RequestRequirements::default(),
+        )
+        .await
+        .expect("failover reaches paid after quota skip");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            routed_identity(&response),
+            "gemini-default/gemini-2.5-flash"
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn gemini_overload_skips_remaining_free_siblings_to_paid() {
+        clear_test_call_responses();
+        push_test_call_response(Ok(overload_503()));
+        push_test_call_response(Ok(ok_response()));
+
+        let app_state = AppState::test_default().await;
+        let router = test_router(&app_state);
+        let candidates = router.credential_round_robin.balance(vec![
+            gemini_candidate(&app_state, "gemini-free", 0, "free-key").await,
+            gemini_candidate(&app_state, "gemini-free-2", 0, "free-2-key")
+                .await,
+            gemini_candidate(&app_state, "gemini-default", 10, "paid-key")
+                .await,
+        ]);
+
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            Bytes::from(r#"{"model":"gpt-4o-mini","messages":[]}"#),
+            candidates,
+            RequestRequirements::default(),
+        )
+        .await
+        .expect("failover reaches paid after overload skip");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            routed_identity(&response),
+            "gemini-default/gemini-2.5-flash"
+        );
     }
 
     #[tokio::test]

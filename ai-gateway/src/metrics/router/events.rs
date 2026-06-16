@@ -10,6 +10,27 @@ use crate::{
     },
 };
 
+/// Attributes for a single failover attempt between upstream candidates.
+pub struct FailoverEvent<'a> {
+    pub router_id: &'a RouterId,
+    pub endpoint_type: &'a str,
+    pub strategy: &'static str,
+    pub from_provider: &'a InferenceProvider,
+    pub to_provider: Option<&'a InferenceProvider>,
+    pub reason: &'a str,
+    pub credential: &'a str,
+    pub quota_metric: &'a str,
+}
+
+/// Identity of a provider/credential cooldown transition.
+pub struct CooldownEvent<'a> {
+    pub router_id: &'a RouterId,
+    pub endpoint_type: &'a str,
+    pub strategy: &'static str,
+    pub provider: &'a InferenceProvider,
+    pub credential: &'a str,
+}
+
 impl RouterRuntimeMetrics {
     #[allow(clippy::too_many_arguments)]
     pub fn record_router_complete(
@@ -49,26 +70,21 @@ impl RouterRuntimeMetrics {
         }
     }
 
-    pub fn record_failover(
-        &self,
-        router_id: &RouterId,
-        endpoint_type: &str,
-        strategy: &'static str,
-        from_provider: &InferenceProvider,
-        to_provider: Option<&InferenceProvider>,
-        reason: &str,
-    ) {
+    pub fn record_failover(&self, event: &FailoverEvent<'_>) {
         let attrs = [
-            KeyValue::new("router_id", router_id.to_string()),
-            KeyValue::new("endpoint_type", endpoint_type.to_string()),
-            KeyValue::new("strategy", strategy),
-            KeyValue::new("from_provider", from_provider.to_string()),
+            KeyValue::new("router_id", event.router_id.to_string()),
+            KeyValue::new("endpoint_type", event.endpoint_type.to_string()),
+            KeyValue::new("strategy", event.strategy),
+            KeyValue::new("from_provider", event.from_provider.to_string()),
             KeyValue::new(
                 "to_provider",
-                to_provider
+                event
+                    .to_provider
                     .map_or_else(|| "unknown".to_string(), ToString::to_string),
             ),
-            KeyValue::new("reason", reason.to_string()),
+            KeyValue::new("reason", event.reason.to_string()),
+            KeyValue::new("credential", event.credential.to_string()),
+            KeyValue::new("quota_metric", event.quota_metric.to_string()),
         ];
         self.router_failover_attempts_total.add(1, &attrs);
     }
@@ -92,58 +108,42 @@ impl RouterRuntimeMetrics {
 
     pub fn record_cooldown_enter(
         &self,
-        router_id: &RouterId,
-        endpoint_type: &str,
-        strategy: &'static str,
-        provider: &InferenceProvider,
+        event: &CooldownEvent<'_>,
         status_class: &'static str,
+        quota_metric: &str,
     ) {
-        let attrs = [
-            KeyValue::new("router_id", router_id.to_string()),
-            KeyValue::new("endpoint_type", endpoint_type.to_string()),
-            KeyValue::new("strategy", strategy),
-            KeyValue::new("provider", provider.to_string()),
-            KeyValue::new("status_class", status_class),
-            KeyValue::new("event", "enter"),
-        ];
+        let mut attrs = event.base_kv();
+        attrs.push(KeyValue::new("status_class", status_class));
+        attrs.push(KeyValue::new("quota_metric", quota_metric.to_string()));
+        attrs.push(KeyValue::new("event", "enter"));
         self.router_provider_cooldown_events_total.add(1, &attrs);
-        let gauge_attrs =
-            cooldown_gauge_kv(router_id, endpoint_type, strategy, provider);
-        self.router_provider_in_cooldown.record(1, &gauge_attrs);
+        self.router_provider_in_cooldown
+            .record(1, &event.gauge_kv());
     }
 
-    pub fn record_cooldown_exit(
-        &self,
-        router_id: &RouterId,
-        endpoint_type: &str,
-        strategy: &'static str,
-        provider: &InferenceProvider,
-    ) {
-        let attrs = [
-            KeyValue::new("router_id", router_id.to_string()),
-            KeyValue::new("endpoint_type", endpoint_type.to_string()),
-            KeyValue::new("strategy", strategy),
-            KeyValue::new("provider", provider.to_string()),
-            KeyValue::new("status_class", "recovered"),
-            KeyValue::new("event", "exit"),
-        ];
+    pub fn record_cooldown_exit(&self, event: &CooldownEvent<'_>) {
+        let mut attrs = event.base_kv();
+        attrs.push(KeyValue::new("status_class", "recovered"));
+        attrs.push(KeyValue::new("event", "exit"));
         self.router_provider_cooldown_events_total.add(1, &attrs);
-        let gauge_attrs =
-            cooldown_gauge_kv(router_id, endpoint_type, strategy, provider);
-        self.router_provider_in_cooldown.record(0, &gauge_attrs);
+        self.router_provider_in_cooldown
+            .record(0, &event.gauge_kv());
     }
 }
 
-fn cooldown_gauge_kv(
-    router_id: &RouterId,
-    endpoint_type: &str,
-    strategy: &'static str,
-    provider: &InferenceProvider,
-) -> Vec<KeyValue> {
-    vec![
-        KeyValue::new("router_id", router_id.to_string()),
-        KeyValue::new("endpoint_type", endpoint_type.to_string()),
-        KeyValue::new("strategy", strategy),
-        KeyValue::new("provider", provider.to_string()),
-    ]
+impl CooldownEvent<'_> {
+    fn base_kv(&self) -> Vec<KeyValue> {
+        let mut attrs = self.gauge_kv();
+        attrs.push(KeyValue::new("credential", self.credential.to_string()));
+        attrs
+    }
+
+    fn gauge_kv(&self) -> Vec<KeyValue> {
+        vec![
+            KeyValue::new("router_id", self.router_id.to_string()),
+            KeyValue::new("endpoint_type", self.endpoint_type.to_string()),
+            KeyValue::new("strategy", self.strategy),
+            KeyValue::new("provider", self.provider.to_string()),
+        ]
+    }
 }
