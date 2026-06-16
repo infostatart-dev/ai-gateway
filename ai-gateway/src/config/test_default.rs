@@ -30,7 +30,13 @@ impl TestDefault for Config {
                 crate::config::provider_limits::ProviderLimitCatalog::default(),
             credentials: {
                 let mut secrets =
-                    crate::config::secrets_file::SecretsFile::load_discovered();
+                    crate::config::secrets_file::SecretsFile::default();
+                secrets.integrations.aws =
+                    Some(crate::config::secrets_file::AwsSecret {
+                        access_key: "test-access-key".into(),
+                        secret_key: "test-secret-key".into(),
+                        region: "us-east-1".into(),
+                    });
                 let registry =
                     crate::config::credentials::CredentialRegistry::build(
                         &crate::config::providers::ProvidersConfig::default(),
