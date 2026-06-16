@@ -141,11 +141,7 @@ impl Dispatcher {
         credential_id: Option<&ProviderCredentialId>,
     ) -> Result<DispatcherService, InitError> {
         let client = if let Some(key) = provider_key {
-            Client::new_with_provider_key(
-                &app_state,
-                &provider,
-                Some(key),
-            )?
+            Client::new_with_provider_key(&app_state, &provider, Some(key))?
         } else {
             Client::new(&app_state, provider.clone()).await?
         };
