@@ -58,6 +58,8 @@ impl TestDefault for Config {
             response_headers:
                 crate::config::response_headers::ResponseHeadersConfig::default(
                 ),
+            observability:
+                crate::config::observability::ObservabilityConfig::default(),
         }
     }
 }

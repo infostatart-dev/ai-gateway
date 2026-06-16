@@ -15,6 +15,7 @@ pub mod minio;
 pub mod model_capability;
 pub mod model_mapping;
 pub mod monitor;
+pub mod observability;
 pub mod perplexity_web;
 pub mod provider_limits;
 pub mod providers;

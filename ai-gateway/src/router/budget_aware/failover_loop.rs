@@ -46,8 +46,15 @@ pub(super) async fn run_failover_candidates(
         }
 
         route_trace.record_attempt();
-        let req =
+        let mut req =
             Request::from_parts(parts.clone(), Body::from(body_bytes.clone()));
+        let attempt_index = route_trace.attempts().saturating_sub(1);
+        let attempt_ctx = crate::types::extensions::UpstreamAttemptContext {
+            attempt_index,
+            upstream_attempts: route_trace.attempts(),
+            credential: candidate.credential_id.to_string(),
+        };
+        req.extensions_mut().insert(attempt_ctx.clone());
         let start = std::time::Instant::now();
         let response = call::call_candidate(candidate, req).await?;
         let elapsed = start.elapsed();
@@ -62,6 +69,7 @@ pub(super) async fn run_failover_candidates(
                 elapsed,
                 crate::metrics::router::status_class(status),
                 &mut failed_credentials,
+                &attempt_ctx,
             )
             .await;
             route_trace.record_skipped(skipped);
@@ -81,6 +89,7 @@ pub(super) async fn run_failover_candidates(
                     elapsed,
                     failed_credentials: &mut failed_credentials,
                     route_trace: &mut route_trace,
+                    attempt_ctx: &attempt_ctx,
                 })
                 .await?
             {
@@ -131,16 +140,22 @@ fn finish_success(
         &candidate.credential_id,
         &candidate.capability.model,
     );
-    route_trace.emit(
+    this.app_state
+        .0
+        .metrics
+        .provider
+        .record_client_request(route_trace.attempts() > 1);
+    let outcome = trace::RouteOutcome {
+        label: "success",
+        provider: Some(&candidate.capability.provider),
+        credential: Some(&candidate.credential_id),
+        status: Some(status.as_u16()),
+    };
+    response.extensions_mut().insert(route_trace.attach_pending(
         &this.router_id,
         this.strategy,
-        &trace::RouteOutcome {
-            label: "success",
-            provider: Some(&candidate.capability.provider),
-            credential: Some(&candidate.credential_id),
-            status: Some(status.as_u16()),
-        },
-    );
+        &outcome,
+    ));
     response
 }
 
@@ -191,6 +206,7 @@ struct SuccessCandidateContext<'a> {
     elapsed: std::time::Duration,
     failed_credentials: &'a mut HashSet<ProviderCredentialId>,
     route_trace: &'a mut trace::RouteTrace,
+    attempt_ctx: &'a crate::types::extensions::UpstreamAttemptContext,
 }
 
 async fn handle_successful_candidate(
@@ -207,6 +223,7 @@ async fn handle_successful_candidate(
         elapsed,
         failed_credentials,
         route_trace,
+        attempt_ctx,
     } = ctx;
     let has_next = index + 1 < candidates.len();
     if requirements.json_schema_required
@@ -239,6 +256,7 @@ async fn handle_successful_candidate(
                     elapsed,
                     "structured_output",
                     failed_credentials,
+                    attempt_ctx,
                 )
                 .await;
                 route_trace.record_skipped(skipped);
@@ -275,6 +293,7 @@ async fn handle_successful_candidate(
     Ok(Some(response))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn fail_over_candidate(
     this: &BudgetAwareRouter,
     candidate: &BudgetCandidate,
@@ -283,6 +302,7 @@ async fn fail_over_candidate(
     elapsed: std::time::Duration,
     reason: impl AsRef<str>,
     failed_credentials: &mut HashSet<ProviderCredentialId>,
+    attempt: &crate::types::extensions::UpstreamAttemptContext,
 ) -> usize {
     let status = response.status();
     let (response, class) = failure::record_classified_failure(
@@ -293,6 +313,24 @@ async fn fail_over_candidate(
         elapsed,
     )
     .await;
+    crate::metrics::provider::record_upstream_attempt(
+        &crate::metrics::provider::DispatchMetricsInput {
+            app_state: &this.app_state,
+            provider: &candidate.capability.provider,
+            credential: Some(&candidate.credential_id),
+            model: Some(&candidate.capability.model),
+            router_id: Some(&this.router_id),
+            attempt: Some(attempt),
+            status,
+            stream: false,
+            request_kind: crate::types::extensions::RequestKind::Router,
+            duration_ms: elapsed.as_secs_f64() * 1000.0,
+            tfft_ms: None,
+            reported_usage: crate::metrics::llm::TokenUsage::default(),
+            request_body: None,
+            failover_class: Some(class),
+        },
+    );
     let _ = response;
     let next_provider =
         next_distinct_provider(remaining_candidates, failed_credentials);

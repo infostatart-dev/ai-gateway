@@ -13,7 +13,7 @@ use crate::{
     config::credentials::ProviderCredentialId,
     dispatcher::client::ProviderClient,
     error::{api::ApiError, internal::InternalError},
-    types::{body::Body, request::Request},
+    types::{body::Body, extensions::UpstreamAttemptContext, request::Request},
 };
 
 struct UpstreamProxyDispatch<'a> {
@@ -50,6 +50,10 @@ impl Dispatcher {
         ) = Self::extract_request_context(&mut req)?;
         let auth_ctx = req_ctx.auth_context.as_ref();
         let target_provider = &self.provider;
+        let upstream_attempt =
+            req.extensions().get::<UpstreamAttemptContext>().cloned();
+        let credential_id =
+            req.extensions().get::<ProviderCredentialId>().cloned();
 
         let finalize_ctx = FinalizeDispatchContext {
             mapper_ctx: mapper_ctx.clone(),
@@ -63,6 +67,8 @@ impl Dispatcher {
             prompt_ctx,
             router_runtime_labels: router_runtime_labels.clone(),
             extracted_path_and_query: extracted_path_and_query.clone(),
+            upstream_attempt,
+            credential_id: credential_id.clone(),
         };
 
         if let Some(ref api_endpoint) = api_endpoint {
@@ -74,8 +80,6 @@ impl Dispatcher {
             endpoint_metrics.incr_req_count();
         }
 
-        let credential_id =
-            req.extensions().get::<ProviderCredentialId>().cloned();
         let skip_outer_pacing =
             crate::config::deepseek_web::is_deepseek_web(target_provider);
         let _pacing_permit = if skip_outer_pacing {

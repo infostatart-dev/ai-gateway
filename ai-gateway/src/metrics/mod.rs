@@ -1,5 +1,6 @@
 pub mod attribute_extractor;
 pub mod llm;
+pub mod provider;
 pub mod request_count;
 pub mod rolling_counter;
 pub mod router;
@@ -25,6 +26,7 @@ pub struct Metrics {
     pub cache: CacheMetrics,
     pub routers: RouterMetrics,
     pub runtime: router::RouterRuntimeMetrics,
+    pub provider: provider::GatewayProviderMetrics,
 }
 
 impl Metrics {
@@ -63,6 +65,7 @@ impl Metrics {
         let cache = CacheMetrics::new(meter);
         let routers = RouterMetrics::new(meter);
         let runtime = router::RouterRuntimeMetrics::new(meter);
+        let provider = provider::GatewayProviderMetrics::new(meter);
         Self {
             error_count,
             provider_health,
@@ -75,6 +78,7 @@ impl Metrics {
             cache,
             routers,
             runtime,
+            provider,
         }
     }
 }

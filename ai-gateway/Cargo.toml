@@ -194,6 +194,10 @@ required-features = ["testing"]
 name = "router_metrics"
 required-features = ["testing"]
 
+[[test]]
+name = "provider_observability"
+required-features = ["testing"]
+
 # jemalloc does not build on Windows MSVC in CI; use the system allocator there.
 [target.'cfg(not(windows))'.dependencies]
 jemallocator = { workspace = true }

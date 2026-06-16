@@ -71,7 +71,7 @@ pub async fn build_service_stack(
         .layer(metrics::request_count::Layer::new(app_state.clone()))
         .layer(compression_layer)
         .layer(cors_layer)
-        .layer(HealthCheckLayer::new())
+        .layer(HealthCheckLayer::new(app_state.clone()))
         .layer(ValidateRouterConfigLayer::new())
         .layer(TimerLayer::new())
         .layer(ErrorHandlerLayer::new(app_state.clone()))

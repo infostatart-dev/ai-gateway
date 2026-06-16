@@ -45,6 +45,22 @@ impl AppState {
     }
 
     #[must_use]
+    pub fn observability_config(
+        &self,
+    ) -> crate::config::observability::ObservabilityConfig {
+        self.0.config.observability
+    }
+
+    #[must_use]
+    pub fn provider_stats_snapshot(
+        &self,
+        provider: Option<&str>,
+        credential: Option<&str>,
+    ) -> crate::metrics::provider::ProviderStatsSnapshot {
+        self.0.metrics.provider.snapshot(provider, credential)
+    }
+
+    #[must_use]
     pub fn config(&self) -> &Config {
         &self.0.config
     }

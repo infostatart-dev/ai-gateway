@@ -122,6 +122,16 @@ where
             }
         }
 
+        if let Some(usage) =
+            response.extensions().get::<crate::types::extensions::GatewayProviderUsageExtension>()
+        && let Some(header_value) = usage.0.to_header_value()
+        {
+            response.headers_mut().insert(
+                http::HeaderName::from_static("x-gateway-provider-usage"),
+                header_value,
+            );
+        }
+
         if !response.headers().contains_key(
             crate::router::routed_identity::REAL_MODE_MODEL_AND_PROVIDER,
         ) && let Some(routed) =
@@ -300,6 +310,65 @@ mod tests {
             service.ready().await.unwrap().call(request).await.unwrap();
 
         assert!(!response.headers().contains_key("helicone-provider"));
+    }
+
+    #[tokio::test]
+    async fn test_gateway_provider_usage_header() {
+        use crate::{
+            metrics::provider::usage_json::{
+                GatewayProviderUsage, LatencyBlock, RoutingBlock, UsageBlock,
+            },
+            types::extensions::GatewayProviderUsageExtension,
+        };
+
+        let config = ResponseHeadersConfig {
+            provider: false,
+            provider_request_id: false,
+        };
+
+        let mut service = ResponseHeaderService::new(
+            config,
+            create_mock_service(|| {
+                let mut response = Response::new("test".to_string());
+                response.extensions_mut().insert(
+                    GatewayProviderUsageExtension(GatewayProviderUsage {
+                        provider: "groq".to_string(),
+                        credential: Some("default".to_string()),
+                        model: None,
+                        usage: UsageBlock {
+                            input: Some(1),
+                            output: Some(2),
+                            cached: None,
+                            reasoning: None,
+                            total: Some(3),
+                            source: "estimated",
+                        },
+                        latency_ms: LatencyBlock {
+                            total: 50.0,
+                            ttft: None,
+                            generation_per_output_token: None,
+                        },
+                        routing: RoutingBlock {
+                            attempts: 1,
+                            failover: false,
+                        },
+                    }),
+                );
+                response
+            }),
+        );
+
+        let request = Request::new(());
+        let response =
+            service.ready().await.unwrap().call(request).await.unwrap();
+
+        let header = response
+            .headers()
+            .get("x-gateway-provider-usage")
+            .expect("usage header");
+        let parsed: serde_json::Value =
+            serde_json::from_str(header.to_str().unwrap()).unwrap();
+        assert_eq!(parsed["usage"]["source"], "estimated");
     }
 
     #[tokio::test]

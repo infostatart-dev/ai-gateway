@@ -6,26 +6,24 @@ use std::{
 
 use axum_core::response::Response;
 use futures::future::Either;
-use http::{Method, Request};
+use http::{Method, Request, StatusCode, header::CONTENT_TYPE};
 use tower::{Layer, Service};
+
+use crate::app_state::AppState;
 
 #[derive(Debug, Clone)]
 pub struct HealthCheckLayer<ReqBody, E> {
+    app_state: AppState,
     _marker: PhantomData<(ReqBody, E)>,
 }
 
 impl<ReqBody, E> HealthCheckLayer<ReqBody, E> {
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new(app_state: AppState) -> Self {
         Self {
+            app_state,
             _marker: PhantomData,
         }
-    }
-}
-
-impl<ReqBody, E> Default for HealthCheckLayer<ReqBody, E> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -36,12 +34,13 @@ where
     type Service = HealthCheck<S, ReqBody, E>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        HealthCheck::new(inner)
+        HealthCheck::new(self.app_state.clone(), inner)
     }
 }
 
 #[derive(Debug)]
 pub struct HealthCheck<S, ReqBody, E> {
+    app_state: AppState,
     inner: S,
     _marker: PhantomData<(ReqBody, E)>,
 }
@@ -49,6 +48,7 @@ pub struct HealthCheck<S, ReqBody, E> {
 impl<S: Clone, ReqBody, E> Clone for HealthCheck<S, ReqBody, E> {
     fn clone(&self) -> Self {
         Self {
+            app_state: self.app_state.clone(),
             inner: self.inner.clone(),
             _marker: PhantomData,
         }
@@ -59,8 +59,9 @@ impl<S, ReqBody, E> HealthCheck<S, ReqBody, E>
 where
     S: tower::Service<http::Request<ReqBody>, Response = Response, Error = E>,
 {
-    pub const fn new(inner: S) -> Self {
+    pub fn new(app_state: AppState, inner: S) -> Self {
         Self {
+            app_state,
             inner,
             _marker: PhantomData,
         }
@@ -87,13 +88,18 @@ where
     }
 
     fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
-        if (req.method() == Method::GET || req.method() == Method::HEAD)
-            && req.uri().path() == "/health"
-        {
-            Either::Left(ready(Ok(healthy_response())))
-        } else {
-            Either::Right(self.inner.call(req))
+        if req.method() == Method::GET || req.method() == Method::HEAD {
+            let path = req.uri().path();
+            if path == "/health" {
+                return Either::Left(ready(Ok(healthy_response())));
+            }
+            if let Some(response) =
+                observability_response(&self.app_state, path)
+            {
+                return Either::Left(ready(Ok(response)));
+            }
         }
+        Either::Right(self.inner.call(req))
     }
 }
 
@@ -103,6 +109,39 @@ fn healthy_response() -> Response {
         .status(http::StatusCode::OK)
         .body(body)
         .expect("always valid if tests pass")
+}
+
+fn observability_response(
+    app_state: &AppState,
+    path: &str,
+) -> Option<Response> {
+    const PREFIX: &str = "/v1/observability/provider-stats";
+    if path == PREFIX {
+        return Some(json_response(
+            app_state.provider_stats_snapshot(None, None),
+        ));
+    }
+    let rest = path.strip_prefix(PREFIX)?.strip_prefix('/')?;
+    if rest.is_empty() || rest.contains('/') {
+        return None;
+    }
+    Some(json_response(
+        app_state.provider_stats_snapshot(Some(rest), None),
+    ))
+}
+
+fn json_response<T: serde::Serialize>(value: T) -> Response {
+    match serde_json::to_vec(&value) {
+        Ok(body) => http::Response::builder()
+            .status(StatusCode::OK)
+            .header(CONTENT_TYPE, "application/json")
+            .body(axum_core::body::Body::from(body))
+            .expect("valid json response"),
+        Err(_) => http::Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(axum_core::body::Body::empty())
+            .expect("valid error response"),
+    }
 }
 
 #[cfg(test)]

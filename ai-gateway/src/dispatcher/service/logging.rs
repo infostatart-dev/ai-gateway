@@ -9,13 +9,21 @@ use uuid::Uuid;
 
 use super::Dispatcher;
 use crate::{
+    config::credentials::ProviderCredentialId,
     logger::service::LoggerService,
-    metrics::tfft::TFFTFuture,
+    metrics::{
+        provider::{
+            DispatchMetricsInput, RecordAttemptInput, build_attempt_record,
+            emit_pending_route_trace, generation_ms_per_output_token,
+            record_upstream_attempt,
+        },
+        tfft::TFFTFuture,
+    },
     types::{
         body::{Body, BodyReader},
         extensions::{
-            MapperContext, PromptContext, RequestContext, RequestKind,
-            RouterRuntimeLabels,
+            MapperContext, PendingRouteTrace, PromptContext, RequestContext,
+            RequestKind, RouterRuntimeLabels, UpstreamAttemptContext,
         },
         router::RouterId,
     },
@@ -40,6 +48,8 @@ impl Dispatcher {
         prompt_ctx: Option<PromptContext>,
         request_kind: RequestKind,
         router_runtime_labels: Option<RouterRuntimeLabels>,
+        upstream_attempt: Option<&UpstreamAttemptContext>,
+        credential_id: Option<ProviderCredentialId>,
     ) {
         let deployment_target =
             self.app_state.config().deployment_target.clone();
@@ -65,6 +75,8 @@ impl Dispatcher {
                 .prompt_ctx(prompt_ctx)
                 .request_kind(request_kind)
                 .router_runtime_labels(router_runtime_labels.clone())
+                .upstream_attempt(upstream_attempt.cloned())
+                .credential_id(credential_id.clone())
                 .build();
             let app_state = self.app_state.clone();
             tokio::spawn(
@@ -86,15 +98,23 @@ impl Dispatcher {
                 tfft_rx,
                 mapper_ctx,
                 target_url: &target_url,
-                router_id: router_id.as_ref(),
+                router_id,
                 request_kind,
                 router_runtime_labels,
                 req_body_len: req_body_bytes.len(),
+                req_body_bytes,
                 provider: self.provider.clone(),
+                upstream_attempt: upstream_attempt.cloned(),
+                credential_id,
+                pending_route_trace: client_response
+                    .extensions()
+                    .get::<PendingRouteTrace>()
+                    .cloned(),
             });
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn handle_metrics_logging(&self, context: MetricsLoggingContext<'_>) {
         let MetricsLoggingContext {
             start_instant,
@@ -107,14 +127,18 @@ impl Dispatcher {
             request_kind,
             router_runtime_labels,
             req_body_len,
+            req_body_bytes,
             provider,
+            upstream_attempt,
+            credential_id,
+            pending_route_trace,
         } = context;
         let mapper_ctx = mapper_ctx.clone();
         let app_state = self.app_state.clone();
         let provider_metric_attrs = crate::metrics::llm::provider_attrs(
             &self.provider,
             mapper_ctx.model.as_ref(),
-            router_id,
+            router_id.as_ref(),
             target_url.path(),
             response_status,
             mapper_ctx.is_stream,
@@ -137,21 +161,22 @@ impl Dispatcher {
                     u64::try_from(response_body.len()).unwrap_or(u64::MAX),
                     &provider_metric_attrs,
                 );
+                let duration_ms = start_instant.elapsed().as_secs_f64() * 1000.0;
                 app_state.0.metrics.llm.provider_response_duration.record(
-                    start_instant.elapsed().as_secs_f64() * 1000.0,
+                    duration_ms,
                     &provider_metric_attrs,
                 );
-                let usage =
+                let reported_usage =
                     crate::metrics::llm::extract_usage_from_response_body(
                         &response_body,
                         is_stream,
                     );
-                if !usage.is_empty() {
+                if !reported_usage.is_empty() {
                     app_state
                         .0
                         .metrics
                         .llm
-                        .record_provider_tokens(usage, &provider_metric_attrs);
+                        .record_provider_tokens(reported_usage, &provider_metric_attrs);
                 }
                 let tfft_ok_ms = tfft_duration
                     .as_ref()
@@ -166,6 +191,28 @@ impl Dispatcher {
                         .tfft_duration
                         .record(dur.as_secs_f64() * 1000.0, &attrs);
                 }
+
+                record_upstream_attempt(&DispatchMetricsInput {
+                    app_state: &app_state,
+                    provider: &provider,
+                    credential: credential_id.as_ref(),
+                    model: mapper_ctx.model.as_ref(),
+                    router_id: router_id.as_ref(),
+                    attempt: upstream_attempt.as_ref(),
+                    status: response_status,
+                    stream: is_stream,
+                    request_kind,
+                    duration_ms,
+                    tfft_ms: tfft_ok_ms,
+                    reported_usage,
+                    request_body: Some(&req_body_bytes),
+                    failover_class: None,
+                });
+
+                if request_kind == RequestKind::DirectProxy {
+                    app_state.0.metrics.provider.record_client_request(false);
+                }
+
                 if let Some(ref rtl) = router_runtime_labels {
                     app_state.runtime_metrics().record_router_complete(
                         rtl,
@@ -174,10 +221,54 @@ impl Dispatcher {
                         response_status,
                         req_body_len,
                         response_body.len(),
-                        start_instant.elapsed().as_secs_f64() * 1000.0,
+                        duration_ms,
                         tfft_ok_ms,
-                        usage,
+                        reported_usage,
                         false,
+                    );
+                }
+
+                if let Some(pending) = pending_route_trace {
+                    let record = build_attempt_record(&RecordAttemptInput {
+                        provider: &provider,
+                        credential: credential_id
+                            .as_ref()
+                            .map(ProviderCredentialId::as_str)
+                            .or_else(|| {
+                                upstream_attempt
+                                    .as_ref()
+                                    .map(|a| a.credential.as_str())
+                            })
+                            .unwrap_or("default"),
+                        model: mapper_ctx.model.as_ref(),
+                        router_id: router_id.as_ref(),
+                        attempt: upstream_attempt.as_ref(),
+                        status: response_status,
+                        stream: is_stream,
+                        request_kind,
+                        duration_ms,
+                        tfft_ms: tfft_ok_ms,
+                        reported_usage,
+                        request_body: Some(&req_body_bytes),
+                        estimate_tokens: app_state
+                            .config()
+                            .observability
+                            .estimate_tokens,
+                        failover_class: None,
+                    });
+                    let usage_source = match record.usage_source {
+                        crate::metrics::provider::attempt::UsageSource::Reported => {
+                            "reported"
+                        }
+                        crate::metrics::provider::attempt::UsageSource::Estimated => {
+                            "estimated"
+                        }
+                        crate::metrics::provider::attempt::UsageSource::None => "none",
+                    };
+                    emit_pending_route_trace(
+                        &pending,
+                        generation_ms_per_output_token(&record),
+                        Some(usage_source),
                     );
                 }
             }
@@ -193,9 +284,13 @@ struct MetricsLoggingContext<'a> {
     tfft_rx: oneshot::Receiver<()>,
     mapper_ctx: &'a MapperContext,
     target_url: &'a url::Url,
-    router_id: Option<&'a RouterId>,
+    router_id: Option<RouterId>,
     request_kind: RequestKind,
     router_runtime_labels: Option<RouterRuntimeLabels>,
     req_body_len: usize,
+    req_body_bytes: Bytes,
     provider: crate::types::provider::InferenceProvider,
+    upstream_attempt: Option<UpstreamAttemptContext>,
+    credential_id: Option<ProviderCredentialId>,
+    pending_route_trace: Option<PendingRouteTrace>,
 }

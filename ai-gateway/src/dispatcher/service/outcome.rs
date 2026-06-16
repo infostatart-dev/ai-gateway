@@ -1,19 +1,22 @@
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use http::{HeaderMap, StatusCode};
+use http_body_util::BodyExt;
 use tokio::{sync::oneshot, time::Instant};
 use url::Url;
 use uuid::Uuid;
 
 use super::Dispatcher;
 use crate::{
+    config::credentials::ProviderCredentialId,
     dispatcher::extensions::ExtensionsCopier,
     error::api::ApiError,
+    metrics::llm::TokenUsage,
     types::{
         body::{Body, BodyReader},
         extensions::{
             MapperContext, PromptContext, RequestContext, RequestKind,
-            RouterRuntimeLabels,
+            RouterRuntimeLabels, UpstreamAttemptContext,
         },
         provider::InferenceProvider,
         router::RouterId,
@@ -58,6 +61,34 @@ pub fn outcome_from_bytes(
     })
 }
 
+async fn buffer_non_stream_response(
+    response: http::Response<Body>,
+) -> (
+    http::Response<Body>,
+    BodyReader,
+    oneshot::Receiver<()>,
+    TokenUsage,
+) {
+    let (parts, body) = response.into_parts();
+    let collected = body
+        .collect()
+        .await
+        .expect("response body is infallible")
+        .to_bytes();
+    let reported_usage = crate::metrics::llm::extract_usage_from_response_body(
+        &collected, false,
+    );
+    let stream = futures::stream::once(futures::future::ready(Ok(collected)));
+    let (new_body, body_reader, tfft_rx) =
+        BodyReader::wrap_stream(stream, false);
+    (
+        http::Response::from_parts(parts, new_body),
+        body_reader,
+        tfft_rx,
+        reported_usage,
+    )
+}
+
 pub struct FinalizeDispatchContext<'a> {
     pub mapper_ctx: MapperContext,
     pub req_ctx: &'a RequestContext,
@@ -70,11 +101,14 @@ pub struct FinalizeDispatchContext<'a> {
     pub prompt_ctx: Option<PromptContext>,
     pub router_runtime_labels: Option<RouterRuntimeLabels>,
     pub extracted_path_and_query: http::uri::PathAndQuery,
+    pub upstream_attempt: Option<UpstreamAttemptContext>,
+    pub credential_id: Option<ProviderCredentialId>,
 }
 
 impl Dispatcher {
     /// Shared observability tail for every provider backend (proxy or
     /// embedded).
+    #[allow(clippy::too_many_lines)]
     pub(super) async fn finalize_dispatch(
         &self,
         mut outcome: DispatchOutcome,
@@ -92,6 +126,8 @@ impl Dispatcher {
             prompt_ctx,
             router_runtime_labels,
             extracted_path_and_query,
+            upstream_attempt,
+            credential_id,
         } = ctx;
 
         tracing::info!(
@@ -165,6 +201,37 @@ impl Dispatcher {
         )
         .await?;
 
+        let (body_reader, tfft_rx, reported_usage) = if mapper_ctx.is_stream {
+            (outcome.body_reader, outcome.tfft_rx, TokenUsage::default())
+        } else {
+            let (response, body_reader, tfft_rx, reported_usage) =
+                buffer_non_stream_response(outcome.response).await;
+            outcome.response = response;
+            (body_reader, tfft_rx, reported_usage)
+        };
+
+        let usage_input = crate::metrics::provider::DispatchMetricsInput {
+            app_state: &self.app_state,
+            provider: &self.provider,
+            credential: credential_id.as_ref(),
+            model: mapper_ctx.model.as_ref(),
+            router_id: router_id.as_ref(),
+            attempt: upstream_attempt.as_ref(),
+            status: response_status,
+            stream: mapper_ctx.is_stream,
+            request_kind,
+            duration_ms: start_instant.elapsed().as_secs_f64() * 1000.0,
+            tfft_ms: None,
+            reported_usage,
+            request_body: Some(&outcome.req_body_bytes),
+            failover_class: None,
+        };
+        crate::metrics::provider::attach_usage_header(
+            &self.app_state,
+            outcome.response.extensions_mut(),
+            &usage_input,
+        );
+
         self.handle_logging(
             req_ctx,
             start_time,
@@ -173,14 +240,16 @@ impl Dispatcher {
             outcome.request_headers.clone(),
             outcome.req_body_bytes.clone(),
             &outcome.response,
-            outcome.body_reader,
-            outcome.tfft_rx,
+            body_reader,
+            tfft_rx,
             &mapper_ctx,
             router_id,
             helicone_request_id,
             prompt_ctx,
             request_kind,
             router_runtime_labels,
+            upstream_attempt.as_ref(),
+            credential_id,
         );
 
         Ok(outcome.response)
@@ -313,6 +382,8 @@ mod finalize_tests {
                     prompt_ctx: None,
                     router_runtime_labels: None,
                     extracted_path_and_query: path.clone(),
+                    upstream_attempt: None,
+                    credential_id: None,
                 },
             )
             .await

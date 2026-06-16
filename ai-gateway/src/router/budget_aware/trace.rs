@@ -5,7 +5,10 @@ use std::time::Instant;
 
 use crate::{
     config::credentials::ProviderCredentialId,
-    types::{provider::InferenceProvider, router::RouterId},
+    types::{
+        extensions::PendingRouteTrace, provider::InferenceProvider,
+        router::RouterId,
+    },
 };
 
 /// `DeepSeek` Web multi-turn execution stats attached to dispatch responses.
@@ -25,7 +28,7 @@ pub(super) struct RouteOutcome<'a> {
 }
 
 pub(super) struct RouteTrace {
-    started: Instant,
+    _started: Instant,
     candidates: usize,
     attempts: u32,
     skipped: usize,
@@ -35,7 +38,7 @@ pub(super) struct RouteTrace {
 impl RouteTrace {
     pub(super) fn new(candidates: usize) -> Self {
         Self {
-            started: Instant::now(),
+            _started: Instant::now(),
             candidates,
             attempts: 0,
             skipped: 0,
@@ -55,37 +58,42 @@ impl RouteTrace {
         self.skipped = self.skipped.saturating_add(count);
     }
 
+    pub(super) fn attempts(&self) -> u32 {
+        self.attempts
+    }
+
+    pub(super) fn attach_pending(
+        &self,
+        router_id: &RouterId,
+        strategy: &'static str,
+        outcome: &RouteOutcome<'_>,
+    ) -> PendingRouteTrace {
+        PendingRouteTrace {
+            router_id: router_id.clone(),
+            strategy,
+            hops: self.attempts,
+            candidates: self.candidates,
+            skipped: self.skipped,
+            outcome_label: outcome.label,
+            terminal_provider: outcome.provider.cloned(),
+            terminal_credential: outcome
+                .credential
+                .map(ProviderCredentialId::to_string),
+            terminal_status: outcome.status,
+            deepseek_web: self.deepseek_web,
+        }
+    }
+
     pub(super) fn emit(
         &self,
         router_id: &RouterId,
         strategy: &'static str,
         outcome: &RouteOutcome<'_>,
     ) {
-        let provider = outcome
-            .provider
-            .map_or_else(|| "none".to_string(), ToString::to_string);
-        let credential = outcome
-            .credential
-            .map_or("none", ProviderCredentialId::as_str);
-        let duration_ms = u64::try_from(self.started.elapsed().as_millis())
-            .unwrap_or(u64::MAX);
-        tracing::info!(
-            router_id = %router_id,
-            strategy,
-            outcome = outcome.label,
-            hops = self.attempts,
-            candidates = self.candidates,
-            skipped = self.skipped,
-            duration_ms,
-            terminal_provider = provider,
-            terminal_credential = credential,
-            terminal_status = outcome.status.map_or(0, u32::from),
-            deepseek_web_turns = self.deepseek_web.map_or(0, |d| d.turns),
-            deepseek_web_upload_parts =
-                self.deepseek_web.map_or(0, |d| d.upload_parts),
-            deepseek_web_pow_cache_hits =
-                self.deepseek_web.map_or(0, |d| d.pow_cache_hits),
-            "budget-aware route summary"
+        crate::metrics::provider::emit_pending_route_trace(
+            &self.attach_pending(router_id, strategy, outcome),
+            None,
+            None,
         );
     }
 }
