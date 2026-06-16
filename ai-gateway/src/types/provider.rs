@@ -268,7 +268,9 @@ impl ProviderKey {
         } else {
             let provider_str = provider.to_string().to_uppercase();
             let env_var = format!("{provider_str}_API_KEY");
-            if let Ok(key) = std::env::var(&env_var) {
+            if let Ok(key) = std::env::var(&env_var)
+                && !key.is_empty()
+            {
                 Some(ProviderKey::Secret(Secret::from(key)))
             } else {
                 None

@@ -371,15 +371,20 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn registry_skips_missing_env_slots() {
+        let clear = [
+            "AI_GATEWAY_CREDENTIAL_GEMINI_FREE",
+            "AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2",
+            "AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3",
+            "AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4",
+            "AI_GATEWAY_CREDENTIAL_GEMINI_DEFAULT",
+            "GEMINI_FREE_TIER_API_KEY",
+            "GEMINI_FREE_TIER_APIKEY",
+            "GEMINI_API_KEY",
+        ];
         unsafe {
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE");
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2");
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3");
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4");
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_DEFAULT");
-            std::env::remove_var("GEMINI_FREE_TIER_API_KEY");
-            std::env::remove_var("GEMINI_FREE_TIER_APIKEY");
-            std::env::remove_var("GEMINI_API_KEY");
+            for name in clear {
+                std::env::remove_var(name);
+            }
         }
         let registry = CredentialRegistry::build(&providers());
         assert!(!registry.has_for(&InferenceProvider::GoogleGemini));
