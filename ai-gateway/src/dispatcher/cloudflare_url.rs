@@ -57,4 +57,20 @@ mod tests {
             "https://api.cerebras.ai/v1/chat/completions"
         );
     }
+
+    #[test]
+    fn github_models_base_url_joins_inference_chat_completions() {
+        let base =
+            url::Url::parse("https://models.github.ai/inference/").unwrap();
+        let joined = join_provider_path(
+            &InferenceProvider::Named("github-models".into()),
+            &base,
+            "chat/completions",
+        )
+        .unwrap();
+        assert_eq!(
+            joined.as_str(),
+            "https://models.github.ai/inference/chat/completions"
+        );
+    }
 }

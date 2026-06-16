@@ -143,7 +143,7 @@ impl Dispatcher {
         let client = if let Some(key) = provider_key {
             Client::new_with_provider_key(
                 &app_state,
-                provider.clone(),
+                &provider,
                 Some(key),
             )?
         } else {

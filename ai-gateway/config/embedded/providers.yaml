@@ -513,6 +513,82 @@ deepseek-web:
       context-window: 65536
       reasoning: true
 
+github-models:
+  # Upstream: https://models.github.ai/inference/chat/completions
+  # Live catalog: https://models.github.ai/inference/models
+  models:
+    - "openai/gpt-4.1"
+    - "openai/gpt-4o"
+    - "openai/gpt-4o-mini"
+    - "openai/o1"
+    - "openai/o3"
+    - "openai/o4-mini"
+    - "deepseek/DeepSeek-R1"
+    - "meta/Llama-4-Maverick-17B-128E-Instruct"
+    - "xai/grok-3"
+    - "mistral-ai/Mistral-Medium-3"
+    - "cohere/Cohere-command-a"
+    - "microsoft/Phi-4"
+    - "openai/text-embedding-3-large"
+    - "openai/text-embedding-3-small"
+  base-url: https://models.github.ai/inference/
+  request-headers:
+    X-GitHub-Api-Version: "2022-11-28"
+    Accept: application/vnd.github+json
+  model-capabilities:
+    openai/gpt-4.1:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1047576
+    openai/gpt-4o:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    openai/gpt-4o-mini:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    openai/o1:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 200000
+      reasoning: true
+    openai/o3:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+      reasoning: true
+    openai/o4-mini:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 200000
+      reasoning: true
+    deepseek/DeepSeek-R1:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 131072
+      reasoning: true
+    meta/Llama-4-Maverick-17B-128E-Instruct:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    xai/grok-3:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 131072
+    mistral-ai/Mistral-Medium-3:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    cohere/Cohere-command-a:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    microsoft/Phi-4:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 16384
+
 bedrock:
   # bedrock models must be enabled prior to sending
   # requests which use them

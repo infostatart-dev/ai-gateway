@@ -29,12 +29,12 @@ impl Client {
                 .get_provider_key(&provider, None)
                 .await
         };
-        Self::new_with_provider_key(app_state, provider, api_key.as_ref())
+        Self::new_with_provider_key(app_state, &provider, api_key.as_ref())
     }
 
     pub fn new_with_provider_key(
         app_state: &AppState,
-        provider: InferenceProvider,
+        provider: &InferenceProvider,
         provider_key: Option<&ProviderKey>,
     ) -> Result<Self, InitError> {
         Self::new_inner(app_state, provider, provider_key)
@@ -42,10 +42,10 @@ impl Client {
 
     fn new_inner(
         app_state: &AppState,
-        provider: InferenceProvider,
+        provider: &InferenceProvider,
         api_key: Option<&ProviderKey>,
     ) -> Result<Self, InitError> {
-        let gzip = app_state.config().gzip_decompress_responses_for(&provider);
+        let gzip = app_state.config().gzip_decompress_responses_for(provider);
         let d = &app_state.config().dispatcher;
         let base = reqwest::Client::builder()
             .gzip(gzip)

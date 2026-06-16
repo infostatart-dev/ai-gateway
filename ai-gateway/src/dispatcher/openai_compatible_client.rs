@@ -1,4 +1,4 @@
-use http::{HeaderMap, HeaderValue};
+use http::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::ClientBuilder;
 
 use crate::{
@@ -18,17 +18,15 @@ impl Client {
     pub fn new(
         app_state: &AppState,
         client_builder: ClientBuilder,
-        provider: InferenceProvider,
+        provider: &InferenceProvider,
         provider_key: Option<&ProviderKey>,
     ) -> Result<Self, InitError> {
-        let base_url = app_state
-            .0
-            .config
-            .providers
-            .get(&provider)
-            .ok_or_else(|| ProviderError::ProviderNotConfigured(provider))?
-            .base_url
-            .clone();
+        let provider_config =
+            app_state.0.config.providers.get(provider).ok_or_else(|| {
+                ProviderError::ProviderNotConfigured(provider.clone())
+            })?;
+
+        let base_url = provider_config.base_url.clone();
 
         let mut default_headers = HeaderMap::new();
         if let Some(ProviderKey::Secret(key)) = provider_key {
@@ -36,6 +34,16 @@ impl Client {
                 http::header::AUTHORIZATION,
                 HeaderValue::from_str(&format!("Bearer {}", key.expose()))
                     .unwrap(),
+            );
+        }
+        for (name, value) in &provider_config.request_headers {
+            default_headers.insert(
+                HeaderName::from_bytes(name.as_bytes()).expect(
+                    "embedded provider request-headers use valid header names",
+                ),
+                HeaderValue::from_str(value).expect(
+                    "embedded provider request-headers use valid header values",
+                ),
             );
         }
         default_headers.insert(http::header::HOST, host_header(&base_url));

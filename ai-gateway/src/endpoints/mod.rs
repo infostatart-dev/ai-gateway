@@ -147,7 +147,10 @@ impl ApiEndpoint {
             } => {
                 // OpenCode base-url already ends with `/v1/`; direct proxy uses
                 // `chat/completions`, mapper must not prepend another `v1/`.
-                if provider == &InferenceProvider::Named("opencode".into()) {
+                if provider == &InferenceProvider::Named("opencode".into())
+                    || provider
+                        == &InferenceProvider::Named("github-models".into())
+                {
                     Ok(EndpointRoute::ChatCompletions.path().to_string())
                 } else {
                     Ok(openai_endpoint.path().to_string())
@@ -181,6 +184,20 @@ impl ApiEndpoint {
             Self::OpenRouter(openrouter) => openrouter.endpoint_type(),
             Self::Bedrock(bedrock) => bedrock.endpoint_type(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn github_models_chat_completions_path_omits_v1_prefix() {
+        let endpoint = ApiEndpoint::OpenAICompatible {
+            provider: InferenceProvider::Named("github-models".into()),
+            openai_endpoint: OpenAI::chat_completions(),
+        };
+        assert_eq!(endpoint.path(None, false).unwrap(), "chat/completions");
     }
 }
 

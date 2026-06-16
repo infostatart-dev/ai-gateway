@@ -408,6 +408,38 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial(env)]
+    fn registry_includes_github_models_when_credential_set() {
+        unsafe {
+            std::env::set_var(
+                "AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT",
+                "ghp_test",
+            );
+        }
+        let registry = CredentialRegistry::build(&providers());
+        let github = InferenceProvider::Named("github-models".into());
+        assert!(registry.has_for(&github));
+        let cred = registry.default_for(&github).unwrap();
+        assert_eq!(cred.id.0, "github-models-default");
+        assert_eq!(cred.tier, "free");
+        assert_eq!(cred.budget_rank, 0);
+        unsafe {
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT");
+        }
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn registry_skips_github_models_without_credential() {
+        unsafe {
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT");
+        }
+        let registry = CredentialRegistry::build(&providers());
+        let github = InferenceProvider::Named("github-models".into());
+        assert!(!registry.has_for(&github));
+    }
+
+    #[test]
     fn credential_id_display() {
         let id = ProviderCredentialId::new("gemini-free");
         assert_eq!(id.to_string(), "gemini-free");

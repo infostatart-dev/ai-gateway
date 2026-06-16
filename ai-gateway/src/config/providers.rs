@@ -35,6 +35,9 @@ pub struct GlobalProviderConfig {
     pub gzip_decompress_responses: Option<bool>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub model_capabilities: IndexMap<ModelId, ModelCapabilityConfig>,
+    /// Static headers merged into every upstream request for this provider.
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub request_headers: IndexMap<String, String>,
 }
 
 /// Map of *ALL* supported providers.
@@ -61,6 +64,8 @@ impl<'de> Deserialize<'de> for ProvidersConfig {
             gzip_decompress_responses: Option<bool>,
             #[serde(default)]
             model_capabilities: IndexMap<String, ModelCapabilityConfig>,
+            #[serde(default)]
+            request_headers: IndexMap<String, String>,
         }
 
         impl<'de> Visitor<'de> for ProvidersConfigVisitor {
@@ -117,6 +122,7 @@ impl<'de> Deserialize<'de> for ProvidersConfig {
                             raw_config.model_capabilities,
                         )
                         .map_err(de::Error::custom)?,
+                        request_headers: raw_config.request_headers,
                     };
 
                     providers.insert(provider, config);
@@ -147,6 +153,8 @@ impl Serialize for ProvidersConfig {
             gzip_decompress_responses: Option<bool>,
             #[serde(skip_serializing_if = "IndexMap::is_empty")]
             model_capabilities: IndexMap<String, ModelCapabilityConfig>,
+            #[serde(skip_serializing_if = "IndexMap::is_empty")]
+            request_headers: IndexMap<String, String>,
         }
 
         let mut map = serializer.serialize_map(Some(self.0.len()))?;
@@ -166,6 +174,7 @@ impl Serialize for ProvidersConfig {
                     .iter()
                     .map(|(model, cap)| (model.to_string(), cap.clone()))
                     .collect(),
+                request_headers: config.request_headers.clone(),
             };
 
             map.serialize_entry(provider, &serialized_config)?;
@@ -213,6 +222,68 @@ impl Default for ProvidersConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_catalog_includes_github_models() {
+        let config = ProvidersConfig::default();
+        let github = InferenceProvider::Named("github-models".into());
+        let cfg = config.get(&github).expect("github-models in catalog");
+        assert_eq!(
+            cfg.base_url.as_str(),
+            "https://models.github.ai/inference/"
+        );
+        assert_eq!(
+            cfg.request_headers
+                .get("X-GitHub-Api-Version")
+                .map(String::as_str),
+            Some("2022-11-28")
+        );
+        assert_eq!(
+            cfg.request_headers.get("Accept").map(String::as_str),
+            Some("application/vnd.github+json")
+        );
+        assert!(cfg.models.iter().any(|m| m.to_string() == "openai/gpt-4.1"));
+        assert!(
+            cfg.models
+                .iter()
+                .any(|m| m.to_string() == "openai/text-embedding-3-large")
+        );
+    }
+
+    #[test]
+    fn test_providers_config_parses_request_headers() {
+        let yaml = r#"
+github-models:
+  models:
+    - "openai/gpt-4o"
+  base-url: https://models.github.ai/inference/
+  request-headers:
+    X-GitHub-Api-Version: "2022-11-28"
+    Accept: application/vnd.github+json
+"#;
+        let config: ProvidersConfig = serde_yml::from_str(yaml).unwrap();
+        let github = InferenceProvider::Named("github-models".into());
+        let cfg = config.get(&github).unwrap();
+        assert_eq!(
+            cfg.request_headers
+                .get("X-GitHub-Api-Version")
+                .map(String::as_str),
+            Some("2022-11-28")
+        );
+    }
+
+    #[test]
+    fn github_models_model_id_preserves_publisher_prefix() {
+        use std::str::FromStr;
+
+        let model =
+            ModelId::from_str("github-models/openai/gpt-4o-mini").unwrap();
+        assert_eq!(model.to_string(), "openai/gpt-4o-mini");
+        assert_eq!(
+            model.inference_provider(),
+            Some(InferenceProvider::Named("github-models".into()))
+        );
+    }
 
     #[test]
     fn default_catalog_includes_deepseek_web_not_perplexity() {

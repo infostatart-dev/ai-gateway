@@ -129,6 +129,7 @@ fn autodefault_provider_order() -> Vec<InferenceProvider> {
     order.extend([
         InferenceProvider::Named("opencode".into()),
         InferenceProvider::OpenRouter,
+        InferenceProvider::Named("github-models".into()),
         InferenceProvider::Named("mistral".into()),
         InferenceProvider::Named("groq".into()),
         InferenceProvider::Named("cerebras".into()),
@@ -285,6 +286,84 @@ mod tests {
         );
         unsafe {
             std::env::remove_var("OPENCODE_API_KEY");
+        }
+    }
+
+    #[serial_test::serial(env)]
+    #[test]
+    fn autodefault_includes_github_models_when_credential_set() {
+        unsafe {
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT");
+        }
+        let config = Config::default();
+        let github = InferenceProvider::Named("github-models".into());
+
+        assert!(
+            config.providers.contains_key(&github),
+            "embedded providers must include github-models"
+        );
+        assert!(
+            !is_available_for_autodefault(
+                &github,
+                &config.providers,
+                &config.credentials,
+            ),
+            "github-models must be omitted from autodefault without credential"
+        );
+
+        unsafe {
+            std::env::set_var(
+                "AI_GATEWAY_CREDENTIAL_OPENROUTER_DEFAULT",
+                "sk-or-test",
+            );
+            std::env::set_var(
+                "AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT",
+                "ghp_test",
+            );
+            std::env::set_var(
+                "AI_GATEWAY_CREDENTIAL_MISTRAL_DEFAULT",
+                "mistral-test",
+            );
+        }
+        let config = Config::default();
+        assert!(
+            is_available_for_autodefault(
+                &github,
+                &config.providers,
+                &config.credentials,
+            ),
+            "github-models must join autodefault when credential is set"
+        );
+
+        let router =
+            build_autodefault_router(&config).expect("autodefault router");
+        let strategy = router.load_balance.0.get(&EndpointType::Chat).unwrap();
+        let BalanceConfigInner::BudgetAwareCapabilityAfter {
+            provider_priorities,
+            ..
+        } = strategy
+        else {
+            panic!("expected BudgetAwareCapabilityAfter");
+        };
+        let openrouter_rank = provider_priorities
+            .get(&InferenceProvider::OpenRouter)
+            .copied()
+            .expect("openrouter in autodefault");
+        let github_rank = provider_priorities
+            .get(&github)
+            .copied()
+            .expect("github-models in autodefault");
+        let mistral_rank = provider_priorities
+            .get(&InferenceProvider::Named("mistral".into()))
+            .copied()
+            .expect("mistral in autodefault");
+        assert!(openrouter_rank < github_rank);
+        assert!(github_rank < mistral_rank);
+
+        unsafe {
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_OPENROUTER_DEFAULT");
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT");
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_MISTRAL_DEFAULT");
         }
     }
 }

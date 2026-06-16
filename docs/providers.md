@@ -27,6 +27,7 @@ Embedded slots in [`credentials.yaml`](../ai-gateway/config/embedded/credentials
 | `cerebras-default` | cerebras | Cerebras API |
 | `mistral-default` | mistral | Mistral API |
 | `opencode-default` | opencode | OpenCode Free tier |
+| `github-models-default` | github-models | GitHub Models PAT (`models:read`) |
 
 Set the matching `AI_GATEWAY_CREDENTIAL_*` env var for each slot you enable.
 For Gemini free tier you can configure up to four AI Studio keys
@@ -66,6 +67,26 @@ Details: [credentials.md](credentials.md).
 - Models: `deepseek-web/deepseek-chat`, `deepseek-web/deepseek-reasoner`
 - Tools not supported initially
 - Setup: [deepseek-web.md](deepseek-web.md)
+
+### GitHub Models
+
+- OpenAI-compatible chat completions via GitHub PAT
+- Base upstream: `https://models.github.ai/inference/chat/completions`
+- Credential: `AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT` (PAT must include **`models:read`** scope)
+- Model IDs keep the publisher prefix upstream, for example
+  `github-models/openai/gpt-4.1` → upstream body model `openai/gpt-4.1`
+- Included in **autodefault** only when `github-models-default` resolves; priority is after `openrouter`, before `mistral`
+- Embedding IDs (`openai/text-embedding-3-large`, `openai/text-embedding-3-small`) are catalog-only in v1
+- Live catalog: [models.github.ai/inference/models](https://models.github.ai/inference/models)
+
+Example request:
+
+```json
+{
+  "model": "github-models/openai/gpt-4o-mini",
+  "messages": [{"role": "user", "content": "Hello"}]
+}
+```
 
 ### Other bundled providers
 

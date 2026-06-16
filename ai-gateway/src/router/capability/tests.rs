@@ -151,6 +151,42 @@ fn test_supports_logic() {
     assert!(!supports(&reqs, &model_unknown_context));
 }
 
+#[test]
+fn github_models_o1_is_reasoning_without_tools_or_json_schema() {
+    use crate::config::providers::ProvidersConfig;
+
+    let provider = InferenceProvider::Named("github-models".into());
+    let model = test_model(provider.clone(), "openai/o1");
+    let metadata = ProvidersConfig::default()
+        .get(&provider)
+        .and_then(|cfg| cfg.model_capabilities.get(&model))
+        .cloned();
+    let cap = get_model_capability(&provider, &model, metadata.as_ref());
+    assert!(cap.reasoning);
+    assert!(!cap.supports_tools);
+    assert!(!cap.supports_json_schema);
+}
+
+#[test]
+fn github_models_grok_3_excluded_for_json_schema_routing() {
+    use crate::config::providers::ProvidersConfig;
+
+    let provider = InferenceProvider::Named("github-models".into());
+    let model = test_model(provider.clone(), "xai/grok-3");
+    let metadata = ProvidersConfig::default()
+        .get(&provider)
+        .and_then(|cfg| cfg.model_capabilities.get(&model))
+        .cloned();
+    let cap = get_model_capability(&provider, &model, metadata.as_ref());
+    assert!(!cap.supports_json_schema);
+
+    let reqs = RequestRequirements {
+        json_schema_required: true,
+        ..RequestRequirements::default()
+    };
+    assert!(!supports(&reqs, &cap));
+}
+
 #[cfg(feature = "testing")]
 mod async_tests {
     use std::sync::Arc;

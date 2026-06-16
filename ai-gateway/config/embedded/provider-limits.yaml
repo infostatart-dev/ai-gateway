@@ -618,6 +618,27 @@ opencode:
                 rpm: 20
                 rpd: 200
 
+github-models:
+  cooldown:
+    provider-error: 30s
+  observed-at: "2026-06-16"
+  scope: api-key
+  source: github-models-inference-docs
+  notes:
+    - Requires a GitHub PAT with models:read scope.
+    - Per-model rate tiers on GitHub vary (Low / High / Embedding); values below are conservative.
+    - Respect GitHub Acceptable Use Policy; no reselling or abusive automation.
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                rpm: 10
+                rpd: 50
+                concurrent: 2
+
 cloudflare:
   cooldown:
     provider-error: 30s
