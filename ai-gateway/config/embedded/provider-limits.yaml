@@ -5,6 +5,7 @@ cooldown-defaults:
   quota-exhausted: 1h
   auth-error: 5m
   retry-after-buffer: 1s
+  abuse-block: 2h
 
 gemini:
   observed-at: "2026-06-14"
@@ -732,12 +733,13 @@ chatgpt-web:
     - Plus/Pro web session — not platform API; limits are heuristic.
     - One session file equals one account; do not share across instances without a pool.
   cooldown:
-    rate-limit: 120s
+    rate-limit: 180s
     auth-error: 30m
     provider-error: 60s
+    abuse-block: 4h
   tiers:
     plus-single-session:
       limits:
-        rpm: 12
-        concurrent: 2
-        min-interval-ms: 3000
+        rpm: 4
+        concurrent: 1
+        min-interval-ms: 12000

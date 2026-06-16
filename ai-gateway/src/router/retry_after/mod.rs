@@ -5,8 +5,11 @@ mod duration;
 mod header;
 mod text;
 
+mod abuse;
+
 use std::time::Duration;
 
+use abuse::looks_like_abuse_block;
 pub use body::extract_retry_after_from_body;
 use bytes::Bytes;
 use classify::classify_429;
@@ -36,6 +39,21 @@ pub fn rate_limit_cooldown(
     Duration::from_secs(base_secs) + config.retry_after_buffer
 }
 
+async fn collect_response_body(
+    response: Response,
+) -> (http::response::Parts, Bytes) {
+    let (parts, body) = response.into_parts();
+    let body_bytes = match body.collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(_) => Bytes::new(),
+    };
+    (parts, body_bytes)
+}
+
+fn abuse_block_cooldown(config: &RouterCooldownConfig) -> Duration {
+    config.abuse_block + config.retry_after_buffer
+}
+
 pub async fn cooldown_for_response(
     response: Response,
     config: &RouterCooldownConfig,
@@ -47,11 +65,7 @@ pub async fn cooldown_for_response(
                 rate_limit_cooldown(response.headers(), None, config);
             return (response, cooldown);
         }
-        let (parts, body) = response.into_parts();
-        let body_bytes = match body.collect().await {
-            Ok(collected) => collected.to_bytes(),
-            Err(_) => Bytes::new(),
-        };
+        let (parts, body_bytes) = collect_response_body(response).await;
         let cooldown = rate_limit_cooldown(
             &parts.headers,
             Some(body_bytes.as_ref()),
@@ -70,7 +84,42 @@ pub async fn cooldown_for_response(
             | StatusCode::FORBIDDEN
             | StatusCode::PAYMENT_REQUIRED
     ) {
-        return (response, config.auth_error);
+        let (parts, body_bytes) = collect_response_body(response).await;
+        let cooldown = if looks_like_abuse_block(Some(body_bytes.as_ref())) {
+            tracing::warn!(
+                cooldown_kind = "abuse-block",
+                "auth response classified as abuse block"
+            );
+            abuse_block_cooldown(config)
+        } else {
+            config.auth_error
+        };
+        let response = Response::from_parts(
+            parts,
+            axum_core::body::Body::from(body_bytes),
+        );
+        return (response, cooldown);
+    }
+
+    if matches!(
+        status,
+        StatusCode::BAD_GATEWAY | StatusCode::SERVICE_UNAVAILABLE
+    ) {
+        let (parts, body_bytes) = collect_response_body(response).await;
+        let cooldown = if looks_like_abuse_block(Some(body_bytes.as_ref())) {
+            tracing::warn!(
+                cooldown_kind = "abuse-block",
+                "upstream response classified as abuse block"
+            );
+            abuse_block_cooldown(config)
+        } else {
+            config.provider_error + config.retry_after_buffer
+        };
+        let response = Response::from_parts(
+            parts,
+            axum_core::body::Body::from(body_bytes),
+        );
+        return (response, cooldown);
     }
 
     (response, config.provider_error)
@@ -82,7 +131,13 @@ mod tests {
     use http::StatusCode;
 
     use super::*;
-    use crate::config::router_cooldown::RouterCooldownConfig;
+    use crate::{
+        config::{
+            provider_limits::ProviderLimitCatalog,
+            router_cooldown::RouterCooldownConfig,
+        },
+        types::provider::InferenceProvider,
+    };
 
     #[tokio::test]
     async fn cooldown_uses_gemini_retry_delay_from_body() {
@@ -112,5 +167,35 @@ mod tests {
             cooldown,
             config.quota_exhausted + config.retry_after_buffer
         );
+    }
+
+    #[tokio::test]
+    async fn abuse_502_uses_abuse_block_cooldown_for_chatgpt_web() {
+        let catalog = ProviderLimitCatalog::default();
+        let config = catalog
+            .cooldown_for(&InferenceProvider::Named("chatgpt-web".into()));
+        let body = br#"{"error":{"message":"Our systems have detected unusual activity"}}"#;
+        let response = http::Response::builder()
+            .status(StatusCode::BAD_GATEWAY)
+            .body(Body::from(body.as_slice()))
+            .unwrap();
+        let (_, cooldown) = cooldown_for_response(response, &config).await;
+        assert_eq!(cooldown, config.abuse_block + config.retry_after_buffer);
+        assert_eq!(cooldown, Duration::from_secs(4 * 3600 + 1));
+    }
+
+    #[tokio::test]
+    async fn generic_502_uses_provider_error_cooldown() {
+        let catalog = ProviderLimitCatalog::default();
+        let config = catalog
+            .cooldown_for(&InferenceProvider::Named("chatgpt-web".into()));
+        let body = br#"{"error":{"message":"upstream connection reset"}}"#;
+        let response = http::Response::builder()
+            .status(StatusCode::BAD_GATEWAY)
+            .body(Body::from(body.as_slice()))
+            .unwrap();
+        let (_, cooldown) = cooldown_for_response(response, &config).await;
+        assert_eq!(cooldown, config.provider_error + config.retry_after_buffer);
+        assert_eq!(cooldown, Duration::from_secs(60 + 1));
     }
 }

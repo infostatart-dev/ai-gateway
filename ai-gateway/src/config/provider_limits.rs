@@ -558,6 +558,10 @@ mod tests {
             catalog.cooldown_defaults.auth_error,
             Duration::from_secs(300)
         );
+        assert_eq!(
+            catalog.cooldown_defaults.abuse_block,
+            Duration::from_secs(2 * 3600)
+        );
     }
 
     #[test]
@@ -568,20 +572,26 @@ mod tests {
             .expect("chatgpt-web limits");
         let limits = &provider.tier("plus-single-session").unwrap().limits;
 
-        assert_eq!(limits.rpm, QuotaValue::Limited(12));
-        assert_eq!(limits.concurrent, Some(2));
-        assert_eq!(limits.min_interval_ms, Some(3000));
+        assert_eq!(limits.rpm, QuotaValue::Limited(4));
+        assert_eq!(limits.concurrent, Some(1));
+        assert_eq!(limits.min_interval_ms, Some(12000));
         assert_eq!(
             catalog
                 .cooldown_for(&InferenceProvider::Named("chatgpt-web".into()))
                 .rate_limit,
-            Duration::from_secs(120)
+            Duration::from_secs(180)
         );
         assert_eq!(
             catalog
                 .cooldown_for(&InferenceProvider::Named("chatgpt-web".into()))
                 .auth_error,
             Duration::from_secs(30 * 60)
+        );
+        assert_eq!(
+            catalog
+                .cooldown_for(&InferenceProvider::Named("chatgpt-web".into()))
+                .abuse_block,
+            Duration::from_secs(4 * 3600)
         );
     }
 

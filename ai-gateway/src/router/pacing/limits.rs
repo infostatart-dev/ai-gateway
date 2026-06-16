@@ -71,9 +71,9 @@ mod tests {
         let limits = catalog
             .pacing_limits_for(&provider)
             .expect("chatgpt-web pacing");
-        assert_eq!(limits.concurrent, 2);
-        assert_eq!(limits.rpm, 12);
-        assert_eq!(limits.min_interval, Duration::from_millis(3000));
+        assert_eq!(limits.concurrent, 1);
+        assert_eq!(limits.rpm, 4);
+        assert_eq!(limits.min_interval, Duration::from_millis(12000));
     }
 
     #[test]

@@ -26,7 +26,7 @@ use crate::{
         cookie::build_session_cookie_header,
         exchange::{exchange_session, invalidate_token_cache},
         file::{SessionFile, save_session},
-        warmup::run_session_warmup,
+        warmup::{invalidate_warmup_cache, run_session_warmup},
     },
     tls::fetch::{FetchRequest, HttpFetch, default_fetch},
 };
@@ -299,6 +299,7 @@ impl Executor {
 
             if resp.status == 401 || resp.status == 403 {
                 invalidate_token_cache(&cookie);
+                invalidate_warmup_cache(&cookie, Some(&token.access_token));
                 return Err(Error::SessionAuth(
                     "conversation unauthorized".into(),
                 ));

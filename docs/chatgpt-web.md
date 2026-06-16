@@ -56,6 +56,58 @@ import`.
 Provider limits and cooldown entries for chatgpt-web are in
 [`provider-limits.yaml`](../ai-gateway/config/embedded/provider-limits.yaml).
 
+## Stabilization (beta.13+)
+
+### Warmup cache
+
+Before sentinel, the executor performs three browser-like GETs (`/me`,
+`/conversations`, `/models`). Results are cached for **60 seconds** per session
+cookie + access-token suffix so burst traffic does not repeat warmup on every
+completion.
+
+Caches are invalidated on HTTP **401/403** from session exchange, sentinel, or
+conversation so a blocked session does not skip warmup on the next attempt.
+
+### Pacing
+
+Embedded pacing for tier `plus-single-session` targets one active browser tab:
+
+| Knob | Value |
+|------|-------|
+| RPM | **4** |
+| Concurrent | **1** |
+| Min interval | **12s** |
+
+### Cooldowns
+
+| Kind | `chatgpt-web` override |
+|------|------------------------|
+| Rate limit (429) | **180s** |
+| Auth error | **30m** |
+| Provider error (generic 502) | **60s** |
+| **Abuse block** (unusual activity / sentinel hard block) | **4h** |
+
+When upstream returns **502** or **503** with OpenAI “unusual activity” copy or
+sentinel block messages, the router applies **`abuse-block`** instead of the
+short provider-error cooldown.
+
+### Operational playbook
+
+1. **Browser sanity check** — if chatgpt.com shows “unusual activity” in a normal
+   browser on the same egress IP, stop gateway retries for hours; cooldown alone
+   is not enough until the IP clears.
+2. **Do not hammer** — repeated autodefault failover that re-selects `chatgpt-web`
+   every minute extends blocks; `abuse-block` cooldown prevents retry storms.
+3. **Full cookie jar** — import/login must include session token **and**
+   Cloudflare cookies (`cf_clearance`, `__cf_bm`); bare token-only paste fails
+   sentinel/CF more often.
+4. **Egress** — datacenter/pod IPs are high-risk; residential or dedicated egress
+   per session reduces false positives (ops concern).
+5. **One session per account** — sharing one session file across many replicas on
+   one IP multiplies automated traffic patterns.
+6. **Recovery window** — expect **1–24h** for light flags; stop all attempts during
+   wait.
+
 ## Security
 
 - Treat `session.json` like a password — add to `.gitignore` (see repo

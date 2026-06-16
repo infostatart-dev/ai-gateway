@@ -172,4 +172,32 @@ mod tests {
         assert!(out.contains("cf_clearance=abc"));
         assert!(!out.contains("unrelated"));
     }
+
+    #[test]
+    fn merge_refreshed_unchunked_to_chunked_drops_stale_token() {
+        let existing = "__Secure-next-auth.session-token=old; cf_clearance=cf1";
+        let set_cookie = "__Secure-next-auth.session-token.0=chunk0; Path=/; \
+                          Secure, __Secure-next-auth.session-token.1=chunk1; \
+                          Path=/; Secure";
+        let merged =
+            merge_refreshed_cookie(existing, Some(set_cookie)).unwrap();
+        assert!(merged.contains("__Secure-next-auth.session-token.0=chunk0"));
+        assert!(merged.contains("__Secure-next-auth.session-token.1=chunk1"));
+        assert!(!merged.contains("__Secure-next-auth.session-token=old"));
+        assert!(!merged.contains("__Secure-next-auth.session-token=chunk"));
+    }
+
+    #[test]
+    fn merge_refreshed_preserves_cf_cookies() {
+        let existing = "__Secure-next-auth.session-token=abc; \
+                        cf_clearance=cf1; __cf_bm=bm1";
+        let set_cookie = "__Secure-next-auth.session-token.0=new0; Path=/; \
+                          Secure, __Secure-next-auth.session-token.1=new1; \
+                          Path=/; Secure";
+        let merged =
+            merge_refreshed_cookie(existing, Some(set_cookie)).unwrap();
+        assert!(merged.contains("cf_clearance=cf1"));
+        assert!(merged.contains("__cf_bm=bm1"));
+        assert!(merged.contains("__Secure-next-auth.session-token.0=new0"));
+    }
 }

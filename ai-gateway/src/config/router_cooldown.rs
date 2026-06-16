@@ -15,6 +15,8 @@ pub struct RouterCooldownConfig {
     pub auth_error: Duration,
     #[serde(with = "humantime_serde", default = "default_retry_after_buffer")]
     pub retry_after_buffer: Duration,
+    #[serde(with = "humantime_serde", default = "default_abuse_block")]
+    pub abuse_block: Duration,
 }
 
 impl Default for RouterCooldownConfig {
@@ -25,6 +27,7 @@ impl Default for RouterCooldownConfig {
             quota_exhausted: default_quota_exhausted(),
             auth_error: default_auth_error(),
             retry_after_buffer: default_retry_after_buffer(),
+            abuse_block: default_abuse_block(),
         }
     }
 }
@@ -64,6 +67,12 @@ pub struct ProviderCooldownOverrides {
         skip_serializing_if = "Option::is_none"
     )]
     pub retry_after_buffer: Option<Duration>,
+    #[serde(
+        default,
+        with = "humantime_serde::option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub abuse_block: Option<Duration>,
 }
 
 impl ProviderCooldownOverrides {
@@ -74,6 +83,7 @@ impl ProviderCooldownOverrides {
             && self.quota_exhausted.is_none()
             && self.auth_error.is_none()
             && self.retry_after_buffer.is_none()
+            && self.abuse_block.is_none()
     }
 }
 
@@ -92,6 +102,7 @@ impl RouterCooldownConfig {
             retry_after_buffer: overrides
                 .retry_after_buffer
                 .unwrap_or(self.retry_after_buffer),
+            abuse_block: overrides.abuse_block.unwrap_or(self.abuse_block),
         }
     }
 }
@@ -114,6 +125,10 @@ pub(crate) const fn default_auth_error() -> Duration {
 
 pub(crate) const fn default_retry_after_buffer() -> Duration {
     Duration::from_secs(1)
+}
+
+pub(crate) const fn default_abuse_block() -> Duration {
+    Duration::from_hours(2)
 }
 
 #[cfg(test)]

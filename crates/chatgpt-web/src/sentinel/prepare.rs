@@ -5,7 +5,10 @@ use crate::{
     constants::{SENTINEL_CR_URL, SENTINEL_PREPARE_URL},
     headers::{browser_headers, oai_headers},
     sentinel::{dpl::build_prekey_config, pow::build_prepare_token},
-    session::cookie::build_session_cookie_header,
+    session::{
+        cookie::build_session_cookie_header, exchange::invalidate_token_cache,
+        warmup::invalidate_warmup_cache,
+    },
     tls::fetch::{FetchRequest, HttpFetch},
 };
 
@@ -77,6 +80,8 @@ pub async fn prepare_chat_requirements(
         .await?;
 
     if prep_resp.status == 401 || prep_resp.status == 403 {
+        invalidate_token_cache(cookie);
+        invalidate_warmup_cache(cookie, Some(access_token));
         return Err(Error::SentinelBlocked(format!(
             "Sentinel /prepare blocked (HTTP {})",
             prep_resp.status
@@ -110,6 +115,8 @@ pub async fn prepare_chat_requirements(
         .await?;
 
     if cr_resp.status == 401 || cr_resp.status == 403 {
+        invalidate_token_cache(cookie);
+        invalidate_warmup_cache(cookie, Some(access_token));
         return Err(Error::SentinelBlocked(format!(
             "Sentinel /chat-requirements blocked (HTTP {})",
             cr_resp.status

@@ -11,8 +11,11 @@ use crate::{
     Error,
     constants::{SESSION_URL, TOKEN_TTL_MS},
     headers::browser_headers,
-    session::cookie::{
-        build_session_cookie_header, cookie_key, merge_refreshed_cookie,
+    session::{
+        cookie::{
+            build_session_cookie_header, cookie_key, merge_refreshed_cookie,
+        },
+        warmup::invalidate_warmup_cache,
     },
     tls::fetch::{FetchRequest, HttpFetch},
 };
@@ -65,6 +68,8 @@ pub async fn exchange_session(
         .await?;
 
     if resp.status == 401 || resp.status == 403 {
+        invalidate_token_cache(cookie);
+        invalidate_warmup_cache(cookie, None);
         return Err(Error::SessionAuth("Invalid session cookie".into()));
     }
     if resp.status >= 400 {

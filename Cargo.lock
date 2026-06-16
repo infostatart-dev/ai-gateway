@@ -53,7 +53,7 @@ dependencies = [
 
 [[package]]
 name = "ai-gateway"
-version = "0.3.0-beta.12"
+version = "0.3.0-beta.13"
 dependencies = [
  "anthropic-ai-sdk",
  "async-openai",
@@ -1249,7 +1249,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chatgpt-web"
-version = "0.3.0-beta.12"
+version = "0.3.0-beta.13"
 dependencies = [
  "base64 0.22.1",
  "chromiumoxide",
@@ -1970,7 +1970,7 @@ checksum = "1c7a8fb8a9fbf66c1f703fe16184d10ca0ee9d23be5b4436400408ba54a95005"
 
 [[package]]
 name = "dynamic-router"
-version = "0.3.0-beta.12"
+version = "0.3.0-beta.13"
 dependencies = [
  "futures",
  "http 1.4.0",
@@ -3474,7 +3474,7 @@ dependencies = [
 
 [[package]]
 name = "latency-router"
-version = "0.3.0-beta.12"
+version = "0.3.0-beta.13"
 dependencies = [
  "futures",
  "http 1.4.0",
@@ -3703,7 +3703,7 @@ dependencies = [
 
 [[package]]
 name = "mock-server"
-version = "0.3.0-beta.12"
+version = "0.3.0-beta.13"
 dependencies = [
  "ai-gateway",
  "axum",
@@ -4183,7 +4183,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "perplexity-web"
-version = "0.3.0-beta.12"
+version = "0.3.0-beta.13"
 dependencies = [
  "chromiumoxide",
  "chrono",
@@ -6261,7 +6261,7 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "telemetry"
-version = "0.3.0-beta.12"
+version = "0.3.0-beta.13"
 dependencies = [
  "http 1.4.0",
  "log-panics",
@@ -7307,7 +7307,7 @@ dependencies = [
 
 [[package]]
 name = "web-browser-login"
-version = "0.3.0-beta.12"
+version = "0.3.0-beta.13"
 dependencies = [
  "chromiumoxide",
  "futures",
@@ -7316,7 +7316,7 @@ dependencies = [
 
 [[package]]
 name = "web-message-budget"
-version = "0.3.0-beta.12"
+version = "0.3.0-beta.13"
 dependencies = [
  "serde",
  "serde_json",
@@ -7371,7 +7371,7 @@ dependencies = [
 
 [[package]]
 name = "weighted-balance"
-version = "0.3.0-beta.12"
+version = "0.3.0-beta.13"
 dependencies = [
  "futures",
  "pin-project-lite",

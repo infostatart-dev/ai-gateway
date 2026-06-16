@@ -5,7 +5,10 @@ use serde_json::json;
 use crate::{
     executor::{ExecuteRequest, Executor},
     sentinel::dpl::clear_dpl_cache,
-    session::exchange::{clear_all_token_cache, invalidate_token_cache},
+    session::{
+        exchange::{clear_all_token_cache, invalidate_token_cache},
+        warmup::clear_warmup_cache,
+    },
     tls::fetch::{FetchResponse, MockFetch},
 };
 
@@ -81,6 +84,12 @@ fn execute_once_responses(conv: FetchResponse) -> Vec<FetchResponse> {
     responses
 }
 
+/// Sentinel + conversation without warmup (warmup cache hit within same
+/// execute).
+fn sentinel_and_conv_responses(conv: FetchResponse) -> Vec<FetchResponse> {
+    vec![prepare_resp(), cr_resp(), conv]
+}
+
 fn first_execute_once_responses(conv: FetchResponse) -> Vec<FetchResponse> {
     let mut responses = vec![session_resp(), dpl_resp()];
     responses.extend(execute_once_responses(conv));
@@ -110,6 +119,7 @@ fn strict_schema_body() -> serde_json::Value {
 fn reset_caches(cookie: &str) {
     clear_dpl_cache();
     clear_all_token_cache();
+    clear_warmup_cache();
     invalidate_token_cache(cookie);
 }
 
@@ -121,8 +131,9 @@ async fn retries_until_assistant_content_is_valid_json() {
     let fetch = MockFetch::new({
         let mut responses =
             first_execute_once_responses(conv_sse("Sure! Here is your JSON."));
-        responses
-            .extend(execute_once_responses(conv_sse(r#"{"status":"ok"}"#)));
+        responses.extend(sentinel_and_conv_responses(conv_sse(
+            r#"{"status":"ok"}"#,
+        )));
         responses
     });
     let exec = Executor::new(fetch);
@@ -156,8 +167,9 @@ async fn retries_when_json_valid_but_schema_mismatch() {
     let fetch = MockFetch::new({
         let mut responses =
             first_execute_once_responses(conv_sse(r#"{"status":42}"#));
-        responses
-            .extend(execute_once_responses(conv_sse(r#"{"status":"ok"}"#)));
+        responses.extend(sentinel_and_conv_responses(conv_sse(
+            r#"{"status":"ok"}"#,
+        )));
         responses
     });
     let exec = Executor::new(fetch);
@@ -175,14 +187,116 @@ async fn retries_when_json_valid_but_schema_mismatch() {
 
 #[tokio::test]
 #[serial_test::serial]
+async fn second_execute_within_warmup_ttl_skips_warmup_gets() {
+    let cookie = "executor-warmup-cache";
+    reset_caches(cookie);
+    let conv = conv_sse("hello");
+    let fetch = MockFetch::new({
+        let mut responses = first_execute_once_responses(conv.clone());
+        responses.extend(sentinel_and_conv_responses(conv));
+        responses
+    });
+    let fetch_for_count = Arc::clone(&fetch);
+    let exec = Executor::new(fetch);
+    let body = json!({
+        "model": "gpt-5-mini",
+        "messages": [{ "role": "user", "content": "hi" }]
+    });
+    let result1 = exec
+        .execute(ExecuteRequest {
+            cookie: cookie.into(),
+            body: body.clone(),
+            json_schema_required: false,
+            session_path: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(result1.status, 200);
+    assert_eq!(fetch_for_count.warmup_call_count(), 3);
+
+    let result2 = exec
+        .execute(ExecuteRequest {
+            cookie: cookie.into(),
+            body,
+            json_schema_required: false,
+            session_path: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(result2.status, 200);
+    assert_eq!(fetch_for_count.warmup_call_count(), 3);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn auth_failure_clears_warmup_for_subsequent_execute() {
+    let cookie = "executor-warmup-auth-clear";
+    reset_caches(cookie);
+    let conv = conv_sse("hello");
+    let unauthorized = FetchResponse {
+        status: 403,
+        headers: vec![],
+        body: br#"{"error":"forbidden"}"#.to_vec(),
+    };
+    let fetch = MockFetch::new({
+        let mut responses = first_execute_once_responses(conv.clone());
+        responses.extend(sentinel_and_conv_responses(unauthorized));
+        responses.push(session_resp());
+        responses.extend(execute_once_responses(conv));
+        responses
+    });
+    let fetch_for_count = Arc::clone(&fetch);
+    let exec = Executor::new(fetch);
+    let body = json!({
+        "model": "gpt-5-mini",
+        "messages": [{ "role": "user", "content": "hi" }]
+    });
+    let ok = exec
+        .execute(ExecuteRequest {
+            cookie: cookie.into(),
+            body: body.clone(),
+            json_schema_required: false,
+            session_path: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(ok.status, 200);
+    assert_eq!(fetch_for_count.warmup_call_count(), 3);
+
+    let err = exec
+        .execute(ExecuteRequest {
+            cookie: cookie.into(),
+            body: body.clone(),
+            json_schema_required: false,
+            session_path: None,
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(err, crate::Error::SessionAuth(_)));
+
+    let result = exec
+        .execute(ExecuteRequest {
+            cookie: cookie.into(),
+            body,
+            json_schema_required: false,
+            session_path: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(result.status, 200);
+    assert_eq!(fetch_for_count.warmup_call_count(), 6);
+}
+
+#[tokio::test]
+#[serial_test::serial]
 async fn returns_502_after_schema_retries_exhausted() {
     let cookie = "executor-schema-retry-fail";
     reset_caches(cookie);
     let bad = conv_sse(r#"{"status":42}"#);
     let fetch = MockFetch::new({
         let mut responses = first_execute_once_responses(bad.clone());
-        responses.extend(execute_once_responses(bad.clone()));
-        responses.extend(execute_once_responses(bad));
+        responses.extend(sentinel_and_conv_responses(bad.clone()));
+        responses.extend(sentinel_and_conv_responses(bad));
         responses
     });
     let exec = Executor::new(fetch);
@@ -214,8 +328,8 @@ async fn returns_502_after_json_retries_exhausted() {
     let bad = conv_sse("Still prose, not JSON.");
     let fetch = MockFetch::new({
         let mut responses = first_execute_once_responses(bad.clone());
-        responses.extend(execute_once_responses(bad.clone()));
-        responses.extend(execute_once_responses(bad));
+        responses.extend(sentinel_and_conv_responses(bad.clone()));
+        responses.extend(sentinel_and_conv_responses(bad));
         responses
     });
     let exec = Executor::new(fetch);

@@ -1,0 +1,65 @@
+use serde_json::Value;
+
+#[must_use]
+pub fn looks_like_abuse_block(body: Option<&[u8]>) -> bool {
+    let text = body_to_lower_text(body);
+    if text.is_empty() {
+        return false;
+    }
+
+    if text.contains("unusual activity") || text.contains("detected unusual") {
+        return true;
+    }
+
+    if text.contains("sentinel") && text.contains("blocked") {
+        return true;
+    }
+
+    if text.contains("try again later")
+        && (text.contains("unusual") || text.contains("detected"))
+    {
+        return true;
+    }
+
+    false
+}
+
+fn body_to_lower_text(body: Option<&[u8]>) -> String {
+    let Some(bytes) = body else {
+        return String::new();
+    };
+    if let Ok(value) = serde_json::from_slice::<Value>(bytes) {
+        return value.to_string().to_ascii_lowercase();
+    }
+    String::from_utf8_lossy(bytes).to_ascii_lowercase()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unusual_activity_body_is_abuse() {
+        let body = b"Our systems have detected unusual activity from your \
+                    network.";
+        assert!(looks_like_abuse_block(Some(body)));
+    }
+
+    #[test]
+    fn sentinel_blocked_message_is_abuse() {
+        let body = b"Sentinel /prepare blocked (HTTP 403)";
+        assert!(looks_like_abuse_block(Some(body)));
+    }
+
+    #[test]
+    fn generic_502_is_not_abuse() {
+        assert!(!looks_like_abuse_block(Some(b"upstream connection reset")));
+    }
+
+    #[test]
+    fn plain_try_again_later_is_not_abuse() {
+        assert!(!looks_like_abuse_block(Some(
+            b"Service unavailable. Please try again later."
+        )));
+    }
+}

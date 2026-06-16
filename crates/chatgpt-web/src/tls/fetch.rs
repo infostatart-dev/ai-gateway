@@ -110,6 +110,7 @@ pub fn default_fetch() -> Arc<dyn HttpFetch> {
 pub struct MockFetch {
     responses: Mutex<Vec<FetchResponse>>,
     calls: Mutex<usize>,
+    urls: Mutex<Vec<String>>,
 }
 
 impl MockFetch {
@@ -117,18 +118,32 @@ impl MockFetch {
         Arc::new(Self {
             responses: Mutex::new(responses),
             calls: Mutex::new(0),
+            urls: Mutex::new(Vec::new()),
         })
     }
 
     pub fn call_count(&self) -> usize {
         *self.calls.lock().unwrap()
     }
+
+    pub fn warmup_call_count(&self) -> usize {
+        self.urls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|url| {
+                url.contains("/backend-api/me")
+                    || url.contains("/backend-api/conversations")
+                    || url.contains("/backend-api/models")
+            })
+            .count()
+    }
 }
 
 impl HttpFetch for MockFetch {
     fn fetch<'a>(
         &'a self,
-        _req: FetchRequest,
+        req: FetchRequest,
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<Output = Result<FetchResponse, Error>>
@@ -137,6 +152,7 @@ impl HttpFetch for MockFetch {
         >,
     > {
         Box::pin(async move {
+            self.urls.lock().unwrap().push(req.url.clone());
             let mut calls = self.calls.lock().unwrap();
             *calls += 1;
             let idx = *calls - 1;
