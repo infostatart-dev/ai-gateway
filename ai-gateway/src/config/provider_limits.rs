@@ -565,7 +565,7 @@ mod tests {
     }
 
     #[test]
-    fn catalog_contains_chatgpt_web_session_limits() {
+    fn chatgpt_web_catalog_exposes_session_pacing() {
         let catalog = ProviderLimitCatalog::default();
         let provider = catalog
             .provider(&InferenceProvider::Named("chatgpt-web".into()))
@@ -592,6 +592,31 @@ mod tests {
                 .cooldown_for(&InferenceProvider::Named("chatgpt-web".into()))
                 .abuse_block,
             Duration::from_secs(4 * 3600)
+        );
+    }
+
+    #[test]
+    fn deepseek_web_catalog_exposes_conservative_pacing() {
+        let catalog = ProviderLimitCatalog::default();
+        let provider = catalog
+            .provider(&InferenceProvider::Named("deepseek-web".into()))
+            .expect("deepseek-web limits");
+        let limits = &provider.tier("free-single-session").unwrap().limits;
+
+        assert_eq!(limits.rpm, QuotaValue::Limited(6));
+        assert_eq!(limits.concurrent, Some(1));
+        assert_eq!(limits.min_interval_ms, Some(10000));
+        assert_eq!(
+            catalog
+                .cooldown_for(&InferenceProvider::Named("deepseek-web".into()))
+                .rate_limit,
+            Duration::from_secs(120)
+        );
+        assert_eq!(
+            catalog
+                .cooldown_for(&InferenceProvider::Named("deepseek-web".into()))
+                .auth_error,
+            Duration::from_secs(30 * 60)
         );
     }
 

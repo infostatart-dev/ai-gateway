@@ -497,25 +497,21 @@ chatgpt-web:
       supports-json-schema: true
       context-window: 128000
 
-perplexity-web:
+deepseek-web:
   models:
-    - "pplx-auto"
-    - "pplx-gpt"
-    - "pplx-gemini"
-  base-url: https://www.perplexity.ai/
+    - "deepseek-chat"
+    - "deepseek-reasoner"
+  base-url: https://chat.deepseek.com/
   model-capabilities:
-    pplx-auto:
+    deepseek-chat:
       supports-tools: false
       supports-json-schema: false
-      context-window: 128000
-    pplx-gpt:
+      context-window: 65536
+    deepseek-reasoner:
       supports-tools: false
       supports-json-schema: false
-      context-window: 128000
-    pplx-gemini:
-      supports-tools: false
-      supports-json-schema: false
-      context-window: 128000
+      context-window: 65536
+      reasoning: true
 
 bedrock:
   # bedrock models must be enabled prior to sending

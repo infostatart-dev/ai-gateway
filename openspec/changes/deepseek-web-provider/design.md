@@ -1,145 +1,140 @@
 ## Context
 
-The gateway already runs one web-session provider end-to-end: `chatgpt-web`
-(crate `chatgpt-web`, `dispatcher/chatgpt_web.rs`, `config/chatgpt_web.rs`, pacing
-scope, provider limits, `chatgpt login` CLI). `perplexity-web` exists as a crate but
-has **no dispatcher branch**, so it cannot serve inference; it also has Cloudflare
-cookie-auth problems. `deepseek-web` does not exist yet.
+- `chatgpt-web` is the reference web-session provider (dispatcher, pacing, limits,
+  session CLI).
+- `perplexity-web` has a crate but **no dispatcher branch** — not usable for inference.
+- **R&D complete (2026-06-16):** minimal `deepseek-web` crate + `deepseek login` /
+  `import` CLI; `web-browser-login` polls `localStorage.userToken` on
+  `chat.deepseek.com`. Verified session file at `dev/deepseek-session.json`.
+- Release version for this change: **`0.3.0-beta.14`**.
 
-A complete, working reference implementation of the DeepSeek web protocol lives in
-the repo at `bindings/OmniRoute/open-sse` (TypeScript): `executors/deepseek-web.ts`,
-`lib/deepseek-pow.ts`, `lib/deepseek-pow-solver.cjs`, `lib/sha3_wasm_bg.wasm`,
-`services/deepseekQuotaFetcher.ts`, plus unit tests. This design ports that protocol
-to Rust following the `chatgpt-web` shape.
-
-**Reverse-engineered protocol (from OmniRoute):**
+## Protocol (reverse-engineered)
 
 - Base `https://chat.deepseek.com`, API `https://chat.deepseek.com/api`.
-- **Credential**: long-lived `userToken` read from `localStorage.userToken` on
-  chat.deepseek.com (stored as JSON `{"value":"..."}`; raw string also accepted).
+- **Credential**: long-lived `userToken` in `localStorage.userToken` (raw string or
+  JSON `{"value":"..."}`).
 - **Access token**: `GET /api/v0/users/current` with `Authorization: Bearer <userToken>`
-  returns `data.biz_data.token` — a short-lived `accessToken` (cache ~1h). 401/403 ⇒
-  token expired.
-- **Session**: `POST /api/v0/chat_session/create` (Bearer accessToken) ⇒
-  `data.biz_data.chat_session.id`. Optional reuse (rolling-window memory) vs
-  fresh-per-request. `POST /api/v0/chat_session/delete` for cleanup.
-- **PoW**: `POST /api/v0/chat/create_pow_challenge` body
-  `{"target_path":"/api/v0/chat/completion"}` ⇒ `data.biz_data.challenge`
-  `{algorithm:"DeepSeekHashV1", challenge, salt, signature, difficulty, expire_at,
-  target_path}`. Solve, then send the answer in header `X-Ds-Pow-Response` as
-  base64(JSON `{algorithm, challenge, salt, answer, signature, target_path}`).
-- **PoW algorithm `DeepSeekHashV1`**: SHA3-256 sponge. For nonce in
-  `0..difficulty`, compute `SHA3-256("{salt}_{expire_at}_{nonce}")`; the answer is
-  the first `nonce` whose hex digest equals `challenge`. (OmniRoute uses a WASM
-  solver for speed and a pure-JS SHA3 fallback that proves the algorithm.)
-- **Completion**: `POST /api/v0/chat/completion` with headers Bearer accessToken,
-  `X-Ds-Pow-Response`, `X-Client-Timezone-Offset`, fake `Cookie`, and the `X-*`
-  client headers. Body: `{chat_session_id, parent_message_id:null, model_type,
-  prompt, ref_file_ids, thinking_enabled, search_enabled, preempt:false}`.
-- **Response**: SSE in DeepSeek's `p`/`o`/`v` op-protocol. Fragments typed
-  `THINK` → OpenAI `reasoning_content`, `ANSWER`/`RESPONSE` → `content`;
-  `response/search_results` accumulate citations. Translate to
-  `chat.completion.chunk` / `chat.completion`.
+  → `data.biz_data.token` (~1h cache in-process). 401/403 ⇒ re-login.
+- **Session**: `POST /api/v0/chat_session/create` → `chat_session.id`; optional
+  `POST /api/v0/chat_session/delete` cleanup.
+- **PoW**: `POST /api/v0/chat/create_pow_challenge` with
+  `{"target_path":"/api/v0/chat/completion"}` → challenge
+  `{algorithm:"DeepSeekHashV1", challenge, salt, signature, difficulty, expire_at}`.
+  Solve: SHA3-256 over `"{salt}_{expire_at}_{nonce}"`; first `nonce` where hex
+  digest equals `challenge`. Send base64 JSON answer in `X-Ds-Pow-Response`.
+- **Completion**: `POST /api/v0/chat/completion` with Bearer accessToken, PoW header,
+  browser-like `X-*` client headers, fake `Cookie`, body
+  `{chat_session_id, parent_message_id, model_type, prompt, thinking_enabled,
+  search_enabled, ...}`.
+- **Response**: SSE `p`/`o`/`v` ops — `THINK` → `reasoning_content`, `ANSWER` →
+  `content`, search results → citations.
+
+## Already implemented (R&D — do not redo)
+
+| Area | Status |
+|------|--------|
+| `web-browser-login` `poll_local_storage_value_with_options` | Done; handles empty `localStorage` without aborting poll |
+| `deepseek_domain` / `deepseek_ready_url` helpers | Done |
+| `crates/deepseek-web` session file `{token, saved_at}` + `normalize_user_token` | Done |
+| `login.rs` + `deepseek login` / `import` in `main.rs` | Done |
+| `deepseek-login` Cargo feature | Done |
+| PoW, executor, tls, sse, dispatcher, catalog | **Not done** |
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Production `deepseek-web` provider reachable through the standard
-  OpenAI-compatible `/v1/chat/completions` path, both streaming and non-streaming.
-- Port PoW, token exchange, session, and SSE translation to Rust with small,
-  single-responsibility modules (≤~60 lines each; OOP/structs where it helps).
-- `deepseek login` headed-browser flow that captures `localStorage.userToken`,
-  reusing the shared `web-browser-login` crate (extended generically).
-- Per-session pacing: free-tier concurrency/min-interval/cooldown via
-  `provider-limits.yaml`, matching the `chatgpt-web` mechanism.
-- Disable `perplexity-web` in the catalog without deleting its code.
+
+- End-to-end `deepseek-web` through `/v1/chat/completions` (stream + non-stream).
+- Native SHA3 PoW; small modules (~60 lines each where practical).
+- Conservative pacing from day one (single session, browser-like rate).
+- R&D smoke: `users/current` + one completion against live API using saved session
+  (manual or `deepseek probe` CLI).
+- Disable perplexity in catalog only.
 
 **Non-Goals:**
-- No WASM runtime in Rust (PoW done with a native SHA3 crate).
-- No native `tools`/function-calling round trips beyond what OmniRoute does
-  (prompt-serialized tools may be a follow-up; initial models can be
-  `supports-tools: false` like `chatgpt-web`).
-- No file upload (`ref_file_ids`) in v1.
-- Not removing the `perplexity-web` crate/CLI.
+
+- WASM PoW runtime.
+- Native tools round-trips (`supports-tools: false` initially).
+- File upload (`ref_file_ids`).
+- Removing `perplexity-web` crate/CLI.
 
 ## Decisions
 
-### D1: PoW in Rust with `sha3`, no WASM
-`DeepSeekHashV1` is plain SHA3-256 over `"{salt}_{expire_at}_{nonce}"`. We use the
-`sha3` crate and a tight nonce loop. Difficulty (~144000) means microseconds-to-low-
-ms in native Rust — far faster than the JS fallback and on par with WASM, without an
-embedded `WebAssembly` runtime. Alternative (embed `sha3_wasm_bg.wasm` + a wasm
-runtime) rejected: needless dependency and complexity for a known hash.
+### D1: PoW in Rust with `sha3`
 
-### D2: Credential = `userToken`, captured from localStorage
-Unlike chatgpt-web/perplexity-web (cookie sessions), DeepSeek auth is a bearer
-`userToken` in `localStorage`. We extend `web-browser-login` with a generic
-"page value extractor" (`page.evaluate("localStorage.getItem('userToken')")`) and
-add a `deepseek login` command that polls until the token is present, then writes a
-session file `{ "token": "...", "saved_at": ... }`. A `--token`/`--cookie` import
-fallback mirrors chatgpt/pplx. The `accessToken` is derived at request time and
-cached in-process; only the `userToken` is persisted.
+`DeepSeekHashV1` = SHA3-256 sponge over `"{salt}_{expire_at}_{nonce}"`. Native
+`sha3` crate; pin with a known challenge→answer unit test.
 
-### D3: Crate `deepseek-web` mirrors `chatgpt-web` layout
-Modules: `constants`, `errors`, `session` (file + token), `tls` (client),
-`pow` (sha3 solver + challenge fetch + header encode), `completion` (request build),
-`sse` (p/o/v → OpenAI), `executor` (orchestration: token → session → pow →
-completion → translate), `login` (feature-gated). Keeps each file small and mirrors
-the working chatgpt-web shape for reviewability.
+### D2: Credential = persisted `userToken`
 
-### D4: Dispatcher branch parallel to chatgpt-web
-Add `is_deepseek_web(provider)` and a `dispatch_deepseek_web` branch in
-`dispatcher/service/dispatch.rs` (the same place that special-cases chatgpt-web),
-returning a `DispatchOutcome` via `outcome_from_bytes`. Credential discovery gets a
-`deepseek-web` session-file path (like `fill_session_credentials` for chatgpt-web),
-and `pacing/scope.rs` keys the gate by the session-file path.
+Session file only stores `userToken`; `accessToken` derived per request and cached
+in-process (~1h). Login/import already implemented.
 
-### D5: Models & options surface
-Catalog models map to DeepSeek options via name/body, following OmniRoute's
-`resolveModelOptions`:
-- `deepseek-chat` → `model_type=default`, `thinking_enabled=false`.
-- `deepseek-reasoner` → `thinking_enabled=true` (DeepThink/R1).
-- `expert`/`pro` in name → `model_type=expert`; `search` in name or
-  `search_enabled` in body → web search. Exact model list finalized in tasks; expose
-  both chat and reasoner at minimum.
+### D3: Crate layout (extend existing scaffold)
 
-### D6: Pacing for a free single session
-Add a `deepseek-web` block to `provider-limits.yaml` with a conservative
-single-session tier (start: `concurrent: 1`, a `min-interval-ms`, modest `rpm`, and
-cooldowns for rate-limit/auth-error) so the gateway serializes calls and backs off,
-respecting DeepSeek free limits. Values are heuristic and tunable.
+Add to `crates/deepseek-web`: `pow`, `tls`, `completion`, `sse`, `executor`;
+expand `constants` with API URLs and client headers.
 
-### D7: Perplexity disabled via catalog only
-Remove `perplexity-web` from embedded `providers.yaml` and `credentials.yaml` so it
-is neither advertised nor discovered. Keep the crate, `config/perplexity_web.rs`,
-`cli/perplexity_login.rs`, and pacing-scope handling intact (dead but compiling) for
-a clean future re-enable. No behavior change for other providers.
+### D4: Dispatcher branch
+
+`dispatch_deepseek_web` parallel to `chatgpt_web`; `outcome_from_bytes`; map
+401/403 → `invalid_session` + auth-error cooldown.
+
+### D5: Models
+
+Minimum catalog:
+
+- `deepseek-web/deepseek-chat` — `thinking_enabled=false`
+- `deepseek-web/deepseek-reasoner` — `thinking_enabled=true`
+
+Optional follow-up: `-search` / expert variants via model name or body flags.
+
+### D6: Pacing (conservative single session)
+
+Apply from initial ship — same philosophy as `chatgpt-web-stabilization`:
+
+| Knob | Value | Rationale |
+|------|-------|-----------|
+| `rpm` | **6** | Free web tier; slightly higher than ChatGPT web (no sentinel warmup chain) but still human-like |
+| `concurrent` | **1** | One in-flight completion per session |
+| `min-interval-ms` | **10000** | ≥10s between paced starts |
+| `cooldown.rate-limit` | **120s** | After HTTP 429 |
+| `cooldown.auth-error` | **30m** | After 401/403 on token exchange |
+
+Each completion ≈ 4 upstream calls (users/current cache miss, session create, pow,
+completion) — pacing limits **completion starts**, not raw HTTP.
+
+### D7: Perplexity catalog disable
+
+Remove `perplexity-web` from embedded `providers.yaml` and `credentials.yaml` only.
+
+### D8: R&D verification gate (before full executor merge)
+
+Using `dev/deepseek-session.json`:
+
+1. `GET /api/v0/users/current` with Bearer `userToken` → access token.
+2. Optional: one minimal completion smoke (non-stream) before wiring dispatcher.
+
+Implement as `deepseek probe` CLI subcommand (like perplexity probe) or documented
+`curl` in `docs/deepseek-web.md`.
 
 ## Risks / Trade-offs
 
-- [DeepSeek changes PoW/headers/SSE shape] → Isolate protocol constants and the
-  SSE parser; cover with ported unit tests (PoW vector, SSE fragments) so breakage
-  surfaces fast. The OmniRoute reference stays in-tree as the source of truth.
-- [SHA3 variant/format mismatch (Keccak vs SHA3, padding)] → Pin behavior with a
-  known challenge/answer test vector captured from the reference before wiring the
-  network path.
-- [`userToken` expiry / silent 401] → Map 401/403 from `users/current` and
-  completion to a gateway auth error + auth-error cooldown, surfaced as
-  `invalid_session` so the operator re-runs `deepseek login`.
-- [Free-tier rate limits / concurrency bans] → Conservative pacing (D6) and
-  cooldowns; per-session gate keyed on the session-file path.
-- [Browser automation flakiness for token capture] → Keep the import fallback so
-  the provider is usable even if headed login fails in an environment.
+- **PoW SHA3 variant mismatch** → unit test vector before network path.
+- **Token expiry** → auth-error cooldown + `invalid_session`; re-run `deepseek login`.
+- **Free-tier rate limits** → D6 pacing; tune after live smoke.
+- **Browser login flakiness** → `import --token` fallback (already works).
 
 ## Migration Plan
 
-Additive. New provider is inert until `DEEPSEEK_BROWSER_CLI` (or the credential
-slot) points at a valid session file. Disabling Perplexity only removes catalog
-entries; rollback = restore the two yaml blocks. No data migration.
+1. Finish executor + gateway + catalog (tasks below).
+2. Bump **`0.3.0-beta.13` → `0.3.0-beta.14`**.
+3. Set `DEEPSEEK_BROWSER_CLI=dev/deepseek-session.json` (or credential slot path).
+4. Rollback: remove catalog entries; old binary ignores deepseek-web.
 
 ## Open Questions
 
-- Final model slugs for the catalog (`deepseek-chat`/`deepseek-reasoner` plus any
-  `-search`/`-expert` variants) — resolve in tasks.
-- Whether to port OmniRoute's prompt-serialized tool-calling now or as a follow-up
-  (initial plan: `supports-tools: false`).
+- Add `abuse-block` cooldown for DeepSeek risk messages? Defer unless smoke shows
+  short `provider-error` retry storms.
+- Session reuse vs fresh `chat_session/create` per request — start with fresh per
+  completion (simpler); add rolling cache if needed.

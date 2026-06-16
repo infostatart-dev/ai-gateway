@@ -42,11 +42,14 @@ challenge for each completion request before calling the completion endpoint.
 - **WHEN** DeepSeek responds 401/403 to the token exchange or completion
 - **THEN** the gateway returns an authentication error indicating the session is invalid and applies the auth-error cooldown
 
-### Requirement: DeepSeek web provider participates in pacing and routing
+### Requirement: Conservative pacing for deepseek-web
 
-The `deepseek-web` provider SHALL be discovered from a session-file credential,
-be scoped for per-session pacing, and honor configured concurrency, minimum
-interval, and cooldown limits for a free single-session account.
+The gateway SHALL apply single-session pacing for `deepseek-web` from initial ship.
+
+#### Scenario: Embedded limits use conservative pacing knobs
+
+- **WHEN** embedded `provider-limits.yaml` is loaded
+- **THEN** provider `deepseek-web` defines **`rpm: 6`**, **`concurrent: 1`**, and **`min-interval-ms: 10000`**
 
 #### Scenario: Provider available only with a valid session file
 
@@ -57,3 +60,14 @@ interval, and cooldown limits for a free single-session account.
 
 - **WHEN** multiple `deepseek-web` requests arrive concurrently
 - **THEN** the gateway serializes them according to the configured concurrency and minimum-interval limits for the session
+
+### Requirement: Documentation, tests, and release version
+
+The gateway SHALL document DeepSeek Web setup (`DEEPSEEK_BROWSER_CLI`, login/import,
+probe), SHALL test PoW/SSE/session/dispatcher behavior without live API in CI, and
+SHALL ship this capability in release **`0.3.0-beta.14`**.
+
+#### Scenario: Operator obtains a session
+
+- **WHEN** an operator runs `deepseek login` or `deepseek import --token`
+- **THEN** a session file with `token` and `saved_at` is written at the configured path

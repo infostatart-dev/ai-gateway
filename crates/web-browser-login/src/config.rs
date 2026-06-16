@@ -40,3 +40,12 @@ pub fn perplexity_left_login(url: &str) -> bool {
 pub fn chatgpt_left_login(url: &str) -> bool {
     !url.contains("/auth/login") && url.contains("chatgpt.com")
 }
+
+pub fn deepseek_domain(url: &str) -> bool {
+    url.contains("deepseek.com")
+}
+
+/// Poll storage only after the user left the sign-in flow.
+pub fn deepseek_ready_url(url: &str) -> bool {
+    deepseek_domain(url) && !url.contains("/sign_in")
+}

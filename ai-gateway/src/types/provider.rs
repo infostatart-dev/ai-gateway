@@ -262,6 +262,9 @@ impl ProviderKey {
         } else if crate::config::chatgpt_web::is_chatgpt_web(provider) {
             crate::config::chatgpt_web::session_file_available()
                 .then_some(ProviderKey::NotRequired)
+        } else if crate::config::deepseek_web::is_deepseek_web(provider) {
+            crate::config::deepseek_web::session_file_available()
+                .then_some(ProviderKey::NotRequired)
         } else {
             let provider_str = provider.to_string().to_uppercase();
             let env_var = format!("{provider_str}_API_KEY");

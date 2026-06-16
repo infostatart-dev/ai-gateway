@@ -58,6 +58,12 @@ enum Command {
         #[command(subcommand)]
         action: PerplexityAction,
     },
+    /// `DeepSeek` web session utilities.
+    #[cfg(feature = "deepseek-login")]
+    Deepseek {
+        #[command(subcommand)]
+        action: DeepseekAction,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -90,6 +96,25 @@ enum PerplexityAction {
     Probe {
         #[arg(long, default_value = "Reply with exactly one word: OK")]
         query: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+#[cfg(feature = "deepseek-login")]
+enum DeepseekAction {
+    /// Open chat.deepseek.com and save `localStorage.userToken` to
+    /// `DEEPSEEK_BROWSER_CLI` path.
+    Login,
+    /// Paste `userToken` from `DevTools` → `Application` → `Local Storage`.
+    Import {
+        #[arg(long)]
+        token: String,
+    },
+    /// Verify session: `users/current` (+ optional one completion).
+    Probe {
+        /// When set, sends one non-stream completion with this user message.
+        #[arg(long)]
+        query: Option<String>,
     },
 }
 
@@ -134,6 +159,26 @@ async fn main() -> Result<(), RuntimeError> {
         };
         if let Err(e) = result {
             eprintln!("perplexity command failed: {e}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+
+    #[cfg(feature = "deepseek-login")]
+    if let Some(Command::Deepseek { action }) = cli.command {
+        let result = match action {
+            DeepseekAction::Login => {
+                ai_gateway::cli::deepseek_login::run_login().await
+            }
+            DeepseekAction::Import { token } => {
+                ai_gateway::cli::deepseek_login::run_import(token).await
+            }
+            DeepseekAction::Probe { query } => {
+                ai_gateway::cli::deepseek_login::run_probe(query).await
+            }
+        };
+        if let Err(e) = result {
+            eprintln!("deepseek command failed: {e}");
             std::process::exit(1);
         }
         return Ok(());

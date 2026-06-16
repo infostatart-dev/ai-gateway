@@ -59,6 +59,7 @@ fn named(cap: &mut ModelCapability, n: &str, model_name: &str) {
         "opencode" => opencode(cap, model_name),
         "cloudflare" => cloudflare(cap, model_name),
         "chatgpt-web" => chatgpt_web(cap),
+        "deepseek-web" => deepseek_web(cap, model_name),
         _ => {}
     }
 }
@@ -176,6 +177,15 @@ fn chatgpt_web(cap: &mut ModelCapability) {
     cap.supports_tools = false;
     cap.supports_json_schema = true;
     cap.context_window = Some(128_000);
+}
+
+fn deepseek_web(cap: &mut ModelCapability, model_name: &str) {
+    cap.supports_tools = false;
+    cap.supports_json_schema = false;
+    cap.context_window = Some(65_536);
+    if model_name.contains("reasoner") || model_name.contains("reason") {
+        cap.reasoning = true;
+    }
 }
 
 mod opencode {

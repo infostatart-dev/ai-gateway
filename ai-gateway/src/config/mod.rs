@@ -6,6 +6,7 @@ pub mod control_plane;
 pub mod credential_env;
 pub mod credentials;
 pub mod database;
+pub mod deepseek_web;
 pub mod deployment_target;
 pub mod discover;
 pub mod dispatcher;

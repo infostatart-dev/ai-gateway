@@ -215,6 +215,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn default_catalog_includes_deepseek_web_not_perplexity() {
+        let config = ProvidersConfig::default();
+        assert!(
+            config
+                .contains_key(&InferenceProvider::Named("deepseek-web".into()))
+        );
+        assert!(
+            !config.contains_key(&InferenceProvider::Named(
+                "perplexity-web".into()
+            ))
+        );
+    }
+
+    #[test]
     fn test_default_providers_config_loads_from_yaml_string() {
         let _default_config = ProvidersConfig::default();
         // just want to make sure we don't panic...

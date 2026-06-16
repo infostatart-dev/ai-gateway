@@ -10,4 +10,5 @@ description = "Shared chromiumoxide session cookie capture for web providers"
 [dependencies]
 chromiumoxide = { workspace = true }
 futures = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true, features = ["time"] }

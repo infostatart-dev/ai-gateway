@@ -77,6 +77,18 @@ mod tests {
     }
 
     #[test]
+    fn deepseek_web_catalog_exposes_session_pacing() {
+        let catalog = ProviderLimitCatalog::default();
+        let provider = InferenceProvider::Named("deepseek-web".into());
+        let limits = catalog
+            .pacing_limits_for(&provider)
+            .expect("deepseek-web pacing");
+        assert_eq!(limits.concurrent, 1);
+        assert_eq!(limits.rpm, 6);
+        assert_eq!(limits.min_interval, Duration::from_millis(10000));
+    }
+
+    #[test]
     fn providers_without_rpm_tier_have_no_gate() {
         let catalog = ProviderLimitCatalog::default();
         let provider = InferenceProvider::OpenAI;

@@ -60,6 +60,13 @@ Details: [credentials.md](credentials.md).
 - Strict JSON schema routing supported
 - Setup: [chatgpt-web.md](chatgpt-web.md)
 
+### DeepSeek Web
+
+- Browser session provider (`userToken` from chat.deepseek.com)
+- Models: `deepseek-web/deepseek-chat`, `deepseek-web/deepseek-reasoner`
+- Tools not supported initially
+- Setup: [deepseek-web.md](deepseek-web.md)
+
 ### Other bundled providers
 
 Also defined in `providers.yaml`: **bedrock**, **ollama**, **xai**, **deepseek**,

@@ -743,3 +743,20 @@ chatgpt-web:
         rpm: 4
         concurrent: 1
         min-interval-ms: 12000
+
+deepseek-web:
+  observed-at: "2026-06-16"
+  scope: browser-session
+  notes:
+    - Free chat.deepseek.com web session — heuristic limits from day one.
+    - One session file equals one account; pacing serializes completions.
+  cooldown:
+    rate-limit: 120s
+    auth-error: 30m
+    provider-error: 60s
+  tiers:
+    free-single-session:
+      limits:
+        rpm: 6
+        concurrent: 1
+        min-interval-ms: 10000

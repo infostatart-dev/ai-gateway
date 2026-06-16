@@ -8,13 +8,15 @@ mod browser;
 mod config;
 mod options;
 mod poll;
+mod poll_storage;
 
 pub use browser::{
     default_user_data_dir, system_chrome_executable, wipe_user_data_dir,
 };
 pub use config::{
-    BrowserLoginTarget, chatgpt_domain, chatgpt_left_login, perplexity_domain,
-    perplexity_left_login,
+    BrowserLoginTarget, chatgpt_domain, chatgpt_left_login, deepseek_domain,
+    deepseek_ready_url, perplexity_domain, perplexity_left_login,
 };
 pub use options::PollOptions;
 pub use poll::{poll_session_cookie, poll_session_cookie_with_options};
+pub use poll_storage::poll_local_storage_value_with_options;

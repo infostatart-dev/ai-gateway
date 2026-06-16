@@ -74,10 +74,29 @@ aliases apply only to the first slot (`gemini-free`).
 Not an `AI_GATEWAY_CREDENTIAL_*` slot. Uses a session file path instead — see
 [chatgpt-web.md](chatgpt-web.md).
 
-### Perplexity Web
+### DeepSeek Web
+
+Session file with `userToken` from chat.deepseek.com localStorage — see
+[deepseek-web.md](deepseek-web.md).
+
+```bash
+cargo run --features deepseek-login -p ai-gateway -- deepseek login
+cargo run --features deepseek-login -p ai-gateway -- deepseek import \
+  --token 'your-userToken'
+cargo run --features deepseek-login -p ai-gateway -- deepseek probe
+```
+
+| Slot | Env var (value = path to session JSON) |
+|------|----------------------------------------|
+| `deepseek-web-default` | `AI_GATEWAY_CREDENTIAL_DEEPSEEK_WEB_DEFAULT` |
+
+CLI writes to `DEEPSEEK_BROWSER_CLI` (default account path).
+
+### Perplexity Web (dormant in catalog)
 
 Session file with logged-in `__Secure-next-auth.session-token` (+ CF cookies).
-OmniRoute stores the same token in credentials as `apiKey`.
+The crate and CLI remain; provider is disabled in embedded catalog until
+dispatcher integration is complete.
 
 ```bash
 cargo run --features perplexity-login -p ai-gateway -- perplexity login
@@ -87,9 +106,9 @@ cargo run --features perplexity-login -p ai-gateway -- perplexity import \
 
 | Slot | Env var (value = path to session JSON) |
 |------|----------------------------------------|
-| `perplexity-web-default` | `AI_GATEWAY_CREDENTIAL_PERPLEXITY_WEB_DEFAULT` |
+| `perplexity-web-default` | (removed from embedded catalog) |
 
-CLI writes to `PERPLEXITY_BROWSER_CLI` (default account path).
+CLI writes to `PERPLEXITY_BROWSER_CLI` when used manually.
 
 ## Budget rank
 

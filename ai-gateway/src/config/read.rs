@@ -123,6 +123,9 @@ fn autodefault_provider_order() -> Vec<InferenceProvider> {
     if crate::config::chatgpt_web::session_file_available() {
         order.push(InferenceProvider::Named("chatgpt-web".into()));
     }
+    if crate::config::deepseek_web::session_file_available() {
+        order.push(InferenceProvider::Named("deepseek-web".into()));
+    }
     order.extend([
         InferenceProvider::Named("opencode".into()),
         InferenceProvider::OpenRouter,
@@ -169,6 +172,9 @@ fn is_available_for_autodefault(
     }
     if crate::config::chatgpt_web::is_chatgpt_web(provider) {
         return crate::config::chatgpt_web::session_file_available();
+    }
+    if crate::config::deepseek_web::is_deepseek_web(provider) {
+        return crate::config::deepseek_web::session_file_available();
     }
     provider.is_keyless() || credentials.has_for(provider)
 }

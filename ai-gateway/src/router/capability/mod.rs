@@ -401,6 +401,8 @@ impl CapabilityAwareRouter {
     ) -> bool {
         if crate::config::chatgpt_web::is_chatgpt_web(
             &candidate.capability.provider,
+        ) || crate::config::deepseek_web::is_deepseek_web(
+            &candidate.capability.provider,
         ) {
             return true;
         }

@@ -73,11 +73,15 @@ impl BudgetAwareRouter {
         requirements: &RequestRequirements,
     ) -> bool {
         use crate::{
-            config::chatgpt_web::is_chatgpt_web,
+            config::{
+                chatgpt_web::is_chatgpt_web, deepseek_web::is_deepseek_web,
+            },
             types::model_id::ModelIdWithoutVersion,
         };
 
-        if is_chatgpt_web(&candidate.capability.provider) {
+        if is_chatgpt_web(&candidate.capability.provider)
+            || is_deepseek_web(&candidate.capability.provider)
+        {
             return true;
         }
 

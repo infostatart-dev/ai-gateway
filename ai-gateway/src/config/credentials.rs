@@ -72,6 +72,31 @@ impl CredentialRegistry {
         let mut registry = Self::default();
 
         for (id, spec) in catalog.credentials {
+            if crate::config::deepseek_web::is_deepseek_web(&spec.provider) {
+                let Some(path) =
+                    crate::config::deepseek_web::session_path_for_credential(
+                        &id,
+                    )
+                else {
+                    continue;
+                };
+                if !providers_config.contains_key(&spec.provider) {
+                    continue;
+                }
+                registry.push(ProviderCredential {
+                    id: ProviderCredentialId::new(id),
+                    provider: spec.provider,
+                    tier: spec.tier,
+                    key: ProviderKey::Secret(
+                        crate::types::secret::Secret::from(
+                            path.display().to_string(),
+                        ),
+                    ),
+                    budget_rank: spec.budget_rank,
+                });
+                continue;
+            }
+
             if crate::config::perplexity_web::is_perplexity_web(&spec.provider)
             {
                 let Some(path) =
@@ -176,19 +201,32 @@ impl CredentialRegistry {
 
     fn fill_session_credentials(&mut self, providers_config: &ProvidersConfig) {
         let chatgpt = InferenceProvider::Named("chatgpt-web".into());
-        if !providers_config.contains_key(&chatgpt) || self.has_for(&chatgpt) {
-            return;
+        if providers_config.contains_key(&chatgpt)
+            && !self.has_for(&chatgpt)
+            && crate::config::chatgpt_web::session_file_available()
+        {
+            self.push(ProviderCredential {
+                id: ProviderCredentialId::new("chatgpt-web-default"),
+                provider: chatgpt,
+                tier: "session".into(),
+                key: ProviderKey::NotRequired,
+                budget_rank: 0,
+            });
         }
-        if !crate::config::chatgpt_web::session_file_available() {
-            return;
+
+        let deepseek = InferenceProvider::Named("deepseek-web".into());
+        if providers_config.contains_key(&deepseek)
+            && !self.has_for(&deepseek)
+            && crate::config::deepseek_web::session_file_available()
+        {
+            self.push(ProviderCredential {
+                id: ProviderCredentialId::new("deepseek-web-default"),
+                provider: deepseek,
+                tier: "session".into(),
+                key: ProviderKey::NotRequired,
+                budget_rank: 0,
+            });
         }
-        self.push(ProviderCredential {
-            id: ProviderCredentialId::new("chatgpt-web-default"),
-            provider: chatgpt,
-            tier: "session".into(),
-            key: ProviderKey::NotRequired,
-            budget_rank: 0,
-        });
     }
 
     fn fill_legacy_defaults(&mut self, providers_config: &ProvidersConfig) {
@@ -258,9 +296,22 @@ mod tests {
         assert!(catalog.credentials.contains_key("gemini-free-4"));
         assert!(catalog.credentials.contains_key("gemini-default"));
         assert!(catalog.credentials.contains_key("openrouter-default"));
+        assert!(catalog.credentials.contains_key("deepseek-web-default"));
         let gemini_default = catalog.credentials.get("gemini-default").unwrap();
         assert_eq!(gemini_default.tier, "tier-3");
         assert_eq!(gemini_default.budget_rank, 10);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn registry_skips_deepseek_without_session_file() {
+        unsafe {
+            std::env::remove_var("DEEPSEEK_BROWSER_CLI");
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_DEEPSEEK_WEB_DEFAULT");
+        }
+        let registry = CredentialRegistry::build(&providers());
+        let deepseek = InferenceProvider::Named("deepseek-web".into());
+        assert!(!registry.has_for(&deepseek));
     }
 
     #[test]
@@ -321,6 +372,11 @@ mod tests {
     #[serial_test::serial(env)]
     fn registry_skips_missing_env_slots() {
         unsafe {
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE");
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2");
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3");
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4");
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_DEFAULT");
             std::env::remove_var("GEMINI_FREE_TIER_API_KEY");
             std::env::remove_var("GEMINI_FREE_TIER_APIKEY");
             std::env::remove_var("GEMINI_API_KEY");
