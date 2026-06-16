@@ -49,4 +49,4 @@
 ## 6. Version bump (`0.3.0-beta.14`)
 
 - [x] 6.1 Bump root `Cargo.toml` **`0.3.0-beta.13` → `0.3.0-beta.14`**
-- [ ] 6.2 Confirm CI green
+- [x] 6.2 Confirm CI green
