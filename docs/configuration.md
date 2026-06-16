@@ -15,12 +15,14 @@ ones):
 
 On load, the gateway also:
 
-- Builds the [`CredentialRegistry`](credentials.md) from embedded
-  `credentials.yaml` + env secrets
+- Loads the [`secrets file`](credentials.md) and builds
+  [`CredentialRegistry`](credentials.md) from embedded `credentials.yaml` +
+  secrets
 - In **Sidecar** deployment mode, may inject an **autodefault** router when
   credentials are available (see [routing.md](routing.md))
 
-Local development typically uses defaults plus `.env` (loaded via `dotenvy`).
+Local development uses `config/local.yaml` for non-secret settings plus
+`dev/secrets.local.yaml` for keys. No `.env` file is required.
 
 ## Embedded reference files
 
@@ -97,14 +99,20 @@ helicone:
   features: none   # or all, observability, prompts, auth
 ```
 
-Requires `HELICONE_CONTROL_PLANE_API_KEY` for cloud observability/auth features.
-**Not required** for self-hosted operation. Sidecar mode with Helicone Cloud is
-[legacy](../SIDECAR.md).
+Helicone API key: `integrations.helicone.api-key` in
+[`dev/secrets.local.yaml`](credentials.md). **Not required** for self-hosted
+operation. Sidecar mode with Helicone Cloud is [legacy](../SIDECAR.md).
 
-## Environment template
+## Local secrets setup
 
-Copy [`.env.template`](../.env.template) to `.env` before first run. Credential
-variables are documented there; see [credentials.md](credentials.md).
+```bash
+cp dev/secrets.local.example.yaml dev/secrets.local.yaml
+# edit keys, then:
+cargo run -- -c ai-gateway/config/local.yaml
+```
+
+See [credentials.md](credentials.md) for the full secrets schema and breaking
+change notes for legacy env vars.
 
 ## Related
 

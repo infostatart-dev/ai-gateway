@@ -1,24 +1,26 @@
 //! CLI: `perplexity login | import | probe`.
 
+use crate::config::perplexity_web as perplexity_cfg;
+
 pub async fn run_login() -> Result<(), Box<dyn std::error::Error>> {
-    perplexity_web::run_login().await?;
+    let path = perplexity_cfg::default_session_path();
+    perplexity_web::login::run_login_to(&path).await?;
     Ok(())
 }
 
 pub async fn run_import(
     cookie: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let path = perplexity_web::session_path_from_env()
-        .ok_or("PERPLEXITY_BROWSER_CLI env var is not set")?;
-    perplexity_web::save_session_from_cookie(&path, cookie.trim()).await?;
+    let path = perplexity_cfg::default_session_path();
+    perplexity_web::login::save_session_from_cookie(&path, cookie.trim())
+        .await?;
     Ok(())
 }
 
 pub async fn run_probe(
     query: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let path = perplexity_web::session_path_from_env()
-        .ok_or("PERPLEXITY_BROWSER_CLI is not set")?;
+    let path = perplexity_cfg::default_session_path();
     let session = perplexity_web::load_session(&path).await?;
     let cookie = session.normalized_cookie();
     if !perplexity_web::session::cookie::has_session_token(&cookie) {

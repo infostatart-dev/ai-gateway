@@ -86,12 +86,14 @@ impl Dispatcher {
         let outcome =
             if crate::config::chatgpt_web::is_chatgpt_web(target_provider) {
                 let headers = req.headers().clone();
-                self.dispatch_chatgpt_web(req, headers).await?
+                self.dispatch_chatgpt_web(req, headers, credential_id.as_ref())
+                    .await?
             } else if crate::config::deepseek_web::is_deepseek_web(
                 target_provider,
             ) {
                 let headers = req.headers().clone();
-                self.dispatch_deepseek_web(req, headers).await?
+                self.dispatch_deepseek_web(req, headers, credential_id.as_ref())
+                    .await?
             } else {
                 self.dispatch_via_upstream_proxy(UpstreamProxyDispatch {
                     req,

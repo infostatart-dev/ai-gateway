@@ -1,46 +1,70 @@
 # Credentials
 
-The gateway loads upstream API keys from environment variables and maps them to
-**credential slots** defined in
-[`credentials.yaml`](../ai-gateway/config/embedded/credentials.yaml).
+The gateway loads upstream API keys and browser session paths from a **single
+secrets YAML file**, not from scattered environment variables.
 
-Each slot represents one upstream account or billing tier (for example
-`openai-default`, `gemini-free`). The budget-aware router treats each slot as a
-separate candidate for failover and cooldown tracking.
+Provider **policy** (tier, budget-rank, cost-class) stays in embedded
+[`credentials.yaml`](../ai-gateway/config/embedded/credentials.yaml). Each
+slot represents one upstream account or billing tier (for example
+`openrouter-default`, `gemini-free`). The budget-aware router treats each slot
+as a separate candidate for failover and cooldown tracking.
 
-## Environment variable naming
+> **Breaking change (0.3.0-beta.18):** `AI_GATEWAY_CREDENTIAL_*`,
+> `{PROVIDER}_API_KEY`, `GEMINI_FREE_TIER_*`, `CHATGPT_BROWSER_CLI`,
+> `DEEPSEEK_BROWSER_CLI`, `HELICONE_CONTROL_PLANE_API_KEY`, and `AWS_*` env
+> overrides are **no longer read**. Migrate to the secrets file below.
 
-Primary convention:
+## Secrets file
 
+Copy the example and fill in real values:
+
+```bash
+cp dev/secrets.local.example.yaml dev/secrets.local.yaml
 ```
-AI_GATEWAY_CREDENTIAL_<ID>
+
+Discovery order (first existing file wins):
+
+1. `AI_GATEWAY_SECRETS_FILE` — explicit path override
+2. `./dev/secrets.local.yaml` — local development default
+3. `~/.config/ai-gateway/secrets.yaml` — user-wide fallback
+
+### Schema
+
+```yaml
+credentials:
+  openrouter-default:
+    api-key: sk-or-...
+  gemini-free:
+    api-key: ...
+  cloudflare-default:
+    api-key: "account_id:cfut_..."
+  deepseek-web-default:
+    session-file: dev/deepseek-session.json
+  chatgpt-web-default:
+    session-file: dev/session.json
+
+integrations:
+  helicone:
+    api-key: sk-helicone-...
+  aws:
+    access-key: ...
+    secret-key: ...
+    region: eu-central-1
 ```
 
-The credential `id` from YAML is uppercased; hyphens become underscores.
+Per slot, use **one** of:
 
-| Slot ID in YAML | Environment variable |
-|-----------------|----------------------|
-| `openai-default` | `AI_GATEWAY_CREDENTIAL_OPENAI_DEFAULT` |
-| `gemini-free` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE` |
-| `gemini-free-2` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2` |
-| `gemini-free-3` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3` |
-| `gemini-free-4` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4` |
-| `cloudflare-default` | `AI_GATEWAY_CREDENTIAL_CLOUDFLARE_DEFAULT` |
+| Field | Use |
+|-------|-----|
+| `api-key` | Inline API key or Cloudflare `account_id:token` |
+| `api-key-file` | Path to a file containing the key (relative to secrets file dir) |
+| `session-file` | Path to browser session JSON (web providers) |
 
-See [`.env.template`](../.env.template) for a full starter list.
+Policy fields (`tier`, `budget-rank`, `cost-class`, `provider`) are **not**
+accepted in the secrets file.
 
-## Resolution order
-
-For each slot, the gateway tries env vars in this order:
-
-1. `AI_GATEWAY_CREDENTIAL_<ID>` (universal)
-2. Optional `key-env` / `alt-key-envs` from YAML (if defined on the slot)
-3. Legacy `{PROVIDER}_API_KEY` — only for slots whose id ends with `-default`
-   (for example `OPENAI_API_KEY` for `openai-default`)
-4. Provider-specific legacy names (see below)
-
-If no secret is found, **the slot is skipped at startup** — no error, the
-provider simply has fewer credentials available.
+If no secret is found for a slot, **the slot is skipped at startup** — no
+error, the provider simply has fewer credentials available.
 
 ## Provider-specific formats
 
@@ -48,109 +72,98 @@ provider simply has fewer credentials available.
 
 Combined account and token in one value:
 
-```bash
-AI_GATEWAY_CREDENTIAL_CLOUDFLARE_DEFAULT="account_id:cfut_..."
+```yaml
+credentials:
+  cloudflare-default:
+    api-key: "account_id:cfut_..."
 ```
 
-Legacy fallbacks: `CLOUDFLARE_API_KEY_WITH_ACCOUNT_ID`, or separate
-`CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_KEY`.
+### Gemini free siblings
 
-### Gemini
+Four free-tier AI Studio slots share `tier: free` and equal `budget-rank` in
+embedded policy. Set each key under its own slot id:
 
-Four free-tier AI Studio slots share `tier: free` and equal `budget-rank`; set
-each key via its own `AI_GATEWAY_CREDENTIAL_GEMINI_FREE*` env var. Legacy
-aliases apply only to the first slot (`gemini-free`).
-
-| Slot | Environment variable | Legacy fallbacks |
-|------|----------------------|------------------|
-| `gemini-free` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE` | `GEMINI_FREE_TIER_API_KEY`, `GEMINI_FREE_TIER_APIKEY` |
-| `gemini-free-2` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2` | — |
-| `gemini-free-3` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3` | — |
-| `gemini-free-4` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4` | — |
-| `gemini-default` | `AI_GATEWAY_CREDENTIAL_GEMINI_DEFAULT` | `GEMINI_API_KEY` |
+```yaml
+credentials:
+  gemini-free:
+    api-key: ...
+  gemini-free-2:
+    api-key: ...
+  gemini-free-3:
+    api-key: ...
+  gemini-free-4:
+    api-key: ...
+  gemini-default:
+    api-key: ...
+```
 
 ### ChatGPT Web
 
-Session file path in `AI_GATEWAY_CREDENTIAL_CHATGPT_WEB_DEFAULT` (value = path
-to session JSON). Fallback env: `CHATGPT_BROWSER_CLI`. Cost-class:
-**`paid-browser`** — autodefault tries ChatGPT Web **last**, after free API
-keys and paid API fallbacks. See [chatgpt-web.md](chatgpt-web.md).
+Session file path in secrets — cost-class **`paid-browser`**. Autodefault tries
+ChatGPT Web **last**. See [chatgpt-web.md](chatgpt-web.md).
+
+```bash
+cargo run --features chatgpt-login -p ai-gateway -- chatgpt login
+```
+
+CLI writes to `dev/session.json` by default; point `session-file` in secrets
+to that path (or another path you prefer).
 
 ### DeepSeek Web
 
-Session file with `userToken` from chat.deepseek.com localStorage — see
-[deepseek-web.md](deepseek-web.md). Cost-class: **`free`**, ordered **after**
-Gemini free slots and **before** paid `gemini-default`.
+Session file with `userToken` from chat.deepseek.com — cost-class **`free`**.
+See [deepseek-web.md](deepseek-web.md).
 
 ```bash
 cargo run --features deepseek-login -p ai-gateway -- deepseek login
 cargo run --features deepseek-login -p ai-gateway -- deepseek import \
   --token 'your-userToken'
-cargo run --features deepseek-login -p ai-gateway -- deepseek probe
 ```
 
-| Slot | Env var (value = path to session JSON) |
-|------|----------------------------------------|
-| `chatgpt-web-default` | `AI_GATEWAY_CREDENTIAL_CHATGPT_WEB_DEFAULT` |
-| `deepseek-web-default` | `AI_GATEWAY_CREDENTIAL_DEEPSEEK_WEB_DEFAULT` |
+Default session path: `dev/deepseek-session.json`.
 
-CLI writes to `DEEPSEEK_BROWSER_CLI` (default account path).
+### AWS Bedrock
 
-### Perplexity Web (dormant in catalog)
+Optional `integrations.aws` block sets region URL and registers Bedrock
+credentials when complete. No `AWS_ACCESS_KEY` / `AWS_REGION` env overrides.
 
-Session file with logged-in `__Secure-next-auth.session-token` (+ CF cookies).
-The crate and CLI remain; provider is disabled in embedded catalog until
-dispatcher integration is complete.
+## Helicone API key
 
-```bash
-cargo run --features perplexity-login -p ai-gateway -- perplexity login
-cargo run --features perplexity-login -p ai-gateway -- perplexity import \
-  --cookie 'Cookie: __Secure-next-auth.session-token=...; cf_clearance=...'
-```
-
-| Slot | Env var (value = path to session JSON) |
-|------|----------------------------------------|
-| `perplexity-web-default` | (removed from embedded catalog) |
-
-CLI writes to `PERPLEXITY_BROWSER_CLI` when used manually.
+Helicone **URLs and features** stay in `config/local.yaml`. The API key lives
+only under `integrations.helicone.api-key` in the secrets file.
 
 ## Budget rank
 
-Each slot has a `budget-rank` in YAML. **Lower values are preferred first**
-within the same provider when the budget-aware router selects candidates.
-Multiple slots with the same provider and model are **round-robin balanced**
-across requests; on failure the router tries sibling accounts before moving to
-the next provider.
+Each slot has a `budget-rank` in embedded YAML. **Lower values are preferred
+first** within the same provider when the budget-aware router selects
+candidates.
 
-Example from embedded config: all four `gemini-free*` slots (rank 0) are tried
-before `gemini-default` (rank 10) when both are eligible. Configured free
-siblings round-robin across requests. On **transient RPM** `429`, the router
-tries the next free sibling. On **daily quota exhaustion** (`429
-RESOURCE_EXHAUSTED`) or **503 overload**, remaining free siblings are skipped
-for that request and the router jumps to `gemini-default` or the next provider
-instead of burning every free key on the same body.
-
-Failover and cooldown metrics include `credential` and `quota_metric`
-(`rpm|tpm|rpd|overload`) attributes; each request emits a structured
-`budget-aware route summary` log (hops, duration, terminal outcome).
+See embedded config: all four `gemini-free*` slots (rank 0) are tried before
+`gemini-default` (rank 10) when both are eligible.
 
 ## Startup behaviour
 
 At startup, `CredentialRegistry`:
 
-1. Parses embedded `credentials.yaml`
-2. Resolves secrets from the environment
+1. Parses embedded `credentials.yaml` (policy only)
+2. Loads the secrets file and resolves keys / session paths
 3. Skips slots without secrets or whose provider is absent from `providers.yaml`
-4. Adds session-based credentials (ChatGPT Web) when a valid session file exists
+4. Registers Bedrock from `integrations.aws` when configured
 
-If **no credentials** resolve for any provider you need, requests to that
-provider will fail at routing time.
+## Production (Kubernetes)
+
+Mount one Secret as a file and set:
+
+```yaml
+env:
+  - name: AI_GATEWAY_SECRETS_FILE
+    value: /etc/ai-gateway/secrets.yaml
+```
 
 ## Adding a new slot
 
-1. Add an entry to `credentials.yaml` (or your override config if you fork
-   embedded files).
-2. Set the matching `AI_GATEWAY_CREDENTIAL_*` env var.
+1. Add policy entry to embedded `credentials.yaml` (or fork embedded files).
+2. Add matching `credentials.<slot-id>` entry in the secrets file.
 3. Ensure the provider exists in `providers.yaml`.
 4. Restart the gateway.
 

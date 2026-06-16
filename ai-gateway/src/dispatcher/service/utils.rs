@@ -148,8 +148,34 @@ impl Dispatcher {
             target_provider,
             base_url,
             path,
+            cloudflare_account_id(config, None).as_deref(),
         )?)
     }
+}
+
+fn cloudflare_account_id(
+    config: &crate::config::Config,
+    credential_id: Option<&crate::config::credentials::ProviderCredentialId>,
+) -> Option<String> {
+    if let Some(id) = credential_id {
+        if let Some(from_secrets) =
+            crate::config::secrets_file::SecretsFile::cloudflare_account_id(
+                id.as_str(),
+            )
+        {
+            return Some(from_secrets);
+        }
+        if let Some(cred) = config.credentials.get(id)
+            && let Some(secret) = cred.key.as_secret()
+            && let Some((account_id, _)) =
+                crate::config::cloudflare::parse_combined(secret.expose())
+        {
+            return Some(account_id);
+        }
+    }
+    crate::config::secrets_file::SecretsFile::cloudflare_account_id(
+        "cloudflare-default",
+    )
 }
 
 pub fn extract_retry_after(headers: &HeaderMap) -> Option<u64> {

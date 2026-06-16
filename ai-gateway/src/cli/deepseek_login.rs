@@ -1,15 +1,17 @@
 //! CLI: `deepseek login | import | probe`.
 
+use crate::config::deepseek_web as deepseek_cfg;
+
 pub async fn run_login() -> Result<(), Box<dyn std::error::Error>> {
-    deepseek_web::login::run_login().await?;
+    let path = deepseek_cfg::default_session_path();
+    deepseek_web::login::run_login_to(&path).await?;
     Ok(())
 }
 
 pub async fn run_import(
     token: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let path = deepseek_web::session_path_from_env()
-        .ok_or("DEEPSEEK_BROWSER_CLI env var is not set")?;
+    let path = deepseek_cfg::default_session_path();
     deepseek_web::login::save_session_from_token(&path, token.trim()).await?;
     Ok(())
 }
@@ -17,8 +19,7 @@ pub async fn run_import(
 pub async fn run_probe(
     query: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let path = deepseek_web::session_path_from_env()
-        .ok_or("DEEPSEEK_BROWSER_CLI env var is not set")?;
+    let path = deepseek_cfg::default_session_path();
     let session = deepseek_web::load_session(&path).await?;
     let user_token = deepseek_web::normalize_user_token(&session.token);
     if user_token.is_empty() {

@@ -65,25 +65,19 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial(env)]
     fn deepseek_scope_uses_session_path() {
         let path = std::env::temp_dir().join("ai-gw-ds-scope.json");
         std::fs::write(&path, r#"{"token":"tok"}"#).unwrap();
-        let env_name = crate::config::credential_env::credential_env_var_name(
-            "deepseek-web-default",
-        );
-        unsafe {
-            std::env::set_var(&env_name, &path);
-        }
+        let mut secrets = crate::config::secrets_file::SecretsFile::default();
+        secrets.register_session_path("deepseek-web-default", path.clone());
+        crate::config::secrets_file::SecretsFile::install(secrets);
+
         let provider = InferenceProvider::Named("deepseek-web".into());
         let id = ProviderCredentialId::new("deepseek-web-default");
         assert_eq!(
             gate_scope_key(&provider, Some(&id)),
             path.display().to_string()
         );
-        unsafe {
-            std::env::remove_var(&env_name);
-        }
         let _ = std::fs::remove_file(path);
     }
 }

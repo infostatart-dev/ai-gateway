@@ -8,8 +8,9 @@ pub fn join_provider_path(
     provider: &InferenceProvider,
     base_url: &Url,
     path: &str,
+    cloudflare_account_id: Option<&str>,
 ) -> Result<Url, InternalError> {
-    let base = cloudflare_ai_base(provider, base_url)?;
+    let base = cloudflare_ai_base(provider, base_url, cloudflare_account_id)?;
     base.join(path).map_err(|error| {
         tracing::error!(%error, provider = %provider, path, "invalid provider URL join");
         InternalError::Internal
@@ -19,19 +20,18 @@ pub fn join_provider_path(
 fn cloudflare_ai_base(
     provider: &InferenceProvider,
     base_url: &Url,
+    cloudflare_account_id: Option<&str>,
 ) -> Result<Url, InternalError> {
     if provider != &InferenceProvider::Named("cloudflare".into()) {
         return Ok(base_url.clone());
     }
-    let account_id = crate::config::cloudflare::credentials_from_env()
-        .map(|(account_id, _)| account_id)
-        .ok_or_else(|| {
-            tracing::error!(
-                "CLOUDFLARE_API_KEY_WITH_ACCOUNT_ID or CLOUDFLARE_ACCOUNT_ID \
-                 is required when cloudflare provider is configured"
-            );
-            InternalError::ProviderNotConfigured(provider.clone())
-        })?;
+    let account_id = cloudflare_account_id.ok_or_else(|| {
+        tracing::error!(
+            "cloudflare account id missing — set \
+             credentials.cloudflare-default in secrets file"
+        );
+        InternalError::ProviderNotConfigured(provider.clone())
+    })?;
     base_url.join(&format!("{account_id}/ai/")).map_err(|error| {
         tracing::error!(%error, account_id, "invalid cloudflare base URL join");
         InternalError::Internal
@@ -50,6 +50,7 @@ mod tests {
             &InferenceProvider::Named("cerebras".into()),
             &base,
             "v1/chat/completions",
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -59,18 +60,17 @@ mod tests {
     }
 
     #[test]
-    fn github_models_base_url_joins_inference_chat_completions() {
+    fn cloudflare_joins_account_scoped_base() {
         let base =
-            url::Url::parse("https://models.github.ai/inference/").unwrap();
+            url::Url::parse("https://api.cloudflare.com/client/v4/accounts/")
+                .unwrap();
         let joined = join_provider_path(
-            &InferenceProvider::Named("github-models".into()),
+            &InferenceProvider::Named("cloudflare".into()),
             &base,
-            "chat/completions",
+            "v1/chat/completions",
+            Some("acct123"),
         )
         .unwrap();
-        assert_eq!(
-            joined.as_str(),
-            "https://models.github.ai/inference/chat/completions"
-        );
+        assert!(joined.as_str().contains("acct123/ai/"));
     }
 }

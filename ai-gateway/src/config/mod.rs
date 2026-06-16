@@ -4,7 +4,6 @@ pub mod chatgpt_web;
 pub mod cloudflare;
 pub mod control_plane;
 pub mod cost_class;
-pub mod credential_env;
 pub mod credentials;
 pub mod database;
 pub mod deepseek_web;
@@ -25,6 +24,7 @@ pub mod response_headers;
 pub mod retry;
 pub mod router;
 pub mod router_cooldown;
+pub mod secrets_file;
 pub mod server;
 pub mod validation;
 

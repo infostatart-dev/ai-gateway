@@ -68,10 +68,7 @@ impl Default for HeliconeConfig {
 
 #[must_use]
 pub fn default_api_key() -> Secret<String> {
-    Secret::from(
-        std::env::var("HELICONE_CONTROL_PLANE_API_KEY")
-            .unwrap_or("sk-helicone-...".to_string()),
-    )
+    Secret::from(String::new())
 }
 #[must_use]
 pub fn default_base_url() -> Url {

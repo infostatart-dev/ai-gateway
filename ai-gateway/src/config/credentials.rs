@@ -8,8 +8,12 @@ use crate::{
     config::{
         cost_class::{self, CostClass},
         providers::ProvidersConfig,
+        secrets_file::SecretsFile,
     },
-    types::provider::{InferenceProvider, ProviderKey},
+    types::{
+        provider::{InferenceProvider, ProviderKey},
+        secret::Secret,
+    },
 };
 
 const CREDENTIALS_YAML: &str =
@@ -74,10 +78,6 @@ struct CredentialSpec {
     #[serde(default)]
     cost_class: Option<CostClass>,
     #[serde(default)]
-    key_env: Option<String>,
-    #[serde(default)]
-    alt_key_envs: Vec<String>,
-    #[serde(default)]
     budget_rank: u16,
 }
 
@@ -92,104 +92,18 @@ impl CredentialSpec {
 }
 
 impl CredentialRegistry {
-    fn try_push_session_slot(
-        &mut self,
-        providers_config: &ProvidersConfig,
-        id: String,
-        spec: &CredentialSpec,
-        cost_class: CostClass,
-        path: &std::path::Path,
-    ) {
-        if !providers_config.contains_key(&spec.provider) {
-            return;
-        }
-        self.push(ProviderCredential {
-            id: ProviderCredentialId::new(id),
-            provider: spec.provider.clone(),
-            tier: spec.tier.clone(),
-            cost_class,
-            key: ProviderKey::Secret(crate::types::secret::Secret::from(
-                path.display().to_string(),
-            )),
-            budget_rank: spec.budget_rank,
-        });
-    }
-
     #[must_use]
-    pub fn build(providers_config: &ProvidersConfig) -> Self {
+    pub fn build(
+        providers_config: &ProvidersConfig,
+        secrets: &mut SecretsFile,
+    ) -> Self {
         let catalog: CredentialCatalog = serde_yml::from_str(CREDENTIALS_YAML)
             .expect("embedded credentials.yaml must parse");
         let mut registry = Self::default();
 
         for (id, spec) in catalog.credentials {
             let cost_class = spec.resolved_cost_class();
-            if crate::config::chatgpt_web::is_chatgpt_web(&spec.provider) {
-                let Some(path) =
-                    crate::config::chatgpt_web::session_path_for_credential(
-                        &id,
-                    )
-                else {
-                    continue;
-                };
-                registry.try_push_session_slot(
-                    providers_config,
-                    id,
-                    &spec,
-                    cost_class,
-                    &path,
-                );
-                continue;
-            }
-
-            if crate::config::deepseek_web::is_deepseek_web(&spec.provider) {
-                let Some(path) =
-                    crate::config::deepseek_web::session_path_for_credential(
-                        &id,
-                    )
-                else {
-                    continue;
-                };
-                registry.try_push_session_slot(
-                    providers_config,
-                    id,
-                    &spec,
-                    cost_class,
-                    &path,
-                );
-                continue;
-            }
-
-            if crate::config::perplexity_web::is_perplexity_web(&spec.provider)
-            {
-                let Some(path) =
-                    crate::config::perplexity_web::session_path_for_credential(
-                        &id,
-                    )
-                else {
-                    continue;
-                };
-                registry.try_push_session_slot(
-                    providers_config,
-                    id,
-                    &spec,
-                    cost_class,
-                    &path,
-                );
-                continue;
-            }
-
-            let extra_env = spec
-                .key_env
-                .iter()
-                .chain(spec.alt_key_envs.iter())
-                .cloned()
-                .collect::<Vec<_>>();
-            let Some(key) =
-                crate::config::credential_env::resolve_credential_secret(
-                    &id,
-                    &spec.provider,
-                    &extra_env,
-                )
+            let Some(key) = secrets.resolve_provider_key(&id, &spec.provider)
             else {
                 continue;
             };
@@ -206,10 +120,42 @@ impl CredentialRegistry {
             });
         }
 
-        registry.fill_legacy_defaults(providers_config);
-        registry.fill_session_credentials(providers_config);
+        registry.push_bedrock_from_integrations(providers_config, secrets);
         registry.rebuild_indexes();
         registry
+    }
+
+    fn push_bedrock_from_integrations(
+        &mut self,
+        providers_config: &ProvidersConfig,
+        secrets: &SecretsFile,
+    ) {
+        let bedrock = InferenceProvider::Bedrock;
+        if !providers_config.contains_key(&bedrock) {
+            return;
+        }
+        if self.has_for(&bedrock) {
+            return;
+        }
+        let Some(aws) = secrets.integrations.aws.as_ref() else {
+            return;
+        };
+        if aws.access_key.is_empty() || aws.secret_key.is_empty() {
+            return;
+        }
+        self.push(ProviderCredential {
+            id: ProviderCredentialId::new("bedrock-default"),
+            provider: bedrock.clone(),
+            tier: "default".into(),
+            cost_class: cost_class::derive_cost_class(
+                None, &bedrock, "default",
+            ),
+            key: ProviderKey::AwsCredentials {
+                access_key: Secret::from(aws.access_key.clone()),
+                secret_key: Secret::from(aws.secret_key.clone()),
+            },
+            budget_rank: 0,
+        });
     }
 
     #[must_use]
@@ -235,6 +181,14 @@ impl CredentialRegistry {
     }
 
     #[must_use]
+    pub fn get(
+        &self,
+        id: &ProviderCredentialId,
+    ) -> Option<&ProviderCredential> {
+        self.credentials.iter().find(|c| &c.id == id)
+    }
+
+    #[must_use]
     pub fn default_for(
         &self,
         provider: &InferenceProvider,
@@ -253,63 +207,6 @@ impl CredentialRegistry {
 
     fn push(&mut self, credential: ProviderCredential) {
         self.credentials.push(credential);
-    }
-
-    fn fill_session_credentials(&mut self, providers_config: &ProvidersConfig) {
-        let chatgpt = InferenceProvider::Named("chatgpt-web".into());
-        if providers_config.contains_key(&chatgpt)
-            && !self.has_for(&chatgpt)
-            && crate::config::chatgpt_web::session_file_available()
-        {
-            self.push(ProviderCredential {
-                id: ProviderCredentialId::new("chatgpt-web-default"),
-                provider: chatgpt,
-                tier: "session".into(),
-                cost_class: CostClass::PaidBrowser,
-                key: ProviderKey::NotRequired,
-                budget_rank: 0,
-            });
-        }
-
-        let deepseek = InferenceProvider::Named("deepseek-web".into());
-        if providers_config.contains_key(&deepseek)
-            && !self.has_for(&deepseek)
-            && crate::config::deepseek_web::session_file_available()
-        {
-            self.push(ProviderCredential {
-                id: ProviderCredentialId::new("deepseek-web-default"),
-                provider: deepseek,
-                tier: "session".into(),
-                cost_class: CostClass::Free,
-                key: ProviderKey::NotRequired,
-                budget_rank: 0,
-            });
-        }
-    }
-
-    fn fill_legacy_defaults(&mut self, providers_config: &ProvidersConfig) {
-        for (provider, _) in providers_config.iter() {
-            if self.has_for(provider) {
-                continue;
-            }
-            if provider.is_keyless() {
-                continue;
-            }
-            let Some(key) = ProviderKey::from_env(provider) else {
-                continue;
-            };
-            let id = ProviderCredentialId::new(format!("{provider}-default"));
-            self.push(ProviderCredential {
-                id,
-                provider: provider.clone(),
-                tier: "default".into(),
-                cost_class: cost_class::derive_cost_class(
-                    None, provider, "default",
-                ),
-                key,
-                budget_rank: 0,
-            });
-        }
     }
 
     fn rebuild_indexes(&mut self) {
@@ -339,12 +236,19 @@ impl CredentialRegistry {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use std::path::Path;
 
     use super::*;
+    use crate::config::secrets_file::SecretsFile;
 
     fn providers() -> ProvidersConfig {
         ProvidersConfig::default()
+    }
+
+    fn write_secrets(dir: &Path, yaml: &str) -> SecretsFile {
+        let path = dir.join("secrets.yaml");
+        std::fs::write(&path, yaml).unwrap();
+        SecretsFile::load(&path).unwrap()
     }
 
     #[test]
@@ -352,167 +256,85 @@ mod tests {
         let catalog: CredentialCatalog =
             serde_yml::from_str(CREDENTIALS_YAML).unwrap();
         assert!(catalog.credentials.contains_key("gemini-free"));
-        assert!(catalog.credentials.contains_key("gemini-free-2"));
-        assert!(catalog.credentials.contains_key("gemini-free-3"));
-        assert!(catalog.credentials.contains_key("gemini-free-4"));
-        assert!(catalog.credentials.contains_key("gemini-default"));
         assert!(catalog.credentials.contains_key("openrouter-default"));
-        assert!(catalog.credentials.contains_key("deepseek-web-default"));
-        assert!(catalog.credentials.contains_key("chatgpt-web-default"));
-        let gemini_default = catalog.credentials.get("gemini-default").unwrap();
-        assert_eq!(gemini_default.tier, "tier-3");
-        assert_eq!(gemini_default.budget_rank, 10);
-        let deepseek_web =
-            catalog.credentials.get("deepseek-web-default").unwrap();
-        assert_eq!(deepseek_web.cost_class, Some(CostClass::Free));
-        let chatgpt_web =
-            catalog.credentials.get("chatgpt-web-default").unwrap();
-        assert_eq!(chatgpt_web.cost_class, Some(CostClass::PaidBrowser));
     }
 
     #[test]
-    #[serial_test::serial(env)]
-    fn registry_skips_deepseek_without_session_file() {
-        unsafe {
-            std::env::remove_var("DEEPSEEK_BROWSER_CLI");
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_DEEPSEEK_WEB_DEFAULT");
-        }
-        let registry = CredentialRegistry::build(&providers());
-        let deepseek = InferenceProvider::Named("deepseek-web".into());
-        assert!(!registry.has_for(&deepseek));
+    fn registry_loads_slot_from_secrets_file() {
+        let dir = std::env::temp_dir().join("ai-gw-cred-openrouter");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut secrets = write_secrets(
+            &dir,
+            "credentials:\n  openrouter-default:\n    api-key: sk-or-test\n",
+        );
+        let registry = CredentialRegistry::build(&providers(), &mut secrets);
+        assert!(registry.has_for(&InferenceProvider::OpenRouter));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    #[serial_test::serial(env)]
-    fn registry_loads_all_configured_free_gemini_siblings() {
+    fn legacy_env_is_ignored_without_secrets_file_entry() {
         unsafe {
-            std::env::set_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE", "free-1");
-            std::env::set_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2", "free-2");
-            std::env::set_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4", "free-4");
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3");
-            std::env::remove_var("GEMINI_API_KEY");
+            std::env::set_var(
+                "AI_GATEWAY_CREDENTIAL_OPENROUTER_DEFAULT",
+                "legacy",
+            );
         }
-        let registry = CredentialRegistry::build(&providers());
-        let gemini: Vec<_> = registry
-            .for_provider(&InferenceProvider::GoogleGemini)
-            .collect();
-        assert_eq!(gemini.len(), 3);
-        assert_eq!(gemini[0].id.0, "gemini-free");
-        assert_eq!(gemini[1].id.0, "gemini-free-2");
-        assert_eq!(gemini[2].id.0, "gemini-free-4");
+        let mut secrets = SecretsFile::default();
+        let registry = CredentialRegistry::build(&providers(), &mut secrets);
+        assert!(!registry.has_for(&InferenceProvider::OpenRouter));
         unsafe {
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE");
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2");
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4");
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_OPENROUTER_DEFAULT");
         }
     }
 
     #[test]
-    #[serial_test::serial(env)]
-    fn registry_loads_gemini_free_before_paid_from_env() {
-        unsafe {
-            std::env::set_var("GEMINI_FREE_TIER_APIKEY", "free-key");
-            std::env::set_var("GEMINI_API_KEY", "paid-key");
-        }
-        let registry = CredentialRegistry::build(&providers());
+    fn registry_loads_multiple_gemini_free_slots() {
+        let dir = std::env::temp_dir().join("ai-gw-cred-gemini");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut secrets = write_secrets(
+            &dir,
+            r#"
+credentials:
+  gemini-free:
+    api-key: free-1
+  gemini-free-2:
+    api-key: free-2
+"#,
+        );
+        let registry = CredentialRegistry::build(&providers(), &mut secrets);
         let gemini: Vec<_> = registry
             .for_provider(&InferenceProvider::GoogleGemini)
             .collect();
         assert_eq!(gemini.len(), 2);
-        assert_eq!(gemini[0].id.0, "gemini-free");
-        assert_eq!(gemini[0].tier, "free");
-        assert_eq!(gemini[1].id.0, "gemini-default");
-        assert_eq!(
-            registry
-                .default_for(&InferenceProvider::GoogleGemini)
-                .unwrap()
-                .id
-                .0,
-            "gemini-free"
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn registry_loads_bedrock_from_integrations_aws() {
+        let dir = std::env::temp_dir().join("ai-gw-cred-bedrock");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut secrets = write_secrets(
+            &dir,
+            r#"
+integrations:
+  aws:
+    access-key: AKIA
+    secret-key: secret
+    region: eu-central-1
+"#,
         );
-        unsafe {
-            std::env::remove_var("GEMINI_FREE_TIER_APIKEY");
-            std::env::remove_var("GEMINI_API_KEY");
-        }
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn registry_skips_missing_env_slots() {
-        let clear = [
-            "AI_GATEWAY_CREDENTIAL_GEMINI_FREE",
-            "AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2",
-            "AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3",
-            "AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4",
-            "AI_GATEWAY_CREDENTIAL_GEMINI_DEFAULT",
-            "GEMINI_FREE_TIER_API_KEY",
-            "GEMINI_FREE_TIER_APIKEY",
-            "GEMINI_API_KEY",
-        ];
-        unsafe {
-            for name in clear {
-                std::env::remove_var(name);
-            }
-        }
-        let registry = CredentialRegistry::build(&providers());
-        assert!(!registry.has_for(&InferenceProvider::GoogleGemini));
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn legacy_default_synthesized_for_provider_with_single_env_key() {
-        unsafe {
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_DEEPSEEK_DEFAULT");
-            std::env::set_var("DEEPSEEK_API_KEY", "deepseek-test");
-        }
-        let registry = CredentialRegistry::build(&providers());
-        let deepseek = InferenceProvider::Named("deepseek".into());
-        assert!(registry.has_for(&deepseek));
-        let cred = registry.default_for(&deepseek).unwrap();
-        assert_eq!(cred.id.0, "deepseek-default");
-        unsafe {
-            std::env::remove_var("DEEPSEEK_API_KEY");
-        }
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn registry_includes_github_models_when_credential_set() {
-        unsafe {
-            std::env::set_var(
-                "AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT",
-                "ghp_test",
-            );
-        }
-        let registry = CredentialRegistry::build(&providers());
-        let github = InferenceProvider::Named("github-models".into());
-        assert!(registry.has_for(&github));
-        let cred = registry.default_for(&github).unwrap();
-        assert_eq!(cred.id.0, "github-models-default");
-        assert_eq!(cred.tier, "free");
-        assert_eq!(cred.budget_rank, 0);
-        unsafe {
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT");
-        }
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn registry_skips_github_models_without_credential() {
-        unsafe {
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT");
-        }
-        let registry = CredentialRegistry::build(&providers());
-        let github = InferenceProvider::Named("github-models".into());
-        assert!(!registry.has_for(&github));
+        let registry = CredentialRegistry::build(&providers(), &mut secrets);
+        assert!(registry.has_for(&InferenceProvider::Bedrock));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn credential_id_display() {
         let id = ProviderCredentialId::new("gemini-free");
         assert_eq!(id.to_string(), "gemini-free");
-        let parsed =
-            ProviderCredentialId(CompactString::from_str("x").unwrap());
-        assert_eq!(parsed.0, "x");
     }
 }

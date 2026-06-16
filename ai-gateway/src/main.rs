@@ -69,8 +69,8 @@ enum Command {
 #[derive(Debug, Subcommand)]
 #[cfg(feature = "chatgpt-login")]
 enum ChatgptAction {
-    /// Open a browser to log in and save session cookies to
-    /// `CHATGPT_BROWSER_CLI` path.
+    /// Open a browser to log in and save session cookies to the default path
+    /// (`dev/session.json`; configure via secrets file).
     Login,
     /// Paste Cookie header from Firefox/Chrome `DevTools`.
     Import {
@@ -124,7 +124,6 @@ async fn main() -> Result<(), RuntimeError> {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    dotenvy::dotenv().ok();
     let cli = Cli::parse();
 
     #[cfg(feature = "chatgpt-login")]
@@ -218,21 +217,16 @@ fn load_and_validate_config(
     })?;
 
     if !config.has_autodefault_router()
-        && ai_gateway::config::chatgpt_web::session_path_from_env().is_some()
+        && config.credentials.has_for(
+            &ai_gateway::types::provider::InferenceProvider::Named(
+                "chatgpt-web".into(),
+            ),
+        )
+        && !ai_gateway::config::chatgpt_web::session_file_available()
     {
         eprintln!(
-            "CHATGPT_BROWSER_CLI is set but session file is missing. Run: \
-             cargo run --features chatgpt-login -- chatgpt login"
-        );
-    }
-
-    if ai_gateway::config::perplexity_web::session_path_from_env().is_some()
-        && !ai_gateway::config::perplexity_web::session_file_available()
-    {
-        eprintln!(
-            "PERPLEXITY_BROWSER_CLI is set but session file is missing or \
-             invalid. Run: cargo run --features perplexity-login -- \
-             perplexity import --cookie '...'"
+            "chatgpt-web is configured in secrets but session file is \
+             missing. Run: cargo run --features chatgpt-login -- chatgpt login"
         );
     }
 

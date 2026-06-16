@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use bytes::Bytes;
 use deepseek_web::{COMPLETION_URL, ExecuteRequest, Executor};
 use http::{HeaderMap, StatusCode};
@@ -6,7 +8,7 @@ use serde_json::Value;
 use tracing::Instrument;
 
 use crate::{
-    config::deepseek_web as deepseek_cfg,
+    config::{credentials::ProviderCredentialId, deepseek_web as deepseek_cfg},
     dispatcher::service::{
         Dispatcher,
         outcome::{DispatchOutcome, outcome_from_bytes},
@@ -21,13 +23,18 @@ impl Dispatcher {
         &self,
         req: Request,
         request_headers: HeaderMap,
+        credential_id: Option<&ProviderCredentialId>,
     ) -> Result<DispatchOutcome, ApiError> {
-        let user_token = deepseek_cfg::load_session_token(
-            &deepseek_cfg::session_path_from_env().ok_or_else(|| {
-                ApiError::Internal(InternalError::ProviderNotFound)
-            })?,
+        let session_path = resolve_session_path(
+            &self.app_state.config().credentials,
+            credential_id,
+            deepseek_cfg::DEFAULT_CREDENTIAL_ID,
         )
         .ok_or_else(|| ApiError::Internal(InternalError::ProviderNotFound))?;
+        let user_token = deepseek_cfg::load_session_token(&session_path)
+            .ok_or_else(|| {
+                ApiError::Internal(InternalError::ProviderNotFound)
+            })?;
 
         let body_bytes = req
             .into_body()
@@ -101,6 +108,20 @@ impl Dispatcher {
         )
         .map_err(ApiError::Internal)
     }
+}
+
+fn resolve_session_path(
+    registry: &crate::config::credentials::CredentialRegistry,
+    credential_id: Option<&ProviderCredentialId>,
+    default_id: &str,
+) -> Option<PathBuf> {
+    if let Some(id) = credential_id
+        && let Some(cred) = registry.get(id)
+        && let Some(path) = cred.key.as_secret()
+    {
+        return Some(PathBuf::from(path.expose()));
+    }
+    deepseek_cfg::session_path_for_credential(default_id)
 }
 
 fn deepseek_error_body(

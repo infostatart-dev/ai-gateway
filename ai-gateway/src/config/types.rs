@@ -79,8 +79,13 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         let providers = crate::config::providers::ProvidersConfig::default();
-        let credentials =
-            crate::config::credentials::CredentialRegistry::build(&providers);
+        let mut secrets =
+            crate::config::secrets_file::SecretsFile::load_discovered();
+        let credentials = crate::config::credentials::CredentialRegistry::build(
+            &providers,
+            &mut secrets,
+        );
+        crate::config::secrets_file::SecretsFile::install(secrets);
         Self {
             telemetry: telemetry::Config::default(),
             server: crate::config::server::ServerConfig::default(),

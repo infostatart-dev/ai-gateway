@@ -78,22 +78,16 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial(env)]
     fn registry_isolates_gates_by_credential_scope() {
         let path_a = std::env::temp_dir().join("ai-gw-pacing-a.json");
         let path_b = std::env::temp_dir().join("ai-gw-pacing-b.json");
         std::fs::write(&path_a, r#"{"cookie":"a"}"#).unwrap();
         std::fs::write(&path_b, r#"{"cookie":"b"}"#).unwrap();
-        let env_a = crate::config::credential_env::credential_env_var_name(
-            "chatgpt-web-a",
-        );
-        let env_b = crate::config::credential_env::credential_env_var_name(
-            "chatgpt-web-b",
-        );
-        unsafe {
-            std::env::set_var(&env_a, &path_a);
-            std::env::set_var(&env_b, &path_b);
-        }
+
+        let mut secrets = crate::config::secrets_file::SecretsFile::default();
+        secrets.register_session_path("chatgpt-web-a", path_a.clone());
+        secrets.register_session_path("chatgpt-web-b", path_b.clone());
+        crate::config::secrets_file::SecretsFile::install(secrets);
 
         let registry = PacingRegistry::new(ProviderLimitCatalog::default());
         let provider = InferenceProvider::Named("chatgpt-web".into());
@@ -105,10 +99,6 @@ mod tests {
             registry.gate_for(&provider, Some(&cred_b)).expect("gate b");
         assert!(!Arc::ptr_eq(&gate_a, &gate_b));
 
-        unsafe {
-            std::env::remove_var(&env_a);
-            std::env::remove_var(&env_b);
-        }
         let _ = std::fs::remove_file(path_a);
         let _ = std::fs::remove_file(path_b);
     }

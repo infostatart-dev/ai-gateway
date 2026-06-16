@@ -5,6 +5,7 @@ node_modules
 dev/session.json
 dev/perplexity-session.json
 dev/deepseek-session.json
+dev/secrets.local.yaml
 .idea/*
 .DS_Store
 bindings/

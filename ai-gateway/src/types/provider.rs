@@ -239,43 +239,8 @@ impl ProviderKey {
     }
 
     #[must_use]
-    pub fn from_env(provider: &InferenceProvider) -> Option<Self> {
-        if *provider == InferenceProvider::Bedrock {
-            if let (Ok(access_key), Ok(secret_key)) = (
-                std::env::var("AWS_ACCESS_KEY"),
-                std::env::var("AWS_SECRET_KEY"),
-            ) {
-                Some(ProviderKey::AwsCredentials {
-                    access_key: Secret::from(access_key),
-                    secret_key: Secret::from(secret_key),
-                })
-            } else {
-                None
-            }
-        } else if matches!(
-            provider,
-            InferenceProvider::Named(name) if name == "cloudflare"
-        ) {
-            crate::config::cloudflare::credentials_from_env().map(
-                |(_, api_token)| ProviderKey::Secret(Secret::from(api_token)),
-            )
-        } else if crate::config::chatgpt_web::is_chatgpt_web(provider) {
-            crate::config::chatgpt_web::session_file_available()
-                .then_some(ProviderKey::NotRequired)
-        } else if crate::config::deepseek_web::is_deepseek_web(provider) {
-            crate::config::deepseek_web::session_file_available()
-                .then_some(ProviderKey::NotRequired)
-        } else {
-            let provider_str = provider.to_string().to_uppercase();
-            let env_var = format!("{provider_str}_API_KEY");
-            if let Ok(key) = std::env::var(&env_var)
-                && !key.is_empty()
-            {
-                Some(ProviderKey::Secret(Secret::from(key)))
-            } else {
-                None
-            }
-        }
+    pub fn from_env(_provider: &InferenceProvider) -> Option<Self> {
+        None
     }
 }
 
@@ -368,8 +333,11 @@ impl ProviderKeyMap {
 
     pub fn from_env(providers_config: &ProvidersConfig) -> Self {
         tracing::debug!("Discovering provider credentials");
+        let mut secrets =
+            crate::config::secrets_file::SecretsFile::load_discovered();
         let registry = crate::config::credentials::CredentialRegistry::build(
             providers_config,
+            &mut secrets,
         );
         let mut keys = HashMap::default();
 
@@ -425,12 +393,12 @@ mod tests {
     }
 
     #[test]
-    fn opencode_api_key_env_var_name() {
+    fn opencode_has_no_legacy_env_resolution() {
         unsafe {
             std::env::set_var("OPENCODE_API_KEY", "test-key");
         }
         let provider = InferenceProvider::Named("opencode".into());
-        assert!(ProviderKey::from_env(&provider).is_some());
+        assert!(ProviderKey::from_env(&provider).is_none());
         unsafe {
             std::env::remove_var("OPENCODE_API_KEY");
         }

@@ -12,22 +12,38 @@ use super::{
 };
 use crate::{
     app_state::AppState,
-    config::{chatgpt_web::SESSION_ENV, router::RouterConfig},
+    config::{
+        chatgpt_web,
+        router::RouterConfig,
+        secrets_file::SECRETS_FILE_ENV,
+    },
     endpoints::EndpointType,
     router::capability::RequestRequirements,
     types::{model_id::ModelId, provider::InferenceProvider, router::RouterId},
 };
 
-fn ensure_chatgpt_session_env() {
-    if std::env::var(SESSION_ENV).is_ok() {
-        return;
-    }
+fn ensure_chatgpt_session_secrets() {
     let session =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dev/session.json");
-    if session.exists() {
-        unsafe {
-            std::env::set_var(SESSION_ENV, session);
-        }
+    if !session.exists() {
+        return;
+    }
+    let dir = std::env::temp_dir()
+        .join(format!("ai-gw-chatgpt-test-secrets-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let secrets_path = dir.join("secrets.yaml");
+    std::fs::write(
+        &secrets_path,
+        format!(
+            "credentials:\n  {}:\n    session-file: {}\n",
+            chatgpt_web::DEFAULT_CREDENTIAL_ID,
+            session.display()
+        ),
+    )
+    .unwrap();
+    unsafe {
+        std::env::set_var(SECRETS_FILE_ENV, &secrets_path);
     }
 }
 
@@ -40,7 +56,7 @@ fn client_model(name: &str) -> ModelId {
 }
 
 async fn chatgpt_only_router() -> BudgetAwareRouter {
-    ensure_chatgpt_session_env();
+    ensure_chatgpt_session_secrets();
     let app_state = AppState::test_default().await;
     let provider = InferenceProvider::Named("chatgpt-web".into());
     build(

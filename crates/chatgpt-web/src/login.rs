@@ -25,6 +25,10 @@ const TARGET: BrowserLoginTarget = BrowserLoginTarget::new(
 
 pub async fn run_login() -> Result<(), Error> {
     let path = session_path_from_env().ok_or(Error::MissingSession)?;
+    run_login_to(&path).await
+}
+
+pub async fn run_login_to(path: &std::path::Path) -> Result<(), Error> {
     eprintln!(
         "Log in to ChatGPT in the opened browser (email + password / Google)."
     );
@@ -40,7 +44,7 @@ pub async fn run_login() -> Result<(), Error> {
     )
     .await
     .map_err(Error::Other)?;
-    save_session_from_cookie(&path, &cookie).await
+    save_session_from_cookie(path, &cookie).await
 }
 
 pub async fn save_session_from_cookie(

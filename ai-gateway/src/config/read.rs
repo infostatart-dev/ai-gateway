@@ -53,10 +53,16 @@ impl Config {
             serde_path_to_error::deserialize(default_config)
                 .map_err(Error::from)
                 .map_err(Box::new)?;
+
+        let mut secrets =
+            crate::config::secrets_file::SecretsFile::load_discovered();
         config.credentials =
             crate::config::credentials::CredentialRegistry::build(
                 &config.providers,
+                &mut secrets,
             );
+        apply_integrations(&mut config, &secrets);
+        crate::config::secrets_file::SecretsFile::install(secrets);
 
         let autodefault_id = Self::autodefault_router_id();
         if config.deployment_target.is_sidecar()
@@ -76,17 +82,28 @@ impl Config {
                 .insert(autodefault_id, autodefault_router);
         }
 
-        if let Ok(k) = std::env::var("HELICONE_CONTROL_PLANE_API_KEY") {
-            config.helicone.api_key = Secret::from(k);
-        }
-        if let Ok(reg) = std::env::var("AWS_REGION")
-            && let Some(p) =
-                config.providers.get_mut(&InferenceProvider::Bedrock)
-        {
-            let url = format!("https://bedrock-runtime.{reg}.amazonaws.com");
-            p.base_url = Url::parse(&url).map_err(Error::UrlParse)?;
-        }
         Ok(config)
+    }
+}
+
+fn apply_integrations(
+    config: &mut Config,
+    secrets: &crate::config::secrets_file::SecretsFile,
+) {
+    if let Some(helicone) = secrets.integrations.helicone.as_ref()
+        && !helicone.api_key.is_empty()
+    {
+        config.helicone.api_key = Secret::from(helicone.api_key.clone());
+    }
+    if let Some(aws) = secrets.integrations.aws.as_ref()
+        && let Some(provider) =
+            config.providers.get_mut(&InferenceProvider::Bedrock)
+    {
+        let url =
+            format!("https://bedrock-runtime.{}.amazonaws.com", aws.region);
+        if let Ok(parsed) = Url::parse(&url) {
+            provider.base_url = parsed;
+        }
     }
 }
 
@@ -129,13 +146,9 @@ fn autodefault_provider_order() -> Vec<InferenceProvider> {
         InferenceProvider::Named("cloudflare".into()),
         InferenceProvider::GoogleGemini,
     ];
-    if crate::config::deepseek_web::session_file_available() {
-        order.push(InferenceProvider::Named("deepseek-web".into()));
-    }
+    order.push(InferenceProvider::Named("deepseek-web".into()));
     order.extend([InferenceProvider::Anthropic, InferenceProvider::OpenAI]);
-    if crate::config::chatgpt_web::session_file_available() {
-        order.push(InferenceProvider::Named("chatgpt-web".into()));
-    }
+    order.push(InferenceProvider::Named("chatgpt-web".into()));
     order
 }
 
@@ -170,11 +183,10 @@ fn is_available_for_autodefault(
     if !providers_config.contains_key(provider) {
         return false;
     }
-    if crate::config::chatgpt_web::is_chatgpt_web(provider) {
-        return crate::config::chatgpt_web::session_file_available();
-    }
-    if crate::config::deepseek_web::is_deepseek_web(provider) {
-        return crate::config::deepseek_web::session_file_available();
+    if crate::config::chatgpt_web::is_chatgpt_web(provider)
+        || crate::config::deepseek_web::is_deepseek_web(provider)
+    {
+        return credentials.has_for(provider);
     }
     provider.is_keyless() || credentials.has_for(provider)
 }
@@ -217,123 +229,93 @@ mod tests {
         assert_eq!(router.decision.tier_cascade, Some(TierCascade::FreeUp));
     }
 
-    #[serial_test::serial(env)]
+    fn registry_from_secrets(
+        yaml: &str,
+    ) -> crate::config::credentials::CredentialRegistry {
+        let dir = std::env::temp_dir()
+            .join(format!("ai-gw-read-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("secrets.yaml");
+        std::fs::write(&path, yaml).unwrap();
+        let mut secrets =
+            crate::config::secrets_file::SecretsFile::load(&path).unwrap();
+        let registry = crate::config::credentials::CredentialRegistry::build(
+            &ProvidersConfig::default(),
+            &mut secrets,
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        registry
+    }
+
     #[test]
     fn autodefault_includes_gemini_when_any_free_slot_resolves() {
-        unsafe {
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE");
-            std::env::remove_var("GEMINI_FREE_TIER_API_KEY");
-            std::env::remove_var("GEMINI_FREE_TIER_APIKEY");
-            std::env::remove_var("GEMINI_API_KEY");
-            std::env::set_var(
-                "AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3",
-                "free-3-key",
-            );
-        }
-        let config = Config::default();
+        let credentials = registry_from_secrets(
+            "credentials:\n  gemini-free-3:\n    api-key: free-3-key\n",
+        );
         let gemini = InferenceProvider::GoogleGemini;
-
-        assert!(
-            is_available_for_autodefault(
-                &gemini,
-                &config.providers,
-                &config.credentials,
-            ),
-            "gemini must join autodefault when any free sibling slot resolves"
-        );
-
-        unsafe {
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3");
-        }
+        assert!(is_available_for_autodefault(
+            &gemini,
+            &ProvidersConfig::default(),
+            &credentials,
+        ));
     }
 
-    #[serial_test::serial(env)]
     #[test]
-    fn autodefault_excludes_opencode_without_api_key() {
-        // SAFETY: serialized test; restores env before exit.
-        unsafe {
-            std::env::remove_var("OPENCODE_API_KEY");
-        }
-        let config = Config::default();
+    fn autodefault_excludes_opencode_without_secrets_entry() {
+        let credentials = registry_from_secrets("credentials: {}\n");
         let opencode = InferenceProvider::Named("opencode".into());
-
-        assert!(
-            config.providers.contains_key(&opencode),
-            "embedded providers must include opencode"
-        );
-        assert!(
-            !is_available_for_autodefault(
-                &opencode,
-                &config.providers,
-                &config.credentials,
-            ),
-            "opencode must be omitted from autodefault without \
-             OPENCODE_API_KEY"
-        );
-
-        unsafe {
-            std::env::set_var("OPENCODE_API_KEY", "test-key");
-        }
-        let config = Config::default();
-        assert!(
-            is_available_for_autodefault(
-                &opencode,
-                &config.providers,
-                &config.credentials,
-            ),
-            "opencode must join autodefault when OPENCODE_API_KEY is set"
-        );
-        unsafe {
-            std::env::remove_var("OPENCODE_API_KEY");
-        }
+        assert!(ProvidersConfig::default().contains_key(&opencode));
+        assert!(!is_available_for_autodefault(
+            &opencode,
+            &ProvidersConfig::default(),
+            &credentials,
+        ));
     }
 
-    #[serial_test::serial(env)]
+    #[test]
+    fn autodefault_includes_opencode_with_secrets_entry() {
+        let credentials = registry_from_secrets(
+            "credentials:\n  opencode-default:\n    api-key: test-key\n",
+        );
+        let opencode = InferenceProvider::Named("opencode".into());
+        assert!(is_available_for_autodefault(
+            &opencode,
+            &ProvidersConfig::default(),
+            &credentials,
+        ));
+    }
+
     #[test]
     fn autodefault_includes_github_models_when_credential_set() {
-        unsafe {
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT");
-        }
-        let config = Config::default();
+        let providers = ProvidersConfig::default();
+        let empty = registry_from_secrets("credentials: {}\n");
         let github = InferenceProvider::Named("github-models".into());
+        assert!(providers.contains_key(&github));
+        assert!(!is_available_for_autodefault(&github, &providers, &empty));
 
-        assert!(
-            config.providers.contains_key(&github),
-            "embedded providers must include github-models"
+        let credentials = registry_from_secrets(
+            r#"
+credentials:
+  openrouter-default:
+    api-key: sk-or-test
+  github-models-default:
+    api-key: ghp_test
+  mistral-default:
+    api-key: mistral-test
+"#,
         );
-        assert!(
-            !is_available_for_autodefault(
-                &github,
-                &config.providers,
-                &config.credentials,
-            ),
-            "github-models must be omitted from autodefault without credential"
-        );
+        assert!(is_available_for_autodefault(
+            &github,
+            &providers,
+            &credentials
+        ));
 
-        unsafe {
-            std::env::set_var(
-                "AI_GATEWAY_CREDENTIAL_OPENROUTER_DEFAULT",
-                "sk-or-test",
-            );
-            std::env::set_var(
-                "AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT",
-                "ghp_test",
-            );
-            std::env::set_var(
-                "AI_GATEWAY_CREDENTIAL_MISTRAL_DEFAULT",
-                "mistral-test",
-            );
-        }
-        let config = Config::default();
-        assert!(
-            is_available_for_autodefault(
-                &github,
-                &config.providers,
-                &config.credentials,
-            ),
-            "github-models must join autodefault when credential is set"
-        );
-
+        let config = Config {
+            providers: providers.clone(),
+            credentials: credentials.clone(),
+            ..Config::default()
+        };
         let router =
             build_autodefault_router(&config).expect("autodefault router");
         let strategy = router.load_balance.0.get(&EndpointType::Chat).unwrap();
@@ -358,11 +340,5 @@ mod tests {
             .expect("mistral in autodefault");
         assert!(openrouter_rank < github_rank);
         assert!(github_rank < mistral_rank);
-
-        unsafe {
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_OPENROUTER_DEFAULT");
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT");
-            std::env::remove_var("AI_GATEWAY_CREDENTIAL_MISTRAL_DEFAULT");
-        }
     }
 }

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use bytes::Bytes;
 use chatgpt_web::{CONV_URL, ExecuteRequest, Executor};
 use http::{HeaderMap, StatusCode};
@@ -7,7 +9,7 @@ use tracing::Instrument;
 use url::Url;
 
 use crate::{
-    config::chatgpt_web as chatgpt_cfg,
+    config::{chatgpt_web as chatgpt_cfg, credentials::ProviderCredentialId},
     dispatcher::service::{
         Dispatcher,
         outcome::{DispatchOutcome, outcome_from_bytes},
@@ -22,10 +24,18 @@ impl Dispatcher {
         &self,
         req: Request,
         request_headers: HeaderMap,
+        credential_id: Option<&ProviderCredentialId>,
     ) -> Result<DispatchOutcome, ApiError> {
-        let cookie = chatgpt_cfg::load_session_cookie().ok_or_else(|| {
-            ApiError::Internal(InternalError::ProviderNotFound)
-        })?;
+        let session_path = resolve_session_path(
+            &self.app_state.config().credentials,
+            credential_id,
+            chatgpt_cfg::DEFAULT_CREDENTIAL_ID,
+        )
+        .ok_or_else(|| ApiError::Internal(InternalError::ProviderNotFound))?;
+        let cookie = chatgpt_cfg::load_session_cookie(&session_path)
+            .ok_or_else(|| {
+                ApiError::Internal(InternalError::ProviderNotFound)
+            })?;
         let body_bytes = req
             .into_body()
             .collect()
@@ -51,7 +61,7 @@ impl Dispatcher {
                 cookie,
                 body: openai_body,
                 json_schema_required,
-                session_path: chatgpt_cfg::session_path_from_env(),
+                session_path: Some(session_path),
             })
             .instrument(tracing::info_span!("chatgpt_web_executor"))
             .await
@@ -90,6 +100,20 @@ impl Dispatcher {
         )
         .map_err(ApiError::Internal)
     }
+}
+
+fn resolve_session_path(
+    registry: &crate::config::credentials::CredentialRegistry,
+    credential_id: Option<&ProviderCredentialId>,
+    default_id: &str,
+) -> Option<PathBuf> {
+    if let Some(id) = credential_id
+        && let Some(cred) = registry.get(id)
+        && let Some(path) = cred.key.as_secret()
+    {
+        return Some(PathBuf::from(path.expose()));
+    }
+    chatgpt_cfg::session_path_for_credential(default_id)
 }
 
 fn chatgpt_error_body(
