@@ -1,4 +1,13 @@
-## ADDED Requirements
+# chatgpt-web-stabilization
+
+## Purpose
+
+Reduce ChatGPT Web session hammering and long-lived IP/account blocks by caching
+warmup, invalidating stale session state on auth/abuse signals, browser-like
+pacing, and an `abuse-block` cooldown tier distinct from short provider-error
+retries.
+
+## Requirements
 
 ### Requirement: Session warmup cache
 The `chatgpt-web` executor SHALL cache successful session warmup for a bounded TTL and skip redundant warmup HTTP calls when the cache entry for the current session identity is still valid.

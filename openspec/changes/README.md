@@ -1,10 +1,11 @@
 # Active changes
 
-Migrated from `.todos/` (Task Magic `.ai/` retired). Use OpenSpec workflow:
+Planning home: [docs/planning.md](../docs/planning.md)
 
 ```bash
 mise run openspec:list
-mise run openspec:validate
+mise exec -- openspec validate --specs --strict
+mise exec -- openspec validate --changes --strict
 ```
 
 | Change | Type | Upstream | Status |
@@ -15,5 +16,6 @@ mise run openspec:validate
 | [azure-openai-provider](azure-openai-provider/) | Decision | [#289](https://github.com/Helicone/ai-gateway/issues/289) | pending |
 | [openai-responses-agents-sdk](openai-responses-agents-sdk/) | Decision | [#173](https://github.com/Helicone/ai-gateway/issues/173) | pending |
 
-**Cursor:** `/opsx:propose`, `/opsx:apply`, `/opsx:archive`  
-**Docs:** [docs/planning.md](../docs/planning.md)
+Completed changes live under [archive/](archive/).
+
+**Cursor:** `/opsx:propose`, `/opsx:apply`, `/opsx:archive`
