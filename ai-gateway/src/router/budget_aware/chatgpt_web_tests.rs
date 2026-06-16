@@ -13,9 +13,7 @@ use super::{
 use crate::{
     app_state::AppState,
     config::{
-        chatgpt_web,
-        router::RouterConfig,
-        secrets_file::SECRETS_FILE_ENV,
+        chatgpt_web, router::RouterConfig, secrets_file::SECRETS_FILE_ENV,
     },
     endpoints::EndpointType,
     router::capability::RequestRequirements,
