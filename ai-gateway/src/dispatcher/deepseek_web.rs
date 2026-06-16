@@ -1,20 +1,22 @@
-use std::path::PathBuf;
+use std::sync::Arc;
 
 use bytes::Bytes;
-use deepseek_web::{COMPLETION_URL, ExecuteRequest, Executor};
+use deepseek_web::{ExecuteRequest, Executor, TurnHook};
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt;
 use serde_json::Value;
 use tracing::Instrument;
 
 use crate::{
+    app_state::AppState,
     config::{credentials::ProviderCredentialId, deepseek_web as deepseek_cfg},
     dispatcher::service::{
         Dispatcher,
         outcome::{DispatchOutcome, outcome_from_bytes},
     },
     error::{api::ApiError, internal::InternalError},
-    types::request::Request,
+    router::budget_aware::DeepSeekWebTrace,
+    types::{provider::InferenceProvider, request::Request},
 };
 
 impl Dispatcher {
@@ -55,14 +57,21 @@ impl Dispatcher {
             .and_then(Value::as_bool)
             .unwrap_or(false);
 
-        let target_url = url::Url::parse(COMPLETION_URL)
+        let target_url = url::Url::parse(deepseek_web::COMPLETION_URL)
             .map_err(|_| InternalError::Internal)?;
+
+        let turn_hook = turn_pacing_hook(
+            self.app_state.clone(),
+            self.provider.clone(),
+            credential_id.cloned(),
+        );
 
         let result = match Executor::default()
             .execute(ExecuteRequest {
                 user_token,
                 body: openai_body,
                 stream,
+                turn_hook: Some(turn_hook),
             })
             .instrument(tracing::info_span!("deepseek_web_executor"))
             .await
@@ -83,6 +92,13 @@ impl Dispatcher {
             }
         };
 
+        tracing::info!(
+            deepseek_web_turns = result.stats.turns,
+            deepseek_web_upload_parts = result.stats.upload_parts,
+            deepseek_web_pow_cache_hits = result.stats.pow_cache_hits,
+            "deepseek-web executor stats"
+        );
+
         let status = StatusCode::from_u16(result.status)
             .unwrap_or(StatusCode::BAD_GATEWAY);
         let mut headers = HeaderMap::new();
@@ -98,7 +114,7 @@ impl Dispatcher {
             );
         }
         let response_body = Bytes::from(result.body);
-        outcome_from_bytes(
+        let mut outcome = outcome_from_bytes(
             status,
             headers,
             &response_body,
@@ -106,20 +122,48 @@ impl Dispatcher {
             req_body_bytes,
             request_headers,
         )
-        .map_err(ApiError::Internal)
+        .map_err(ApiError::Internal)?;
+        outcome.response.extensions_mut().insert(DeepSeekWebTrace {
+            turns: result.stats.turns,
+            upload_parts: result.stats.upload_parts,
+            pow_cache_hits: result.stats.pow_cache_hits,
+        });
+        Ok(outcome)
     }
+}
+
+fn turn_pacing_hook(
+    app_state: AppState,
+    provider: InferenceProvider,
+    credential_id: Option<ProviderCredentialId>,
+) -> TurnHook {
+    Arc::new(move || {
+        let app_state = app_state.clone();
+        let provider = provider.clone();
+        let credential_id = credential_id.clone();
+        Box::pin(async move {
+            crate::router::pacing::acquire_upstream_pacing(
+                &app_state,
+                &provider,
+                credential_id.as_ref(),
+            )
+            .await
+            .map_err(|e| deepseek_web::Error::Other(e.to_string()))?;
+            Ok(())
+        })
+    })
 }
 
 fn resolve_session_path(
     registry: &crate::config::credentials::CredentialRegistry,
     credential_id: Option<&ProviderCredentialId>,
     default_id: &str,
-) -> Option<PathBuf> {
+) -> Option<std::path::PathBuf> {
     if let Some(id) = credential_id
         && let Some(cred) = registry.get(id)
         && let Some(path) = cred.key.as_secret()
     {
-        return Some(PathBuf::from(path.expose()));
+        return Some(std::path::PathBuf::from(path.expose()));
     }
     deepseek_cfg::session_path_for_credential(default_id)
 }

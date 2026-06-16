@@ -269,6 +269,9 @@ async fn handle_successful_candidate(
         &candidate.capability.provider,
         elapsed,
     );
+    if let Some(ds) = response.extensions().get::<trace::DeepSeekWebTrace>() {
+        route_trace.record_deepseek_web(*ds);
+    }
     Ok(Some(response))
 }
 

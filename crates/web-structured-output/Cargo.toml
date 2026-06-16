@@ -1,0 +1,12 @@
+[package]
+name = "web-structured-output"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = false
+description = "Shared JSON schema / structured output helpers for web-session providers"
+
+[dependencies]
+jsonschema = { workspace = true }
+serde_json = { workspace = true }

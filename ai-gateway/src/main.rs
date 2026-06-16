@@ -115,6 +115,12 @@ enum DeepseekAction {
         /// When set, sends one non-stream completion with this user message.
         #[arg(long)]
         query: Option<String>,
+        /// Smoke-test strict `json_schema` through the live session.
+        #[arg(long)]
+        structured_output: bool,
+        /// Binary-search largest single-prompt completion size.
+        #[arg(long)]
+        context_limit: bool,
     },
 }
 
@@ -172,8 +178,17 @@ async fn main() -> Result<(), RuntimeError> {
             DeepseekAction::Import { token } => {
                 ai_gateway::cli::deepseek_login::run_import(token).await
             }
-            DeepseekAction::Probe { query } => {
-                ai_gateway::cli::deepseek_login::run_probe(query).await
+            DeepseekAction::Probe {
+                query,
+                structured_output,
+                context_limit,
+            } => {
+                ai_gateway::cli::deepseek_login::run_probe(
+                    query,
+                    structured_output,
+                    context_limit,
+                )
+                .await
             }
         };
         if let Err(e) = result {

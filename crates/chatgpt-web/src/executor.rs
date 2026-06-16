@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     Error,
-    constants::{CONV_URL, JSON_RETRY_SUFFIX, SCHEMA_RETRY_SUFFIX},
+    constants::CONV_URL,
     conversation::{
         build_conversation_body, build_non_streaming_response,
         collect_sse_turn_meta, parse_openai_messages, plan_conversation_turns,
@@ -15,7 +15,7 @@ use crate::{
     schema::{
         StructuredOutputIssue, base_system_without_schema,
         build_schema_instruction, check_structured_response,
-        parse_json_schema_spec,
+        parse_json_schema_spec, retry_suffix_for,
     },
     sentinel::{
         dpl::{build_prekey_config, fallback_dpl, fetch_dpl},
@@ -386,13 +386,6 @@ fn conv_headers(
         headers.push(("openai-sentinel-proof-token".into(), t.to_string()));
     }
     headers
-}
-
-fn retry_suffix_for(issue: Option<StructuredOutputIssue>) -> &'static str {
-    match issue {
-        Some(StructuredOutputIssue::SchemaMismatch) => SCHEMA_RETRY_SUFFIX,
-        Some(StructuredOutputIssue::InvalidJson) | None => JSON_RETRY_SUFFIX,
-    }
 }
 
 fn structured_failure_message(issue: StructuredOutputIssue) -> &'static str {

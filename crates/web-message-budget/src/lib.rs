@@ -20,4 +20,6 @@ pub use types::{
 };
 
 pub const CHATGPT_WEB_CONTEXT_TOKENS: u32 = 131_072;
+pub const DEEPSEEK_WEB_CONTEXT_TOKENS: u32 = 128_000;
+pub const DEEPSEEK_UPLOAD_PAYLOAD_TOKENS: usize = 45_000;
 pub const PERPLEXITY_MAX_QUERY_CHARS: usize = 96_000;

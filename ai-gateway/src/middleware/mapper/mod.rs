@@ -3,6 +3,7 @@ pub mod bedrock;
 pub mod chatgpt_json_schema;
 pub mod chatgpt_web;
 pub mod cloudflare;
+pub mod deepseek_web;
 pub mod groq;
 pub mod model;
 pub mod ollama;

@@ -5,16 +5,13 @@ The `deepseek-web` provider routes chat completions through a **browser session*
 
 ## Enable
 
-1. Set session file path in `.env`:
+1. Add session path to `dev/secrets.local.yaml` (see
+   [`dev/secrets.local.example.yaml`](../dev/secrets.local.example.yaml)):
 
-   ```bash
-   DEEPSEEK_BROWSER_CLI=dev/deepseek-session.json
-   ```
-
-   Or use the credential slot:
-
-   ```bash
-   AI_GATEWAY_CREDENTIAL_DEEPSEEK_WEB_DEFAULT=dev/deepseek-session.json
+   ```yaml
+   credentials:
+     deepseek-web-default:
+       session-file: dev/deepseek-session.json
    ```
 
 2. Create the session (requires `deepseek-login` feature):
@@ -36,68 +33,96 @@ The `deepseek-web` provider routes chat completions through a **browser session*
    `chat.deepseek.com` → `userToken` (plain string or JSON `{"value":"..."}`).
 
 3. Restart the gateway. When the session file exists, `deepseek-web` joins
-   **autodefault** with high priority (after `chatgpt-web` when both are configured).
+   **autodefault** (cost-class routing — see [routing.md](routing.md)).
 
-## Smoke test
+## Smoke tests
 
-Verify token exchange without starting the server:
+Verify token exchange:
 
 ```bash
-DEEPSEEK_BROWSER_CLI=dev/deepseek-session.json \
-  cargo run --features deepseek-login -- deepseek probe
+cargo run --features deepseek-login -- deepseek probe
 ```
 
-Optional completion smoke:
+Optional completion:
 
 ```bash
-DEEPSEEK_BROWSER_CLI=dev/deepseek-session.json \
-  cargo run --features deepseek-login -- deepseek probe \
+cargo run --features deepseek-login -- deepseek probe \
   --query 'Reply with exactly one word: OK'
 ```
 
-Manual curl (token exchange only):
+Structured output smoke (`json_schema`):
 
 ```bash
-TOKEN=$(jq -r .token dev/deepseek-session.json)
-curl -sS "https://chat.deepseek.com/api/v0/users/current" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Origin: https://chat.deepseek.com"
+cargo run --features deepseek-login -- deepseek probe --structured-output
+```
+
+Context limit calibration (binary search single-prompt size):
+
+```bash
+cargo run --features deepseek-login -- deepseek probe --context-limit
 ```
 
 ## Models
 
-Embedded catalog ([`providers.yaml`](../ai-gateway/config/embedded/providers.yaml)):
+| Model | JSON schema | Context (catalog) | Notes |
+|-------|-------------|-------------------|-------|
+| `deepseek-web/deepseek-chat` | yes | 128000 | Standard chat |
+| `deepseek-web/deepseek-reasoner` | yes | 128000 | `reasoning_content` + JSON `content` |
 
-| Model | Notes |
-|-------|-------|
-| `deepseek-web/deepseek-chat` | Standard chat |
-| `deepseek-web/deepseek-reasoner` | Thinking enabled (`reasoning_content`) |
+Tools are **not** supported (`supports-tools: false`).
 
-Capabilities: tools **not** supported initially (`supports-tools: false`).
+## Structured output
+
+Both models accept OpenAI `response_format`:
+
+- `json_schema` (including `strict: true`) — schema injected into the prompt;
+  assistant **`content`** validated (not `reasoning_content` on reasoner)
+- `json_object` — JSON-only instruction; parse validation only
+
+Non-streaming requests retry the **final turn** up to two times on invalid JSON
+or schema mismatch. Upload/context turns are not schema-validated.
+
+Example:
+
+```bash
+curl -sS http://127.0.0.1:8080/v1/chat/completions \
+  -H "Authorization: Bearer $AI_GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-web/deepseek-chat",
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "status",
+        "strict": true,
+        "schema": {
+          "type": "object",
+          "properties": { "status": { "type": "string" } },
+          "required": ["status"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "messages": [{ "role": "user", "content": "Say ok." }]
+  }'
+```
+
+## Long context and chunk upload
+
+Oversized payloads use the shared `web-message-budget` planner:
+
+- **128000** token input budget (default until `--context-limit` probe says otherwise)
+- **45000** tokens per upload part (conservative vs ChatGPT Web 90k)
+- One `chat_session_id` per gateway request; schema only on the final turn
+- **PoW cache** (45s TTL) reuses proof-of-work answers across upload turns
+
+Each upload/final turn consumes one **pacing** slot (`deepseek-web` RPM limits).
+Route trace logs `deepseek_web_turns`, `deepseek_web_upload_parts`, and
+`deepseek_web_pow_cache_hits`.
 
 ## Session maintenance
 
 Sessions expire when DeepSeek invalidates `userToken`. Symptoms: HTTP 401,
-auth-error cooldown on the credential. Re-run `deepseek login` or `deepseek import`.
+`invalid_session` in error body. Re-run `deepseek login` or `deepseek import`.
 
-## Pacing
-
-Conservative single-session limits in
-[`provider-limits.yaml`](../ai-gateway/config/embedded/provider-limits.yaml):
-
-| Knob | Value |
-|------|-------|
-| RPM | **6** |
-| Concurrent | **1** |
-| Min interval | **10s** |
-| Rate-limit cooldown | **120s** |
-| Auth-error cooldown | **30m** |
-
-Each completion performs several upstream calls (token exchange, session create,
-PoW challenge, completion). Pacing limits **completion starts**, not raw HTTP.
-
-## Related
-
-- [credentials.md](credentials.md)
-- [providers.md](providers.md)
-- [chatgpt-web.md](chatgpt-web.md)
+See also: [credentials.md](credentials.md), [routing.md](routing.md).

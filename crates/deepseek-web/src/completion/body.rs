@@ -12,6 +12,28 @@ pub struct CompletionRequest {
     pub search_enabled: bool,
 }
 
+pub fn build_completion_from_prompt(
+    body: &Value,
+    model: &str,
+    session_id: &str,
+    prompt: String,
+) -> CompletionRequest {
+    let opts = super::model::resolve_model_options(model, body);
+    let ref_file_ids = body
+        .get("ref_file_ids")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    CompletionRequest {
+        chat_session_id: session_id.to_string(),
+        model_type: opts.model_type,
+        prompt,
+        ref_file_ids,
+        thinking_enabled: opts.thinking_enabled,
+        search_enabled: opts.search_enabled,
+    }
+}
+
 pub fn build_completion_request(
     body: &Value,
     model: &str,

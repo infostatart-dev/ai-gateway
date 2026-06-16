@@ -505,12 +505,12 @@ deepseek-web:
   model-capabilities:
     deepseek-chat:
       supports-tools: false
-      supports-json-schema: false
-      context-window: 65536
+      supports-json-schema: true
+      context-window: 128000
     deepseek-reasoner:
       supports-tools: false
-      supports-json-schema: false
-      context-window: 65536
+      supports-json-schema: true
+      context-window: 128000
       reasoning: true
 
 github-models:

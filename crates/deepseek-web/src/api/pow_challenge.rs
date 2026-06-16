@@ -8,7 +8,7 @@ use crate::{
     tls::fetch::{FetchRequest, HttpFetch},
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PowChallenge {
     pub algorithm: String,
     pub challenge: String,

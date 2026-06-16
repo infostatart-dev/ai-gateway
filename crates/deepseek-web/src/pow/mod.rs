@@ -5,6 +5,8 @@ mod keccak_f;
 mod solve;
 mod sponge;
 
+pub mod cache;
+
 pub use hash::{
     ALGORITHM, deepseek_hash, deepseek_hash_with_prefix, pow_prefix,
 };

@@ -5,6 +5,7 @@ members = [
     "crates/deepseek-web",
     "crates/perplexity-web",
     "crates/web-message-budget",
+    "crates/web-structured-output",
     "crates/web-browser-login",
     "crates/mock-server",
     "crates/telemetry",
@@ -23,7 +24,7 @@ edition = "2024"
 authors = [ "Thomas Harmon <tom@helicone.ai>, Justin Torre <justin@helicone.ai>, Kavin Desi Valli <kavin@helicone.ai>, Charlie Wu <charlie@helicone.ai>", "Helicone Developers" ]
 license = "Apache-2.0"
 publish = false
-version = "0.3.0-beta.18"
+version = "0.3.0-beta.19"
 
 
 [profile.release]
@@ -161,6 +162,7 @@ chatgpt-web = { path = "./crates/chatgpt-web" }
 deepseek-web = { path = "./crates/deepseek-web" }
 perplexity-web = { path = "./crates/perplexity-web" }
 web-message-budget = { path = "./crates/web-message-budget" }
+web-structured-output = { path = "./crates/web-structured-output" }
 web-browser-login = { path = "./crates/web-browser-login" }
 
 [patch.crates-io]

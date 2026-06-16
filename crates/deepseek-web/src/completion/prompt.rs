@@ -1,9 +1,15 @@
 use serde_json::Value;
+use web_message_budget::WebTurn;
 
-#[derive(Debug, Clone)]
-struct Turn {
-    role: String,
-    text: String,
+pub fn web_turn_to_prompt(turn: &WebTurn) -> String {
+    let mut parts = Vec::new();
+    if !turn.system_msg.trim().is_empty() {
+        parts.push(turn.system_msg.trim().to_string());
+    }
+    if !turn.user_msg.trim().is_empty() {
+        parts.push(turn.user_msg.trim().to_string());
+    }
+    strip_images(&parts.join("\n\n"))
 }
 
 pub fn messages_to_prompt(messages: &[Value], history_window: usize) -> String {
@@ -21,10 +27,7 @@ pub fn messages_to_prompt(messages: &[Value], history_window: usize) -> String {
         match role {
             "system" if !text.is_empty() => system_parts.push(text),
             "user" | "assistant" if !text.is_empty() => {
-                conversation.push(Turn {
-                    role: role.to_string(),
-                    text: text.clone(),
-                });
+                conversation.push((role.to_string(), text.clone()));
                 if role == "user" {
                     last_user = text;
                 }
@@ -39,21 +42,20 @@ pub fn messages_to_prompt(messages: &[Value], history_window: usize) -> String {
     }
 
     if history_window > 0 && conversation.len() > 1 {
-        let recent = conversation
+        let transcript = conversation
             .iter()
             .rev()
             .take(history_window)
-            .collect::<Vec<_>>();
-        let transcript = recent
+            .collect::<Vec<_>>()
             .into_iter()
             .rev()
-            .map(|t| {
-                let label = if t.role == "assistant" {
+            .map(|(role, text)| {
+                let label = if role == "assistant" {
                     "Assistant"
                 } else {
                     "User"
                 };
-                format!("{label}: {}", t.text)
+                format!("{label}: {text}")
             })
             .collect::<Vec<_>>()
             .join("\n\n");
@@ -84,4 +86,23 @@ fn strip_images(text: &str) -> String {
         .ok()
         .map(|re| re.replace_all(text, "").to_string())
         .unwrap_or_else(|| text.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use web_message_budget::{WebTurn, WebTurnKind};
+
+    use super::*;
+
+    #[test]
+    fn combines_system_and_user_in_order() {
+        let turn = WebTurn {
+            kind: WebTurnKind::Final,
+            system_msg: "Rules".into(),
+            user_msg: "Question".into(),
+        };
+        let prompt = web_turn_to_prompt(&turn);
+        assert!(prompt.starts_with("Rules"));
+        assert!(prompt.contains("Question"));
+    }
 }

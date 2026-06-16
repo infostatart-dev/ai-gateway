@@ -83,7 +83,9 @@ OpenRouter key does not block another slot.
 
 Requests with OpenAI `response_format.type = json_schema` (strict) are routed
 only to providers/models that declare `supports-json-schema: true` in
-`providers.yaml`.
+`providers.yaml`. **`deepseek-web/deepseek-chat`** and
+**`deepseek-web/deepseek-reasoner`** are eligible when a browser session is
+configured; the mapper injects schema instructions (no native API field).
 
 If the upstream response is invalid or missing expected fields, the router can
 fail over to the next capable candidate instead of returning a broken payload.

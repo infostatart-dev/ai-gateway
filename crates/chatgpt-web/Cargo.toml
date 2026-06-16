@@ -17,6 +17,7 @@ wreq-util = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 web-message-budget = { workspace = true }
+web-structured-output = { workspace = true }
 jsonschema = { workspace = true }
 sha2 = { workspace = true }
 sha3 = { workspace = true }

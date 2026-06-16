@@ -1,6 +1,8 @@
 use bytes::Bytes;
-use chatgpt_web::schema::{check_structured_response, parse_json_schema_spec};
 use serde_json::Value;
+use web_structured_output::{
+    check_structured_response, parse_json_schema_spec,
+};
 
 use crate::router::capability::{ModelCapability, RequestRequirements};
 

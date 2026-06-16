@@ -188,8 +188,9 @@ fn chatgpt_web(cap: &mut ModelCapability) {
 
 fn deepseek_web(cap: &mut ModelCapability, model_name: &str) {
     cap.supports_tools = false;
-    cap.supports_json_schema = false;
-    cap.context_window = Some(65_536);
+    cap.supports_json_schema = true;
+    cap.context_window = Some(128_000);
+    cap.json_schema_rank = 0;
     if model_name.contains("reasoner") || model_name.contains("reason") {
         cap.reasoning = true;
     }

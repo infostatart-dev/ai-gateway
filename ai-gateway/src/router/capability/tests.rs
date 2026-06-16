@@ -154,6 +154,20 @@ fn test_supports_logic() {
 }
 
 #[test]
+fn deepseek_web_supports_json_schema_for_autodefault() {
+    let provider = InferenceProvider::Named("deepseek-web".into());
+    let model = test_model(provider.clone(), "deepseek-chat");
+    let cap = get_model_capability(&provider, &model, None);
+    assert!(cap.supports_json_schema);
+
+    let reqs = RequestRequirements {
+        json_schema_required: true,
+        ..RequestRequirements::default()
+    };
+    assert!(supports(&reqs, &cap));
+}
+
+#[test]
 fn deepseek_web_excluded_when_tools_required() {
     let provider = InferenceProvider::Named("deepseek-web".into());
     let model = test_model(provider.clone(), "deepseek-chat");

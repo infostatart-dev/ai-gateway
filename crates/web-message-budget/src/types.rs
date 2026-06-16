@@ -11,6 +11,7 @@ pub struct MessageBudget {
     pub max_context_tokens: u32,
     pub reserved_output_tokens: u32,
     pub protocol_overhead_tokens: u32,
+    pub upload_part_token_cap: usize,
 }
 
 impl Default for MessageBudget {
@@ -19,6 +20,7 @@ impl Default for MessageBudget {
             max_context_tokens: 131_072,
             reserved_output_tokens: 4_096,
             protocol_overhead_tokens: 2_048,
+            upload_part_token_cap: 90_000,
         }
     }
 }

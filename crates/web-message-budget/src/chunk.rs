@@ -3,7 +3,7 @@ use crate::{
     types::{ChunkPlan, MessageBudget, ParsedChat, WebTurn, WebTurnKind},
 };
 
-const UPLOAD_PAYLOAD_TOKENS: usize = 90_000;
+const DEFAULT_UPLOAD_PAYLOAD_TOKENS: usize = 90_000;
 const UPLOAD_ACK_SYSTEM: &str = "The user will upload context in several \
                                  messages. Acknowledge each part with only OK \
                                  until the final message.";
@@ -39,7 +39,12 @@ pub fn plan_web_chunks(
         return single_final_turn(parsed, base_system, schema_instruction);
     }
 
-    let parts = split_by_tokens(&payload, UPLOAD_PAYLOAD_TOKENS);
+    let upload_cap = if budget.upload_part_token_cap > 0 {
+        budget.upload_part_token_cap
+    } else {
+        DEFAULT_UPLOAD_PAYLOAD_TOKENS
+    };
+    let parts = split_by_tokens(&payload, upload_cap);
     let total = parts.len();
     let mut turns = Vec::with_capacity(total);
 

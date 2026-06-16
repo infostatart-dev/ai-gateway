@@ -30,4 +30,5 @@ mod chatgpt_web_tests;
 mod credential_failover;
 
 pub(crate) use rank::default_provider_budget_rank;
+pub use trace::DeepSeekWebTrace;
 pub use types::BudgetAwareRouter;

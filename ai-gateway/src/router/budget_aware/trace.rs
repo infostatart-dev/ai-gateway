@@ -8,6 +8,14 @@ use crate::{
     types::{provider::InferenceProvider, router::RouterId},
 };
 
+/// `DeepSeek` Web multi-turn execution stats attached to dispatch responses.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DeepSeekWebTrace {
+    pub turns: u32,
+    pub upload_parts: u32,
+    pub pow_cache_hits: u32,
+}
+
 /// The terminal upstream a request settled on (or none).
 pub(super) struct RouteOutcome<'a> {
     pub label: &'static str,
@@ -21,6 +29,7 @@ pub(super) struct RouteTrace {
     candidates: usize,
     attempts: u32,
     skipped: usize,
+    deepseek_web: Option<DeepSeekWebTrace>,
 }
 
 impl RouteTrace {
@@ -30,7 +39,12 @@ impl RouteTrace {
             candidates,
             attempts: 0,
             skipped: 0,
+            deepseek_web: None,
         }
+    }
+
+    pub(super) fn record_deepseek_web(&mut self, trace: DeepSeekWebTrace) {
+        self.deepseek_web = Some(trace);
     }
 
     pub(super) fn record_attempt(&mut self) {
@@ -66,6 +80,11 @@ impl RouteTrace {
             terminal_provider = provider,
             terminal_credential = credential,
             terminal_status = outcome.status.map_or(0, u32::from),
+            deepseek_web_turns = self.deepseek_web.map_or(0, |d| d.turns),
+            deepseek_web_upload_parts =
+                self.deepseek_web.map_or(0, |d| d.upload_parts),
+            deepseek_web_pow_cache_hits =
+                self.deepseek_web.map_or(0, |d| d.pow_cache_hits),
             "budget-aware route summary"
         );
     }

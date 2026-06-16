@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.3.0-beta.19] - 2026-06-16
+
+### Features
+
+- **DeepSeek Web structured output:** `json_schema` and `json_object` for
+  `deepseek-chat` and `deepseek-reasoner` (validation on assistant `content`
+  only; bounded retries)
+- **DeepSeek Web context chunking:** 128k input budget, 45k-token upload parts,
+  multi-turn session reuse, PoW answer cache (45s TTL)
+- **`DeepSeekWebConverter`** registered for autodefault / mapper stack (fixes
+  `Converter not present`)
+- Shared **`web-structured-output`** crate (ChatGPT Web + gateway gate)
+- CLI: `deepseek probe --structured-output`, `deepseek probe --context-limit`
+- DeepSeek Web catalog `context-window` raised from 65536 → 128000
+
 ## [0.3.0-beta.17] - 2026-06-16
 
 ### Features

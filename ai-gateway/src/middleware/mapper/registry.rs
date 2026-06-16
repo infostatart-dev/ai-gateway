@@ -310,6 +310,21 @@ impl EndpointConverterRegistryInner {
         let key = RegistryKey::new(
             ApiEndpoint::OpenAI(OpenAI::chat_completions()),
             ApiEndpoint::OpenAICompatible {
+                provider: InferenceProvider::Named("deepseek-web".into()),
+                openai_endpoint: OpenAI::chat_completions(),
+            },
+        );
+        let converter =
+            TypedEndpointConverter::<
+                endpoints::openai::ChatCompletions,
+                super::deepseek_web::DeepSeekWebChatCompletions,
+                super::deepseek_web::DeepSeekWebConverter,
+            >::new(super::deepseek_web::DeepSeekWebConverter);
+        registry.register_converter(key, converter);
+
+        let key = RegistryKey::new(
+            ApiEndpoint::OpenAI(OpenAI::chat_completions()),
+            ApiEndpoint::OpenAICompatible {
                 provider: InferenceProvider::Named("github-models".into()),
                 openai_endpoint: OpenAI::chat_completions(),
             },

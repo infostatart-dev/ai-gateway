@@ -76,12 +76,18 @@ impl Dispatcher {
 
         let credential_id =
             req.extensions().get::<ProviderCredentialId>().cloned();
-        let _pacing_permit = crate::router::pacing::acquire_upstream_pacing(
-            &self.app_state,
-            target_provider,
-            credential_id.as_ref(),
-        )
-        .await?;
+        let skip_outer_pacing =
+            crate::config::deepseek_web::is_deepseek_web(target_provider);
+        let _pacing_permit = if skip_outer_pacing {
+            None
+        } else {
+            crate::router::pacing::acquire_upstream_pacing(
+                &self.app_state,
+                target_provider,
+                credential_id.as_ref(),
+            )
+            .await?
+        };
 
         let outcome =
             if crate::config::chatgpt_web::is_chatgpt_web(target_provider) {
