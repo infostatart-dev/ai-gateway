@@ -15,8 +15,7 @@ fn estimates_input_and_default_output_reservation() {
     let body = Bytes::from(
         r#"{"model":"gpt-5-mini","messages":[{"role":"user","content":"hello world"}]}"#,
     );
-    let estimate =
-        estimate_from_value(&parse(&body), cfg()).expect("estimate");
+    let estimate = estimate_from_value(&parse(&body), cfg()).expect("estimate");
     assert!(estimate.input_tokens > 0);
     assert_eq!(estimate.reserved_output, 4_000);
     assert_eq!(estimate.total(), estimate.input_tokens + 4_000);
@@ -27,8 +26,7 @@ fn reserves_explicit_max_tokens() {
     let body = Bytes::from(
         r#"{"max_tokens":256,"messages":[{"role":"user","content":"hi"}]}"#,
     );
-    let estimate =
-        estimate_from_value(&parse(&body), cfg()).expect("estimate");
+    let estimate = estimate_from_value(&parse(&body), cfg()).expect("estimate");
     assert_eq!(estimate.reserved_output, 256);
 }
 
