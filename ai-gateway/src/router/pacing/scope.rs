@@ -70,7 +70,8 @@ mod tests {
         std::fs::write(&path, r#"{"token":"tok"}"#).unwrap();
         let mut secrets = crate::config::secrets_file::SecretsFile::default();
         secrets.register_session_path("deepseek-web-default", path.clone());
-        crate::config::secrets_file::SecretsFile::install(secrets);
+        let _guard =
+            crate::config::secrets_file::SecretsFile::install_for_test(secrets);
 
         let provider = InferenceProvider::Named("deepseek-web".into());
         let id = ProviderCredentialId::new("deepseek-web-default");

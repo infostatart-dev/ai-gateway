@@ -78,7 +78,6 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
     fn registry_isolates_gates_by_credential_scope() {
         let path_a = std::env::temp_dir().join("ai-gw-pacing-a.json");
         let path_b = std::env::temp_dir().join("ai-gw-pacing-b.json");
@@ -88,7 +87,8 @@ mod tests {
         let mut secrets = crate::config::secrets_file::SecretsFile::default();
         secrets.register_session_path("chatgpt-web-a", path_a.clone());
         secrets.register_session_path("chatgpt-web-b", path_b.clone());
-        crate::config::secrets_file::SecretsFile::install(secrets);
+        let _guard =
+            crate::config::secrets_file::SecretsFile::install_for_test(secrets);
 
         let registry = PacingRegistry::new(ProviderLimitCatalog::default());
         let provider = InferenceProvider::Named("chatgpt-web".into());
