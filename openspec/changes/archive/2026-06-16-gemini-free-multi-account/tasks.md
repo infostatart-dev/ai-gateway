@@ -23,4 +23,4 @@
 
 - [x] 5.1 Run scoped tests/clippy for credential + budget-aware changes
 - [x] 5.2 Bump root `Cargo.toml` workspace version **`0.3.0-beta.11` → `0.3.0-beta.12`**
-- [ ] 5.3 Confirm CI passes (Rust tests + Docker publish per existing workflows)
+- [x] 5.3 Confirm CI passes (Rust tests + Docker publish per existing workflows)
