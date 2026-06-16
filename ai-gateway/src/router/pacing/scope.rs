@@ -65,6 +65,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn deepseek_scope_uses_session_path() {
         let path = std::env::temp_dir().join("ai-gw-ds-scope.json");
         std::fs::write(&path, r#"{"token":"tok"}"#).unwrap();

@@ -54,6 +54,35 @@ cargo run -p test
 cargo test --tests --all-features
 ```
 
+### Routing load verification (`testing` feature)
+
+Concurrent autodefault routing checks without live provider keys. Uses synthetic
+secrets, Stubr upstream mocks (L2), and per-credential test hooks (L1).
+
+```bash
+# Full routing load suite (~25s; pacing_burst includes a real 12s interval wait)
+cargo test -p ai-gateway --test routing_load --features testing -- --test-threads=1
+```
+
+**Layout**
+
+| Layer | Location | What it validates |
+|-------|----------|-------------------|
+| L1 | `ai-gateway/src/routing_load/scenarios/*.rs` | Router + `run_failover_candidates` under concurrent load |
+| L2 | `harness_round_robin.rs`, `harness_payload_filter.rs` | HTTP dispatch + `GET /v1/observability/provider-stats` |
+| Shared | `routing_load/{payload,assert_stats,responses,router}.rs` | Fat payloads, stats helpers, secrets fixture |
+
+**Adding a scenario**
+
+1. Add `ai-gateway/src/routing_load/scenarios/your_case.rs` and export it from `scenarios/mod.rs`.
+2. Register one line in `ai-gateway/tests/routing_load.rs` via the `routing_load_test!` macro.
+3. Reuse `RoutingLoadHarness::gemini_free_only(N)` or `gemini_prod_like(N)` for secrets; call `prepare_harness_test()` before Harness cases (clears global mock queues).
+4. Assert routing via `attempts_for_credential` / `assert_fairness_band`, not response text.
+
+Payload filter scenarios must exceed groq free TPM (~11.4k effective tokens after margin):
+use `GROQ_FILTER_EXTRA_CHARS` from `routing_load::payload` and model `openai/gpt-4o-mini`
+(maps to groq `llama-3.1-8b-instant` in the embedded catalog).
+
 ### Build
 
 ```bash

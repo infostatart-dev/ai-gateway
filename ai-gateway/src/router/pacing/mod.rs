@@ -7,7 +7,8 @@ mod registry;
 mod scope;
 mod window;
 
-pub use gate::PacingPermit;
+pub use gate::{PacingGate, PacingPermit};
+pub use limits::PacingLimits;
 pub use registry::PacingRegistry;
 
 use crate::{

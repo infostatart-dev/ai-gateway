@@ -201,12 +201,17 @@ fn is_available_for_autodefault(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{
+        path::PathBuf,
+        sync::atomic::{AtomicU64, Ordering},
+    };
 
     use compact_str::CompactString;
 
     use super::*;
     use crate::{config::cost_class::CostClass, types::router::RouterId};
+
+    static READ_TEST_DIR_SEQ: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn decision_example_config_loads_budget_aware_router() {
@@ -240,8 +245,9 @@ mod tests {
     fn registry_from_secrets(
         yaml: &str,
     ) -> crate::config::credentials::CredentialRegistry {
+        let seq = READ_TEST_DIR_SEQ.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir()
-            .join(format!("ai-gw-read-test-{}", std::process::id()));
+            .join(format!("ai-gw-read-test-{}-{seq}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("secrets.yaml");

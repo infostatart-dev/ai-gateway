@@ -78,6 +78,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn registry_isolates_gates_by_credential_scope() {
         let path_a = std::env::temp_dir().join("ai-gw-pacing-a.json");
         let path_b = std::env::temp_dir().join("ai-gw-pacing-b.json");

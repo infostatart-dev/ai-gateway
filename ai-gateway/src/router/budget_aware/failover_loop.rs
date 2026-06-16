@@ -21,7 +21,7 @@ use crate::{
     },
 };
 
-pub(super) async fn run_failover_candidates(
+pub async fn run_failover_candidates(
     this: BudgetAwareRouter,
     parts: Parts,
     body_bytes: bytes::Bytes,
