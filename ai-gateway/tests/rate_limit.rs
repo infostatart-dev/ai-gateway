@@ -1,10 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, num::NonZeroU32, time::Duration};
 
 use ai_gateway::{
     config::{
         Config,
         helicone::HeliconeFeatures,
-        rate_limit::{RateLimitConfig, RateLimitStore},
+        rate_limit::{
+            GcraConfig, LimitsConfig, RateLimitConfig, RateLimitStore,
+        },
     },
     control_plane::types::{Key, hash_key},
     tests::{TestDefault, harness::Harness, mock::MockArgs},
@@ -58,10 +60,24 @@ async fn rate_limit_per_user_isolation_redis() {
     .await;
 }
 
+/// Long refill window so sequential harness requests cannot refill capacity
+/// between the 3rd and 4th call when dispatch waits for the full response body.
+const BURST_TEST_REFILL: Duration = Duration::from_secs(10);
+
+fn burst_test_limits() -> LimitsConfig {
+    LimitsConfig {
+        per_api_key: GcraConfig {
+            refill_frequency: BURST_TEST_REFILL,
+            capacity: NonZeroU32::new(3).unwrap(),
+        },
+    }
+}
+
 async fn rate_limit_capacity_enforced_impl(
     rate_limit_store: RateLimitStore,
-    rate_limit_config: RateLimitConfig,
+    mut rate_limit_config: RateLimitConfig,
 ) {
+    rate_limit_config.limits = burst_test_limits();
     let mut config = Config::test_default();
     config.helicone.features = HeliconeFeatures::All;
     config.global.rate_limit = Some(rate_limit_config);
@@ -109,20 +125,24 @@ async fn rate_limit_capacity_enforced_impl(
     );
     let _body = response.into_body().collect().await.unwrap();
 
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    tokio::time::sleep(BURST_TEST_REFILL + Duration::from_millis(100)).await;
     for i in 1..=3 {
         let response = make_chat_request(&mut harness, auth_header).await;
         assert_eq!(
             response.status(),
             StatusCode::OK,
-            "Request {i} should succeed"
+            "Request {i} should succeed after refill"
         );
         let _body = response.into_body().collect().await.unwrap();
     }
 
     let response = make_chat_request(&mut harness, auth_header).await;
     let status = response.status();
-    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS,);
+    assert_eq!(
+        status,
+        StatusCode::TOO_MANY_REQUESTS,
+        "4th request after refill should be rate limited again"
+    );
 
     let retry_after = response.headers().get("retry-after");
     assert!(
@@ -134,8 +154,9 @@ async fn rate_limit_capacity_enforced_impl(
 
 async fn rate_limit_per_user_isolation_impl(
     rate_limit_store: RateLimitStore,
-    rate_limit_config: RateLimitConfig,
+    mut rate_limit_config: RateLimitConfig,
 ) {
+    rate_limit_config.limits = burst_test_limits();
     let mut config = Config::test_default();
     config.helicone.features = HeliconeFeatures::All;
     config.global.rate_limit = Some(rate_limit_config);
