@@ -253,7 +253,39 @@ mod tests {
         let catalog: CredentialCatalog =
             serde_yml::from_str(CREDENTIALS_YAML).unwrap();
         assert!(catalog.credentials.contains_key("gemini-free"));
+        assert!(catalog.credentials.contains_key("gemini-free-2"));
+        assert!(catalog.credentials.contains_key("gemini-free-3"));
+        assert!(catalog.credentials.contains_key("gemini-free-4"));
+        assert!(catalog.credentials.contains_key("gemini-default"));
         assert!(catalog.credentials.contains_key("openrouter-default"));
+        let gemini_default = catalog.credentials.get("gemini-default").unwrap();
+        assert_eq!(gemini_default.tier, "tier-3");
+        assert_eq!(gemini_default.budget_rank, 10);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn registry_loads_all_configured_free_gemini_siblings() {
+        unsafe {
+            std::env::set_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE", "free-1");
+            std::env::set_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2", "free-2");
+            std::env::set_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4", "free-4");
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3");
+            std::env::remove_var("GEMINI_API_KEY");
+        }
+        let registry = CredentialRegistry::build(&providers());
+        let gemini: Vec<_> = registry
+            .for_provider(&InferenceProvider::GoogleGemini)
+            .collect();
+        assert_eq!(gemini.len(), 3);
+        assert_eq!(gemini[0].id.0, "gemini-free");
+        assert_eq!(gemini[1].id.0, "gemini-free-2");
+        assert_eq!(gemini[2].id.0, "gemini-free-4");
+        unsafe {
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE");
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2");
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4");
+        }
     }
 
     #[test]

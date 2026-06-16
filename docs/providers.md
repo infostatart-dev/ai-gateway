@@ -16,7 +16,10 @@ Embedded slots in [`credentials.yaml`](../ai-gateway/config/embedded/credentials
 |---------|----------|-------|
 | `openai-default` | openai | Standard OpenAI API |
 | `anthropic-default` | anthropic | Claude API |
-| `gemini-free` | gemini | Free-tier Google AI Studio |
+| `gemini-free` | gemini | Free-tier Google AI Studio (slot 1) |
+| `gemini-free-2` | gemini | Free-tier Google AI Studio (slot 2) |
+| `gemini-free-3` | gemini | Free-tier Google AI Studio (slot 3) |
+| `gemini-free-4` | gemini | Free-tier Google AI Studio (slot 4) |
 | `gemini-default` | gemini | Paid / Tier 3 project |
 | `groq-default` | groq | Groq inference |
 | `openrouter-default` | openrouter | Aggregator; slugs must match live catalog |
@@ -26,6 +29,9 @@ Embedded slots in [`credentials.yaml`](../ai-gateway/config/embedded/credentials
 | `opencode-default` | opencode | OpenCode Free tier |
 
 Set the matching `AI_GATEWAY_CREDENTIAL_*` env var for each slot you enable.
+For Gemini free tier you can configure up to four AI Studio keys
+(`AI_GATEWAY_CREDENTIAL_GEMINI_FREE` through `_4`) to spread autodefault traffic
+before falling back to `gemini-default` or other providers.
 Details: [credentials.md](credentials.md).
 
 ## Extended providers (fork highlights)

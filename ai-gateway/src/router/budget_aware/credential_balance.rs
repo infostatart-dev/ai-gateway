@@ -220,6 +220,51 @@ mod tests {
     }
 
     #[test]
+    fn four_free_gemini_slots_rotate_first_account() {
+        let ranked = vec![
+            PoolEntry {
+                credential_id: "gemini-free".into(),
+                provider: "gemini".into(),
+                model: "gemini-2.5-flash".into(),
+                budget_rank: 0,
+            },
+            PoolEntry {
+                credential_id: "gemini-free-2".into(),
+                provider: "gemini".into(),
+                model: "gemini-2.5-flash".into(),
+                budget_rank: 0,
+            },
+            PoolEntry {
+                credential_id: "gemini-free-3".into(),
+                provider: "gemini".into(),
+                model: "gemini-2.5-flash".into(),
+                budget_rank: 0,
+            },
+            PoolEntry {
+                credential_id: "gemini-free-4".into(),
+                provider: "gemini".into(),
+                model: "gemini-2.5-flash".into(),
+                budget_rank: 0,
+            },
+        ];
+        let mut rr = HashMap::new();
+        let mut first_accounts = Vec::new();
+        for _ in 0..4 {
+            let ids = balance_entries(ranked.clone(), &mut rr);
+            first_accounts.push(ids[0].clone());
+        }
+        assert_eq!(
+            first_accounts,
+            vec![
+                "gemini-free",
+                "gemini-free-2",
+                "gemini-free-3",
+                "gemini-free-4",
+            ]
+        );
+    }
+
+    #[test]
     fn openrouter_accounts_with_same_rank_alternate() {
         let ranked = vec![
             PoolEntry {

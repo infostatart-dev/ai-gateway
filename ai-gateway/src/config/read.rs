@@ -213,6 +213,36 @@ mod tests {
 
     #[serial_test::serial(env)]
     #[test]
+    fn autodefault_includes_gemini_when_any_free_slot_resolves() {
+        unsafe {
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE");
+            std::env::remove_var("GEMINI_FREE_TIER_API_KEY");
+            std::env::remove_var("GEMINI_FREE_TIER_APIKEY");
+            std::env::remove_var("GEMINI_API_KEY");
+            std::env::set_var(
+                "AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3",
+                "free-3-key",
+            );
+        }
+        let config = Config::default();
+        let gemini = InferenceProvider::GoogleGemini;
+
+        assert!(
+            is_available_for_autodefault(
+                &gemini,
+                &config.providers,
+                &config.credentials,
+            ),
+            "gemini must join autodefault when any free sibling slot resolves"
+        );
+
+        unsafe {
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3");
+        }
+    }
+
+    #[serial_test::serial(env)]
+    #[test]
     fn autodefault_excludes_opencode_without_api_key() {
         // SAFETY: serialized test; restores env before exit.
         unsafe {

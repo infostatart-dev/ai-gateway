@@ -173,6 +173,40 @@ mod tests {
 
     #[tokio::test]
     #[serial_test::serial]
+    async fn gemini_free_429_failover_to_sibling_free_slot() {
+        clear_test_call_responses();
+        push_test_call_response(Ok(rate_limited()));
+        push_test_call_response(Ok(ok_response()));
+
+        let app_state = AppState::test_default().await;
+        let router = test_router(&app_state);
+        let candidates = router.credential_round_robin.balance(vec![
+            gemini_candidate(&app_state, "gemini-free", 0, "free-key").await,
+            gemini_candidate(&app_state, "gemini-free-2", 0, "free-2-key")
+                .await,
+            gemini_candidate(&app_state, "gemini-default", 10, "paid-key")
+                .await,
+        ]);
+
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            Bytes::from(r#"{"model":"gpt-4o-mini","messages":[]}"#),
+            candidates,
+            RequestRequirements::default(),
+        )
+        .await
+        .expect("failover succeeds on sibling free credential");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            routed_identity(&response),
+            "gemini-free-2/gemini-2.5-flash"
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
     async fn gemini_free_429_failover_to_paid_credential() {
         clear_test_call_responses();
         push_test_call_response(Ok(rate_limited()));

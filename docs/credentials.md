@@ -22,6 +22,9 @@ The credential `id` from YAML is uppercased; hyphens become underscores.
 |-----------------|----------------------|
 | `openai-default` | `AI_GATEWAY_CREDENTIAL_OPENAI_DEFAULT` |
 | `gemini-free` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE` |
+| `gemini-free-2` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2` |
+| `gemini-free-3` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3` |
+| `gemini-free-4` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4` |
 | `cloudflare-default` | `AI_GATEWAY_CREDENTIAL_CLOUDFLARE_DEFAULT` |
 
 See [`.env.template`](../.env.template) for a full starter list.
@@ -54,10 +57,17 @@ Legacy fallbacks: `CLOUDFLARE_API_KEY_WITH_ACCOUNT_ID`, or separate
 
 ### Gemini
 
-| Slot | Legacy fallbacks |
-|------|------------------|
-| `gemini-free` | `GEMINI_FREE_TIER_API_KEY`, `GEMINI_FREE_TIER_APIKEY` |
-| `gemini-default` | `GEMINI_API_KEY` |
+Four free-tier AI Studio slots share `tier: free` and equal `budget-rank`; set
+each key via its own `AI_GATEWAY_CREDENTIAL_GEMINI_FREE*` env var. Legacy
+aliases apply only to the first slot (`gemini-free`).
+
+| Slot | Environment variable | Legacy fallbacks |
+|------|----------------------|------------------|
+| `gemini-free` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE` | `GEMINI_FREE_TIER_API_KEY`, `GEMINI_FREE_TIER_APIKEY` |
+| `gemini-free-2` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2` | — |
+| `gemini-free-3` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3` | — |
+| `gemini-free-4` | `AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4` | — |
+| `gemini-default` | `AI_GATEWAY_CREDENTIAL_GEMINI_DEFAULT` | `GEMINI_API_KEY` |
 
 ### ChatGPT Web
 
@@ -89,9 +99,10 @@ Multiple slots with the same provider and model are **round-robin balanced**
 across requests; on failure the router tries sibling accounts before moving to
 the next provider.
 
-Example from embedded config: `gemini-free` (rank 0) is tried before
-`gemini-default` (rank 10) when both are eligible, but both receive traffic when
-configured together.
+Example from embedded config: all four `gemini-free*` slots (rank 0) are tried
+before `gemini-default` (rank 10) when both are eligible. Configured free
+siblings round-robin across requests; on 429/quota only the failing slot
+cooldowns and the router tries the next free sibling.
 
 ## Startup behaviour
 

@@ -156,6 +156,76 @@ mod tests {
     }
 
     #[test]
+    fn credential_env_var_name_maps_free_sibling_slots() {
+        assert_eq!(
+            credential_env_var_name("gemini-free-2"),
+            "AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2"
+        );
+        assert_eq!(
+            credential_env_var_name("gemini-free-3"),
+            "AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3"
+        );
+        assert_eq!(
+            credential_env_var_name("gemini-free-4"),
+            "AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn free_sibling_slots_resolve_from_own_env_only() {
+        unsafe {
+            std::env::set_var(
+                "AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2",
+                "free-2-key",
+            );
+            std::env::set_var(
+                "AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4",
+                "free-4-key",
+            );
+            std::env::set_var("GEMINI_FREE_TIER_APIKEY", "legacy-first-only");
+        }
+        let provider = InferenceProvider::GoogleGemini;
+        let free_2 =
+            resolve_credential_secret("gemini-free-2", &provider, &[]).unwrap();
+        let free_4 =
+            resolve_credential_secret("gemini-free-4", &provider, &[]).unwrap();
+        assert_eq!(free_2.as_secret().unwrap().expose(), "free-2-key");
+        assert_eq!(free_4.as_secret().unwrap().expose(), "free-4-key");
+        assert!(
+            resolve_credential_secret("gemini-free-3", &provider, &[])
+                .is_none()
+        );
+        let free_1 =
+            resolve_credential_secret("gemini-free", &provider, &[]).unwrap();
+        assert_eq!(free_1.as_secret().unwrap().expose(), "legacy-first-only");
+        unsafe {
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_2");
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_4");
+            std::env::remove_var("GEMINI_FREE_TIER_APIKEY");
+        }
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn empty_free_sibling_env_is_skipped() {
+        unsafe {
+            std::env::set_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3", "");
+        }
+        assert!(
+            resolve_credential_secret(
+                "gemini-free-3",
+                &InferenceProvider::GoogleGemini,
+                &[],
+            )
+            .is_none()
+        );
+        unsafe {
+            std::env::remove_var("AI_GATEWAY_CREDENTIAL_GEMINI_FREE_3");
+        }
+    }
+
+    #[test]
     #[serial_test::serial(env)]
     fn cloudflare_universal_env_uses_account_token_format() {
         unsafe {
