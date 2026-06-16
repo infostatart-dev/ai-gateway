@@ -18,6 +18,10 @@ use http_body_util::BodyExt;
 use serde_json::json;
 use tower::Service;
 
+/// Sequential harness requests can exceed 1s on CI after dispatch buffers
+/// bodies.
+const BURST_REFILL_MS: u64 = 10_000;
+
 fn create_test_limits(capacity: u32, duration_ms: u64) -> LimitsConfig {
     LimitsConfig {
         per_api_key: GcraConfig {
@@ -118,8 +122,8 @@ async fn test_global_rate_limit_with_router_none() {
     let mut config = Config::test_default();
     config.helicone.features = HeliconeFeatures::All;
     config.global.rate_limit = Some(RateLimitConfig {
-        // 3 requests per second
-        limits: create_test_limits(3, 1000),
+        // 3 requests per refill window
+        limits: create_test_limits(3, BURST_REFILL_MS),
         store: None,
     });
     config.rate_limit_store = Some(RateLimitStore::InMemory);
@@ -197,7 +201,9 @@ async fn test_router_specific_with_custom_limits() {
         RouterId::Named(CompactString::new("my-router")),
         RouterConfig {
             rate_limit: Some(RateLimitConfig {
-                limits: create_test_limits(2, 1000), // 2 requests per second
+                limits: create_test_limits(2, BURST_REFILL_MS), /* 2 requests
+                                                                 * per refill
+                                                                 * window */
                 store: None,
             }),
             load_balance:
@@ -253,8 +259,8 @@ async fn test_global_with_custom_router_override() {
     let mut config = Config::test_default();
     config.helicone.features = HeliconeFeatures::All;
     config.global.rate_limit = Some(RateLimitConfig {
-        // 5 requests per second
-        limits: create_test_limits(5, 1000),
+        // 5 requests per refill window
+        limits: create_test_limits(5, BURST_REFILL_MS),
         store: None,
     });
     config.rate_limit_store = Some(RateLimitStore::InMemory);
@@ -263,8 +269,10 @@ async fn test_global_with_custom_router_override() {
         RouterId::Named(CompactString::new("my-router")),
         RouterConfig {
             rate_limit: Some(RateLimitConfig {
-                limits: create_test_limits(2, 1000), /* 2 requests per second
-                                                      * for this router */
+                limits: create_test_limits(2, BURST_REFILL_MS), /* 2 requests
+                                                                 * per refill
+                                                                 * window
+                                                                 * for this router */
                 store: None,
             }),
             load_balance:
@@ -329,8 +337,8 @@ async fn test_router_independence_different_rate_limits() {
             RouterConfig {
                 rate_limit: Some(RateLimitConfig {
                     store: None,
-                    limits: create_test_limits(1, 1000), /* 1 request per
-                                                         second - strict */
+                    limits: create_test_limits(1, BURST_REFILL_MS), /* 1 request per
+                                                                    refill window - strict */
                 }),
                 load_balance:
                     ai_gateway::config::balance::BalanceConfig::openai_chat(),
@@ -342,8 +350,8 @@ async fn test_router_independence_different_rate_limits() {
             RouterConfig {
                 rate_limit: Some(RateLimitConfig {
                     store: None,
-                    limits: create_test_limits(5, 1000), /* 5 requests per
-                                                         second - lenient */
+                    limits: create_test_limits(5, BURST_REFILL_MS), /* 5 requests per
+                                                                    refill window - lenient */
                 }),
                 load_balance:
                     ai_gateway::config::balance::BalanceConfig::openai_chat(),
@@ -501,7 +509,7 @@ async fn test_multi_router_different_rate_limits_in_memory() {
             RouterConfig {
                 rate_limit: Some(RateLimitConfig {
                     store: Some(RateLimitStore::InMemory),
-                    limits: create_test_limits(1, 1000),
+                    limits: create_test_limits(1, BURST_REFILL_MS),
                 }),
                 load_balance:
                     ai_gateway::config::balance::BalanceConfig::openai_chat(),
@@ -513,7 +521,7 @@ async fn test_multi_router_different_rate_limits_in_memory() {
             RouterConfig {
                 rate_limit: Some(RateLimitConfig {
                     store: Some(RateLimitStore::InMemory),
-                    limits: create_test_limits(3, 1000),
+                    limits: create_test_limits(3, BURST_REFILL_MS),
                 }),
                 load_balance:
                     ai_gateway::config::balance::BalanceConfig::openai_chat(),

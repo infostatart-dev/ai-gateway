@@ -19,6 +19,10 @@ use http_body_util::BodyExt;
 use serde_json::json;
 use tower::Service;
 
+/// Sequential harness requests can exceed 1s on CI after dispatch buffers
+/// bodies.
+const BURST_REFILL_MS: u64 = 10_000;
+
 fn create_test_limits(capacity: u32, duration_ms: u64) -> LimitsConfig {
     LimitsConfig {
         per_api_key: GcraConfig {
@@ -122,7 +126,7 @@ async fn test_global_rate_limit_with_router_none() {
     config.helicone.features = HeliconeFeatures::All;
     config.global.rate_limit = Some(RateLimitConfig {
         // 3 requests per 5 seconds
-        limits: create_test_limits(3, 1000),
+        limits: create_test_limits(3, BURST_REFILL_MS),
         store: None,
     });
     config.rate_limit_store = Some(RateLimitStore::Redis(RedisConfig {
@@ -212,7 +216,7 @@ async fn test_router_specific_with_custom_limits() {
                     ),
                     connection_timeout: Duration::from_secs(1),
                 })),
-                limits: create_test_limits(2, 1000), // 2 requests per second
+                limits: create_test_limits(2, BURST_REFILL_MS), /* 2 requests per second */
             }),
             load_balance:
                 ai_gateway::config::balance::BalanceConfig::openai_chat(),
@@ -268,7 +272,7 @@ async fn test_global_with_custom_router_override() {
     config.helicone.features = HeliconeFeatures::All;
     config.global.rate_limit = Some(RateLimitConfig {
         // 5 requests per second
-        limits: create_test_limits(5, 1000),
+        limits: create_test_limits(5, BURST_REFILL_MS),
         store: None,
     });
     config.rate_limit_store = Some(RateLimitStore::Redis(RedisConfig {
@@ -287,8 +291,8 @@ async fn test_global_with_custom_router_override() {
                     ),
                     connection_timeout: Duration::from_secs(1),
                 })),
-                limits: create_test_limits(2, 1000), /* 2 requests per second
-                                                      * for this router */
+                limits: create_test_limits(2, BURST_REFILL_MS), /* 2 requests per second
+                                                                 * for this router */
             }),
             load_balance:
                 ai_gateway::config::balance::BalanceConfig::openai_chat(),
@@ -361,8 +365,8 @@ async fn test_router_independence_different_rate_limits() {
                         ),
                         connection_timeout: Duration::from_secs(1),
                     })),
-                    limits: create_test_limits(1, 1000), /* 1 request per
-                                                         second - strict */
+                    limits: create_test_limits(1, BURST_REFILL_MS), /* 1 request per
+                                                                    second - strict */
                 }),
                 load_balance:
                     ai_gateway::config::balance::BalanceConfig::openai_chat(),
@@ -379,8 +383,8 @@ async fn test_router_independence_different_rate_limits() {
                         ),
                         connection_timeout: Duration::from_secs(1),
                     })),
-                    limits: create_test_limits(5, 1000), /* 5 requests per
-                                                         second - lenient */
+                    limits: create_test_limits(5, BURST_REFILL_MS), /* 5 requests per
+                                                                    second - lenient */
                 }),
                 load_balance:
                     ai_gateway::config::balance::BalanceConfig::openai_chat(),
@@ -546,7 +550,7 @@ async fn test_multi_router_different_rate_limits_in_memory() {
                         ),
                         connection_timeout: Duration::from_secs(1),
                     })),
-                    limits: create_test_limits(1, 1000),
+                    limits: create_test_limits(1, BURST_REFILL_MS),
                 }),
                 load_balance:
                     ai_gateway::config::balance::BalanceConfig::openai_chat(),
@@ -563,7 +567,7 @@ async fn test_multi_router_different_rate_limits_in_memory() {
                         ),
                         connection_timeout: Duration::from_secs(1),
                     })),
-                    limits: create_test_limits(3, 1000),
+                    limits: create_test_limits(3, BURST_REFILL_MS),
                 }),
                 load_balance:
                     ai_gateway::config::balance::BalanceConfig::openai_chat(),
