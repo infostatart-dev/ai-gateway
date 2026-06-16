@@ -224,6 +224,57 @@ mod tests {
     use super::*;
 
     #[test]
+    fn default_catalog_includes_curated_free_providers() {
+        let config = ProvidersConfig::default();
+        for name in [
+            "longcat",
+            "doubao",
+            "ollama-cloud",
+            "inclusionai",
+            "sambanova",
+            "bluesminds",
+            "bazaarlink",
+            "cohere",
+        ] {
+            let provider = InferenceProvider::Named(name.into());
+            let cfg = config.get(&provider).unwrap_or_else(|| {
+                panic!("{name} missing from embedded provider catalog")
+            });
+            assert!(
+                cfg.base_url.as_str().starts_with("http"),
+                "{name} base-url"
+            );
+            assert!(!cfg.models.is_empty(), "{name} models");
+        }
+        let longcat = InferenceProvider::Named("longcat".into());
+        assert_eq!(
+            config.get(&longcat).unwrap().base_url.as_str(),
+            "https://api.longcat.chat/openai/"
+        );
+        let openrouter = config.get(&InferenceProvider::OpenRouter).unwrap();
+        assert!(
+            openrouter
+                .models
+                .iter()
+                .any(|m| m.to_string() == "openrouter/free")
+        );
+        assert!(
+            openrouter
+                .models
+                .iter()
+                .any(|m| m.to_string() == "nvidia/nemotron-3-nano-30b-a3b:free")
+        );
+    }
+
+    #[test]
+    fn longcat_model_id_strips_gateway_prefix() {
+        use std::str::FromStr;
+
+        let model = ModelId::from_str("longcat/LongCat-Flash-Lite").unwrap();
+        assert_eq!(model.to_string(), "LongCat-Flash-Lite");
+    }
+
+    #[test]
     fn default_catalog_includes_github_models() {
         let config = ProvidersConfig::default();
         let github = InferenceProvider::Named("github-models".into());

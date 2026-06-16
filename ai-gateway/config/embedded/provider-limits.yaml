@@ -448,10 +448,104 @@ gemini:
               rpd: unlimited
 
 groq:
-  observed-at: "2026-05-01"
+  observed-at: "2026-06-17"
   scope: organization
   source: groq-console
+  notes:
+    - Free developer tier; no credit card required.
+    - Credential slot `groq-default` uses tier `free`.
   tiers:
+    free:
+      billing: free
+      endpoints:
+        chat-completions:
+          models:
+            allam-2-7b:
+              limits:
+                rpm: 30
+                rpd: 7000
+                tpm: 6000
+                tpd: 500000
+            groq/compound:
+              limits:
+                rpm: 30
+                rpd: 250
+                tpm: 70000
+                tpd: unlimited
+            groq/compound-mini:
+              limits:
+                rpm: 30
+                rpd: 250
+                tpm: 70000
+                tpd: unlimited
+            llama-3.1-8b-instant:
+              limits:
+                rpm: 30
+                rpd: 14400
+                tpm: 6000
+                tpd: 500000
+            llama-3.3-70b-versatile:
+              limits:
+                rpm: 30
+                rpd: 1000
+                tpm: 12000
+                tpd: 100000
+            meta-llama/llama-4-scout-17b-16e-instruct:
+              limits:
+                rpm: 30
+                rpd: 1000
+                tpm: 30000
+                tpd: 500000
+            meta-llama/llama-prompt-guard-2-22m:
+              limits:
+                rpm: 30
+                rpd: 14400
+                tpm: 15000
+                tpd: 500000
+            meta-llama/llama-prompt-guard-2-86m:
+              limits:
+                rpm: 30
+                rpd: 14400
+                tpm: 15000
+                tpd: 500000
+            openai/gpt-oss-120b:
+              limits:
+                rpm: 30
+                rpd: 1000
+                tpm: 8000
+                tpd: 200000
+            openai/gpt-oss-20b:
+              limits:
+                rpm: 30
+                rpd: 1000
+                tpm: 8000
+                tpd: 200000
+            openai/gpt-oss-safeguard-20b:
+              limits:
+                rpm: 30
+                rpd: 1000
+                tpm: 8000
+                tpd: 200000
+            qwen/qwen3-32b:
+              limits:
+                rpm: 60
+                rpd: 1000
+                tpm: 6000
+                tpd: 500000
+        speech-to-text:
+          models:
+            whisper-large-v3:
+              limits:
+                rpm: 20
+                rpd: 2000
+                audio-seconds-per-hour: 7200
+                audio-seconds-per-day: 28800
+            whisper-large-v3-turbo:
+              limits:
+                rpm: 20
+                rpd: 2000
+                audio-seconds-per-hour: 7200
+                audio-seconds-per-day: 28800
     developer:
       billing: free
       endpoints:
@@ -660,13 +754,15 @@ cloudflare:
 openrouter:
   cooldown:
     provider-error: 30s
-  observed-at: "2026-05-02"
+  observed-at: "2026-06-17"
   scope: api-key
   source: openrouter-docs
   notes:
     - Credit balance is dynamic and must be read per API key.
     - Negative credit balance can return 402, including for free models.
     - Cloudflare DDoS protection may block unreasonable traffic spikes.
+    - Free catalog includes `openrouter/free` router and `:free` slugs (23 live
+      variants verified 2026-06-17). Unlisted slugs return mapping errors.
   runtime-sources:
     key-info:
       method: GET
@@ -781,3 +877,139 @@ deepseek-web:
         rpm: 6
         concurrent: 1
         min-interval-ms: 10000
+
+longcat:
+  observed-at: "2026-06-17"
+  scope: api-key
+  source: longcat-platform-docs
+  notes:
+    - Public beta; no paid quota. Flash-Lite ~50M tokens/day; Flash-Chat ~500K/day
+      (up to 5M/day after quota request).
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            LongCat-Flash-Lite:
+              limits:
+                tpd: 50000000
+            LongCat-Flash-Chat:
+              limits:
+                tpd: 5000000
+            LongCat-Flash-Thinking:
+              limits:
+                tpd: 5000000
+            LongCat-Flash-Omni-2603:
+              limits:
+                tpd: 5000000
+
+doubao:
+  observed-at: "2026-06-17"
+  scope: api-key
+  source: volcengine-ark-docs
+  notes:
+    - Volcengine Ark free welcome quota; regional (cn-beijing) endpoint.
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                tpd: 2000000
+
+ollama-cloud:
+  observed-at: "2026-06-17"
+  scope: api-key
+  source: ollama-cloud-pricing
+  notes:
+    - Free tier is light usage on cloud-hosted models (~20M tokens/month est.).
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                rpm: 30
+                tpd: 700000
+
+inclusionai:
+  observed-at: "2026-06-17"
+  scope: api-key
+  source: inclusionai-docs
+  notes:
+    - ~500K tokens/day free tier on developer portal.
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                tpd: 500000
+
+sambanova:
+  observed-at: "2026-06-17"
+  scope: api-key
+  source: sambanova-cloud-docs
+  notes:
+    - Permanent free tier ~20 RPM, 200K TPD, no credit card.
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                rpm: 20
+                rpd: 20
+                tpd: 200000
+
+bluesminds:
+  observed-at: "2026-06-17"
+  scope: api-key
+  source: bluesminds-pricing
+  notes:
+    - Free plan ~300 RPD, 20 RPM; aggregator over multiple upstream models.
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                rpm: 20
+                rpd: 300
+
+bazaarlink:
+  observed-at: "2026-06-17"
+  scope: api-key
+  source: bazaarlink-pricing
+  notes:
+    - Permanent free tier with `auto:free` routing (~4M tokens/month est.).
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                rpm: 20
+                rpd: 200
+
+cohere:
+  observed-at: "2026-06-17"
+  scope: api-key
+  source: cohere-trial-docs
+  notes:
+    - Trial API key ~1000 calls/month across endpoints.
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                rpm: 20
+                rpd: 33

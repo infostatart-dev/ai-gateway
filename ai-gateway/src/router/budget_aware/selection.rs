@@ -131,18 +131,18 @@ mod autodefault_scenario_tests {
         let mut provider_priorities = indexmap::IndexMap::new();
         provider_priorities
             .insert(InferenceProvider::Named("opencode".into()), 0);
-        provider_priorities.insert(InferenceProvider::OpenRouter, 1);
         provider_priorities
-            .insert(InferenceProvider::Named("github-models".into()), 2);
+            .insert(InferenceProvider::Named("mistral".into()), 2);
+        provider_priorities.insert(InferenceProvider::OpenRouter, 3);
         provider_priorities
-            .insert(InferenceProvider::Named("mistral".into()), 3);
-        provider_priorities.insert(InferenceProvider::Named("groq".into()), 4);
+            .insert(InferenceProvider::Named("github-models".into()), 4);
+        provider_priorities.insert(InferenceProvider::Named("groq".into()), 7);
         provider_priorities
-            .insert(InferenceProvider::Named("cerebras".into()), 5);
+            .insert(InferenceProvider::Named("cerebras".into()), 8);
         provider_priorities
-            .insert(InferenceProvider::Named("cloudflare".into()), 6);
-        provider_priorities.insert(InferenceProvider::GoogleGemini, 7);
-        provider_priorities.insert(InferenceProvider::Anthropic, 8);
+            .insert(InferenceProvider::Named("cloudflare".into()), 9);
+        provider_priorities.insert(InferenceProvider::GoogleGemini, 15);
+        provider_priorities.insert(InferenceProvider::Anthropic, 17);
 
         BudgetAwareRouter::new_budget_then_capability(
             app_state,

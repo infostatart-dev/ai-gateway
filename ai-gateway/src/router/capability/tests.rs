@@ -182,6 +182,28 @@ fn deepseek_web_excluded_when_tools_required() {
 }
 
 #[test]
+fn longcat_flash_lite_supports_json_schema() {
+    use super::providers::apply_provider_capabilities;
+    let provider = InferenceProvider::Named("longcat".into());
+    let mut cap = ModelCapability {
+        provider: provider.clone(),
+        model: ModelId::from_str_and_provider(
+            provider.clone(),
+            "LongCat-Flash-Lite",
+        )
+        .unwrap(),
+        context_window: None,
+        supports_tools: false,
+        supports_json_schema: false,
+        supports_vision: false,
+        reasoning: false,
+        json_schema_rank: 0,
+    };
+    apply_provider_capabilities(&mut cap, &provider, "LongCat-Flash-Lite");
+    assert!(cap.supports_json_schema);
+}
+
+#[test]
 fn github_models_o1_is_reasoning_without_tools_or_json_schema() {
     use crate::config::providers::ProvidersConfig;
 

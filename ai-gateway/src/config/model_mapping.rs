@@ -74,12 +74,18 @@ gpt-5-mini:
     }
 
     #[test]
-    fn gpt_5_mini_default_mapping_prefers_gpt_oss_on_openrouter() {
+    fn gpt_5_mini_default_mapping_prefers_curated_free_providers_first() {
         let config = ModelMappingConfig::default();
         let mappings = config
             .as_ref()
             .get(&ModelName::owned("gpt-5-mini".into()))
             .expect("gpt-5-mini mapping");
+
+        let first = mappings.first();
+        assert_eq!(
+            first.inference_provider(),
+            Some(InferenceProvider::Named("longcat".into()))
+        );
 
         let openrouter_models: Vec<_> = mappings
             .iter()
@@ -92,15 +98,14 @@ gpt-5-mini:
 
         let first_openrouter =
             openrouter_models.first().expect("openrouter entry");
-        assert!(
-            first_openrouter.contains("gpt-oss-120b:free"),
-            "first openrouter fallback must be gpt-oss-120b:free, got \
-             {first_openrouter}"
+        assert_eq!(
+            first_openrouter, "openrouter/free",
+            "first openrouter fallback must be the free router slug"
         );
     }
 
     #[test]
-    fn gpt_5_4_nano_default_mapping_prefers_free_openrouter_before_anthropic() {
+    fn gpt_5_4_nano_default_mapping_prefers_curated_free_before_paid() {
         let config = ModelMappingConfig::default();
         let mappings = config
             .as_ref()
@@ -113,22 +118,22 @@ gpt-5-mini:
             .collect();
 
         let first = providers.first().expect("first mapping");
-        assert_eq!(*first, InferenceProvider::OpenRouter);
+        assert_eq!(*first, InferenceProvider::Named("longcat".into()));
 
         let anthropic_pos = providers
             .iter()
             .position(|p| *p == InferenceProvider::Anthropic)
             .expect("anthropic fallback");
-        let openrouter_pos = providers
+        let longcat_pos = providers
             .iter()
-            .position(|p| *p == InferenceProvider::OpenRouter)
-            .expect("openrouter entry");
-        assert!(openrouter_pos < anthropic_pos);
+            .position(|p| *p == InferenceProvider::Named("longcat".into()))
+            .expect("longcat entry");
+        assert!(longcat_pos < anthropic_pos);
 
         let first_model = mappings.first().to_string();
-        assert!(
-            first_model.contains("gpt-oss-120b:free"),
-            "first nano mapping must be free openrouter, got {first_model}"
+        assert_eq!(
+            first_model, "LongCat-Flash-Lite",
+            "first nano mapping must be longcat, got {first_model}"
         );
     }
 }

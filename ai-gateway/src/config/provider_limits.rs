@@ -394,7 +394,7 @@ mod tests {
             catalog
                 .provider(&InferenceProvider::Named("groq".into()))
                 .unwrap()
-                .tier("developer")
+                .tier("free")
                 .is_some()
         );
     }
@@ -453,7 +453,7 @@ mod tests {
         let limits = &catalog
             .model(
                 &InferenceProvider::Named("groq".into()),
-                "developer",
+                "free",
                 "llama-3.1-8b-instant",
             )
             .unwrap()
@@ -471,7 +471,7 @@ mod tests {
         let limits = &catalog
             .endpoint_model(
                 &InferenceProvider::Named("groq".into()),
-                "developer",
+                "free",
                 "speech-to-text",
                 "whisper-large-v3",
             )

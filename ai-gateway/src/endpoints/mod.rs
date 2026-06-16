@@ -192,6 +192,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn longcat_chat_completions_path() {
+        let endpoint = ApiEndpoint::OpenAICompatible {
+            provider: InferenceProvider::Named("longcat".into()),
+            openai_endpoint: OpenAI::chat_completions(),
+        };
+        assert_eq!(endpoint.path(None, false).unwrap(), "v1/chat/completions");
+    }
+
+    #[test]
     fn github_models_chat_completions_path_omits_v1_prefix() {
         let endpoint = ApiEndpoint::OpenAICompatible {
             provider: InferenceProvider::Named("github-models".into()),

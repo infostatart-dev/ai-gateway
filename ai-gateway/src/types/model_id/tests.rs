@@ -98,6 +98,29 @@ fn openrouter_prefix_is_ignored_for_openrouter_request_style_models() {
 }
 
 #[test]
+fn openrouter_free_router_slug_survives_gateway_prefix_stripping() {
+    for gateway_id in ["openrouter/openrouter/free", "openrouter/free"] {
+        let model = ModelId::from_str(gateway_id).unwrap();
+        assert_eq!(
+            model.to_string(),
+            "openrouter/free",
+            "upstream slug for {gateway_id}"
+        );
+        assert_eq!(
+            model.inference_provider(),
+            Some(InferenceProvider::OpenRouter)
+        );
+    }
+
+    let catalog = ModelId::from_str_and_provider(
+        InferenceProvider::OpenRouter,
+        "openrouter/openrouter/free",
+    )
+    .unwrap();
+    assert_eq!(catalog.to_string(), "openrouter/free");
+}
+
+#[test]
 fn named_provider_models_keep_matching_namespace() {
     let result = ModelId::from_str_and_provider(
         InferenceProvider::Named("groq".into()),

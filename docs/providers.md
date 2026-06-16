@@ -21,19 +21,24 @@ Embedded slots in [`credentials.yaml`](../ai-gateway/config/embedded/credentials
 | `gemini-free-3` | gemini | Free-tier Google AI Studio (slot 3) |
 | `gemini-free-4` | gemini | Free-tier Google AI Studio (slot 4) |
 | `gemini-default` | gemini | Paid / Tier 3 project |
-| `groq-default` | groq | Groq inference |
+| `groq-default` | groq | Free developer tier (no card) |
 | `openrouter-default` | openrouter | Aggregator; slugs must match live catalog |
-| `cloudflare-default` | cloudflare | Workers AI; env `account_id:token` |
+| `cloudflare-default` | cloudflare | Workers AI; `account_id:token` in secrets |
 | `cerebras-default` | cerebras | Cerebras API |
-| `mistral-default` | mistral | Mistral API |
+| `mistral-default` | mistral | Mistral experiment tier (~1B tok/mo) |
 | `opencode-default` | opencode | OpenCode Free tier |
 | `github-models-default` | github-models | GitHub Models PAT (`models:read`) |
+| `longcat-default` | longcat | Meituan LongCat public beta |
+| `doubao-default` | doubao | Volcengine Ark (cn-beijing) |
+| `ollama-cloud-default` | ollama-cloud | Ollama Cloud (not local `ollama`) |
+| `inclusionai-default` | inclusionai | InclusionAI free API |
+| `sambanova-default` | sambanova | SambaNova free tier |
+| `bluesminds-default` | bluesminds | BluesMinds free aggregator |
+| `bazaarlink-default` | bazaarlink | BazaarLink `auto:free` routing |
+| `cohere-default` | cohere | Cohere trial compatibility API |
 
-Set the matching `AI_GATEWAY_CREDENTIAL_*` env var for each slot you enable.
-For Gemini free tier you can configure up to four AI Studio keys
-(`AI_GATEWAY_CREDENTIAL_GEMINI_FREE` through `_4`) to spread autodefault traffic
-before falling back to `gemini-default` or other providers.
-Details: [credentials.md](credentials.md).
+Configure keys in [`dev/secrets.local.yaml`](../dev/secrets.local.example.yaml)
+(see [credentials.md](credentials.md)). Missing slot secrets are skipped at startup.
 
 ## Extended providers (fork highlights)
 
@@ -41,8 +46,32 @@ Details: [credentials.md](credentials.md).
 
 - Base URL: `https://openrouter.ai/api/v1/`
 - Model slugs must exist in the [OpenRouter catalog](https://openrouter.ai/api/v1/models)
-- Free-tier models often use the `:free` suffix (for example
-  `openai/gpt-oss-120b:free`)
+- Free-tier: `:free` suffix (for example `openai/gpt-oss-120b:free`) or router
+  slug `openrouter/free` (auto-picks a capable free model)
+- Live free catalog verified periodically; stale slugs are omitted from embedded config
+
+### Tier 1 free API providers (0.3.0-beta.20+)
+
+OpenAI-compatible providers gated on secrets-file credentials. Autodefault priority
+(high → low among configured free API keys): `opencode` → `longcat` → `mistral` →
+`openrouter` → `github-models` → `bazaarlink` → `bluesminds` → `groq` → …
+
+| Provider | Base URL | Example model |
+|----------|----------|---------------|
+| `longcat` | `https://api.longcat.chat/openai/` | `longcat/LongCat-Flash-Lite` |
+| `bazaarlink` | `https://bazaarlink.ai/api/v1/` | `bazaarlink/auto:free` |
+| `bluesminds` | `https://api.bluesminds.com/v1/` | `bluesminds/gpt-4.1-nano` |
+| `sambanova` | `https://api.sambanova.ai/v1/` | `sambanova/gpt-oss-120b` |
+| `ollama-cloud` | `https://ollama.com/v1/` | `ollama-cloud/kimi-k2.6` |
+| `inclusionai` | `https://api.inclusionai.tech/v1/` | `inclusionai/inclusion-model` |
+| `cohere` | `https://api.cohere.com/compatibility/v1/` | `cohere/command-a-03-2025` |
+| `doubao` | `https://ark.cn-beijing.volces.com/api/v3/` | `doubao/doubao-pro-32k` |
+
+```bash
+curl http://localhost:8080/ai/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"longcat/LongCat-Flash-Lite","messages":[{"role":"user","content":"hi"}]}'
+```
 
 ### Cloudflare Workers AI
 
@@ -75,7 +104,8 @@ Details: [credentials.md](credentials.md).
 - Credential: `AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT` (PAT must include **`models:read`** scope)
 - Model IDs keep the publisher prefix upstream, for example
   `github-models/openai/gpt-4.1` → upstream body model `openai/gpt-4.1`
-- Included in **autodefault** only when `github-models-default` resolves; priority is after `openrouter`, before `mistral`
+- Included in **autodefault** only when `github-models-default` resolves; priority
+  is after `openrouter` and `mistral`, before `bazaarlink`
 - Embedding IDs (`openai/text-embedding-3-large`, `openai/text-embedding-3-small`) are catalog-only in v1
 - Live catalog: [models.github.ai/inference/models](https://models.github.ai/inference/models)
 

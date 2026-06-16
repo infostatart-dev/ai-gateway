@@ -41,6 +41,13 @@ gpt-4o-mini:
   - "bedrock/us.anthropic.claude-3-5-haiku-20241022-v1:0"
   - "deepseek/deepseek-chat"
 gpt-5-mini:
+  - "longcat/LongCat-Flash-Lite"
+  - "bazaarlink/auto:free"
+  - "openrouter/openrouter/free"
+  - "openrouter/nvidia/nemotron-3-nano-30b-a3b:free"
+  - "bluesminds/gpt-4.1-nano"
+  - "sambanova/gpt-oss-120b"
+  - "ollama-cloud/kimi-k2.6"
   - "openrouter/openai/gpt-oss-120b:free"
   - "opencode/nemotron-3-ultra-free"
   - "opencode/mimo-v2.5-free"
@@ -114,6 +121,13 @@ gpt-4.5:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 gpt-5.4-nano:
+  - longcat/LongCat-Flash-Lite
+  - bazaarlink/auto:free
+  - openrouter/openrouter/free
+  - openrouter/nvidia/nemotron-3-nano-30b-a3b:free
+  - bluesminds/gpt-4.1-nano
+  - sambanova/gpt-oss-120b
+  - ollama-cloud/kimi-k2.6
   - openrouter/openai/gpt-oss-120b:free
   - opencode/nemotron-3-ultra-free
   - opencode/mimo-v2.5-free
@@ -128,6 +142,13 @@ gpt-5.4-nano:
   - anthropic/claude-3-5-haiku
   - deepseek/deepseek-chat
 gpt-5.4-mini:
+  - longcat/LongCat-Flash-Lite
+  - bazaarlink/auto:free
+  - openrouter/openrouter/free
+  - openrouter/nvidia/nemotron-3-nano-30b-a3b:free
+  - bluesminds/gpt-4.1-nano
+  - sambanova/gpt-oss-120b
+  - ollama-cloud/kimi-k2.6
   - openrouter/openai/gpt-oss-120b:free
   - opencode/nemotron-3-ultra-free
   - opencode/mimo-v2.5-free

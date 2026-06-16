@@ -26,8 +26,10 @@ fn payload_too_large_triggers_provider_failover() {
 #[test]
 fn default_provider_budget_order_matches_autodefault_policy() {
     let opencode = InferenceProvider::Named("opencode".into());
+    let longcat = InferenceProvider::Named("longcat".into());
     let github = InferenceProvider::Named("github-models".into());
     let mistral = InferenceProvider::Named("mistral".into());
+    let bazaarlink = InferenceProvider::Named("bazaarlink".into());
     let groq = InferenceProvider::Named("groq".into());
     let cerebras = InferenceProvider::Named("cerebras".into());
     let cloudflare = InferenceProvider::Named("cloudflare".into());
@@ -35,6 +37,14 @@ fn default_provider_budget_order_matches_autodefault_policy() {
 
     assert!(
         default_provider_budget_rank(&opencode)
+            < default_provider_budget_rank(&longcat)
+    );
+    assert!(
+        default_provider_budget_rank(&longcat)
+            < default_provider_budget_rank(&mistral)
+    );
+    assert!(
+        default_provider_budget_rank(&mistral)
             < default_provider_budget_rank(&InferenceProvider::OpenRouter)
     );
     assert!(
@@ -43,10 +53,10 @@ fn default_provider_budget_order_matches_autodefault_policy() {
     );
     assert!(
         default_provider_budget_rank(&github)
-            < default_provider_budget_rank(&mistral)
+            < default_provider_budget_rank(&bazaarlink)
     );
     assert!(
-        default_provider_budget_rank(&mistral)
+        default_provider_budget_rank(&bazaarlink)
             < default_provider_budget_rank(&groq)
     );
     assert!(
@@ -111,15 +121,15 @@ fn paid_api_ranks_before_chatgpt_web() {
 
 #[test]
 fn gemini_free_ranks_before_deepseek_web() {
-    let gemini_free = cost_class_rank(CostClass::Free, 0, 7);
-    let deepseek_web = cost_class_rank(CostClass::Free, 0, 8);
+    let gemini_free = cost_class_rank(CostClass::Free, 0, 15);
+    let deepseek_web = cost_class_rank(CostClass::Free, 0, 16);
     assert!(gemini_free < deepseek_web);
 }
 
 #[test]
 fn deepseek_web_ranks_before_paid_gemini_default() {
-    let deepseek_web = cost_class_rank(CostClass::Free, 0, 8);
-    let gemini_paid = cost_class_rank(CostClass::Paid, 10, 7);
+    let deepseek_web = cost_class_rank(CostClass::Free, 0, 16);
+    let gemini_paid = cost_class_rank(CostClass::Paid, 10, 15);
     assert!(deepseek_web < gemini_paid);
 }
 
@@ -133,7 +143,7 @@ fn cost_class_beats_json_schema_rank_gap() {
 
 #[test]
 fn ranks_short_cooldown_cheap_provider_before_expensive_provider() {
-    let groq_base = cost_class_rank(CostClass::Free, 0, 4);
+    let groq_base = cost_class_rank(CostClass::Free, 0, 7);
     let anthropic_base = cost_class_rank(CostClass::Paid, 0, 0);
 
     assert!(

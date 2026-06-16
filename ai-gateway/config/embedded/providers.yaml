@@ -60,7 +60,8 @@ openrouter:
     - "x-ai/grok-3-mini"
     - "x-ai/grok-4"
     - "x-ai/grok-4-fast"
-    # Free tier
+    # Free tier (live catalog verified 2026-06-17)
+    - "openrouter/openrouter/free"
     - "openai/gpt-oss-120b:free"
     - "openai/gpt-oss-20b:free"
     - "qwen/qwen3-next-80b-a3b-instruct:free"
@@ -70,6 +71,18 @@ openrouter:
     - "google/gemma-4-31b-it:free"
     - "meta-llama/llama-3.3-70b-instruct:free"
     - "meta-llama/llama-3.2-3b-instruct:free"
+    - "nvidia/nemotron-3-nano-30b-a3b:free"
+    - "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    - "nvidia/nemotron-3-super-120b-a12b:free"
+    - "nvidia/nemotron-3-ultra-550b-a55b:free"
+    - "nvidia/nemotron-nano-9b-v2:free"
+    - "nousresearch/hermes-3-llama-3.1-405b:free"
+    - "liquid/lfm-2.5-1.2b-instruct:free"
+    - "liquid/lfm-2.5-1.2b-thinking:free"
+    - "poolside/laguna-m.1:free"
+    - "poolside/laguna-xs.2:free"
+    - "nex-agi/nex-n2-pro:free"
+    - "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
     # Paid non-OpenAI fallbacks
     - "meta-llama/llama-3.1-8b-instruct"
     - "deepseek/deepseek-chat"
@@ -229,6 +242,61 @@ openrouter:
       context-window: 131072
     meta-llama/llama-3.2-3b-instruct:free:
       supports-tools: false
+      supports-json-schema: false
+      context-window: 131072
+    openrouter/openrouter/free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    nvidia/nemotron-3-nano-30b-a3b:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 131072
+      reasoning: true
+    nvidia/nemotron-3-super-120b-a12b:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    nvidia/nemotron-3-ultra-550b-a55b:free:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 131072
+      reasoning: true
+    nvidia/nemotron-nano-9b-v2:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    nousresearch/hermes-3-llama-3.1-405b:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    liquid/lfm-2.5-1.2b-instruct:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 32768
+    liquid/lfm-2.5-1.2b-thinking:free:
+      supports-tools: false
+      supports-json-schema: false
+      context-window: 32768
+      reasoning: true
+    poolside/laguna-m.1:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    poolside/laguna-xs.2:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    nex-agi/nex-n2-pro:free:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    cognitivecomputations/dolphin-mistral-24b-venice-edition:free:
+      supports-tools: true
       supports-json-schema: false
       context-window: 131072
     meta-llama/llama-3.1-8b-instruct:
@@ -588,6 +656,207 @@ github-models:
       supports-tools: true
       supports-json-schema: false
       context-window: 16384
+
+longcat:
+  models:
+    - "LongCat-Flash-Lite"
+    - "LongCat-Flash-Chat"
+    - "LongCat-Flash-Thinking"
+    - "LongCat-Flash-Omni-2603"
+  base-url: https://api.longcat.chat/openai/
+  model-capabilities:
+    LongCat-Flash-Lite:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    LongCat-Flash-Chat:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    LongCat-Flash-Thinking:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 131072
+      reasoning: true
+    LongCat-Flash-Omni-2603:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 131072
+
+doubao:
+  models:
+    - "doubao-pro-32k"
+  base-url: https://ark.cn-beijing.volces.com/api/v3/
+  model-capabilities:
+    doubao-pro-32k:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 32768
+
+ollama-cloud:
+  models:
+    - "deepseek-v4-pro"
+    - "deepseek-v4-flash"
+    - "kimi-k2.6"
+    - "kimi-k2.7-code"
+  base-url: https://ollama.com/v1/
+  model-capabilities:
+    deepseek-v4-pro:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 200000
+      reasoning: true
+    deepseek-v4-flash:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 200000
+      reasoning: true
+    kimi-k2.6:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 262144
+    kimi-k2.7-code:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 262144
+
+inclusionai:
+  models:
+    - "inclusion-model"
+  base-url: https://api.inclusionai.tech/v1/
+  model-capabilities:
+    inclusion-model:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 131072
+
+sambanova:
+  models:
+    - "MiniMax-M2.7"
+    - "DeepSeek-V3.2"
+    - "Llama-4-Maverick-17B-128E-Instruct"
+    - "Meta-Llama-3.3-70B-Instruct"
+    - "gpt-oss-120b"
+  base-url: https://api.sambanova.ai/v1/
+  model-capabilities:
+    MiniMax-M2.7:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    DeepSeek-V3.2:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    Llama-4-Maverick-17B-128E-Instruct:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    Meta-Llama-3.3-70B-Instruct:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    gpt-oss-120b:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+      reasoning: true
+
+bluesminds:
+  models:
+    - "gpt-4o-mini"
+    - "gpt-4.1-nano"
+    - "gemini-2.0-flash"
+    - "deepseek-reasoner"
+    - "llama-3.3-70b-instruct"
+    - "qwen3-32b"
+  base-url: https://api.bluesminds.com/v1/
+  model-capabilities:
+    gpt-4o-mini:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    gpt-4.1-nano:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    gemini-2.0-flash:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    deepseek-reasoner:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 128000
+      reasoning: true
+    llama-3.3-70b-instruct:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    qwen3-32b:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+
+bazaarlink:
+  models:
+    - "auto:free"
+    - "gpt-5.4-nano"
+    - "gemini-3-flash-preview"
+    - "deepseek-v3.2"
+    - "kimi-k2.6"
+    - "llama-3.3-70b-instruct"
+    - "qwen3.6-plus"
+  base-url: https://bazaarlink.ai/api/v1/
+  model-capabilities:
+    "auto:free":
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    gpt-5.4-nano:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    gemini-3-flash-preview:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+    deepseek-v3.2:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    kimi-k2.6:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 262144
+    llama-3.3-70b-instruct:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+    qwen3.6-plus:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 131072
+
+cohere:
+  models:
+    - "command-a-03-2025"
+    - "command-a-reasoning-08-2025"
+    - "command-r7b-12-2024"
+  base-url: https://api.cohere.com/compatibility/v1/
+  model-capabilities:
+    command-a-03-2025:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    command-a-reasoning-08-2025:
+      supports-tools: true
+      supports-json-schema: false
+      context-window: 128000
+      reasoning: true
+    command-r7b-12-2024:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
 
 bedrock:
   # bedrock models must be enabled prior to sending

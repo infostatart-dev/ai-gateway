@@ -32,10 +32,11 @@ impl ModelId {
             | InferenceProvider::Anthropic
             | InferenceProvider::GoogleGemini
             | InferenceProvider::OpenRouter) => {
+                let slug = openrouter_upstream_slug(strip_provider_prefix(
+                    &provider, s,
+                ));
                 Ok(ModelId::ModelIdWithVersion {
-                    id: ModelIdWithVersion::from_str(strip_provider_prefix(
-                        &provider, s,
-                    ))?,
+                    id: ModelIdWithVersion::from_str(slug)?,
                     provider,
                 })
             }
@@ -111,6 +112,11 @@ fn strip_provider_prefix<'a>(
     s.strip_prefix(provider.as_ref())
         .and_then(|rest| rest.strip_prefix('/'))
         .unwrap_or(s)
+}
+
+/// `OpenRouter`'s meta-router slug is literally `openrouter/free`.
+fn openrouter_upstream_slug(s: &str) -> &str {
+    if s == "free" { "openrouter/free" } else { s }
 }
 
 impl<'de> Deserialize<'de> for ModelId {

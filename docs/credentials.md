@@ -122,6 +122,28 @@ cargo run --features deepseek-login -p ai-gateway -- deepseek import \
 
 Default session path: `dev/deepseek-session.json`.
 
+### Tier 1 free API providers
+
+Add API keys under slot ids from embedded `credentials.yaml`:
+
+```yaml
+credentials:
+  longcat-default:
+    api-key: ...
+  bazaarlink-default:
+    api-key: ...
+  sambanova-default:
+    api-key: ...
+  ollama-cloud-default:
+    api-key: ...
+  cohere-default:
+    api-key: ...
+```
+
+All use `tier: free` / `cost-class: free`. `groq-default` is also free-tier
+(developer plan, no credit card). See [providers.md](providers.md) for base URLs
+and model prefixes.
+
 ### AWS Bedrock
 
 Optional `integrations.aws` block sets region URL and registers Bedrock

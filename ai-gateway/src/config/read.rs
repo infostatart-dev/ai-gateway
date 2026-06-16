@@ -138,12 +138,20 @@ fn build_autodefault_router(config: &Config) -> Option<RouterConfig> {
 fn autodefault_provider_order() -> Vec<InferenceProvider> {
     let mut order = vec![
         InferenceProvider::Named("opencode".into()),
+        InferenceProvider::Named("longcat".into()),
+        InferenceProvider::Named("mistral".into()),
         InferenceProvider::OpenRouter,
         InferenceProvider::Named("github-models".into()),
-        InferenceProvider::Named("mistral".into()),
+        InferenceProvider::Named("bazaarlink".into()),
+        InferenceProvider::Named("bluesminds".into()),
         InferenceProvider::Named("groq".into()),
         InferenceProvider::Named("cerebras".into()),
         InferenceProvider::Named("cloudflare".into()),
+        InferenceProvider::Named("sambanova".into()),
+        InferenceProvider::Named("inclusionai".into()),
+        InferenceProvider::Named("ollama-cloud".into()),
+        InferenceProvider::Named("cohere".into()),
+        InferenceProvider::Named("doubao".into()),
         InferenceProvider::GoogleGemini,
     ];
     order.push(InferenceProvider::Named("deepseek-web".into()));
@@ -198,7 +206,7 @@ mod tests {
     use compact_str::CompactString;
 
     use super::*;
-    use crate::types::router::RouterId;
+    use crate::{config::cost_class::CostClass, types::router::RouterId};
 
     #[test]
     fn decision_example_config_loads_budget_aware_router() {
@@ -326,6 +334,10 @@ credentials:
         else {
             panic!("expected BudgetAwareCapabilityAfter");
         };
+        let mistral_rank = provider_priorities
+            .get(&InferenceProvider::Named("mistral".into()))
+            .copied()
+            .expect("mistral in autodefault");
         let openrouter_rank = provider_priorities
             .get(&InferenceProvider::OpenRouter)
             .copied()
@@ -334,11 +346,64 @@ credentials:
             .get(&github)
             .copied()
             .expect("github-models in autodefault");
-        let mistral_rank = provider_priorities
-            .get(&InferenceProvider::Named("mistral".into()))
-            .copied()
-            .expect("mistral in autodefault");
+        assert!(mistral_rank < openrouter_rank);
         assert!(openrouter_rank < github_rank);
-        assert!(github_rank < mistral_rank);
+    }
+
+    #[test]
+    fn autodefault_longcat_precedes_openrouter_when_configured() {
+        let providers = ProvidersConfig::default();
+        let credentials = registry_from_secrets(
+            r#"
+credentials:
+  longcat-default:
+    api-key: lc-test
+  openrouter-default:
+    api-key: sk-or-test
+"#,
+        );
+        let longcat = InferenceProvider::Named("longcat".into());
+        assert!(is_available_for_autodefault(
+            &longcat,
+            &providers,
+            &credentials,
+        ));
+
+        let config = Config {
+            providers: providers.clone(),
+            credentials: credentials.clone(),
+            ..Config::default()
+        };
+        let router =
+            build_autodefault_router(&config).expect("autodefault router");
+        let strategy = router.load_balance.0.get(&EndpointType::Chat).unwrap();
+        let BalanceConfigInner::BudgetAwareCapabilityAfter {
+            provider_priorities,
+            ..
+        } = strategy
+        else {
+            panic!("expected BudgetAwareCapabilityAfter");
+        };
+        let longcat_rank = provider_priorities
+            .get(&longcat)
+            .copied()
+            .expect("longcat in autodefault");
+        let openrouter_rank = provider_priorities
+            .get(&InferenceProvider::OpenRouter)
+            .copied()
+            .expect("openrouter in autodefault");
+        assert!(longcat_rank < openrouter_rank);
+    }
+
+    #[test]
+    fn groq_default_resolves_free_cost_class() {
+        let credentials = registry_from_secrets(
+            "credentials:\n  groq-default:\n    api-key: gsk_test\n",
+        );
+        let groq = credentials
+            .default_for(&InferenceProvider::Named("groq".into()))
+            .expect("groq credential");
+        assert_eq!(groq.tier, "free");
+        assert_eq!(groq.cost_class, CostClass::Free);
     }
 }

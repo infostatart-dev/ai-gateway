@@ -108,11 +108,11 @@ mod tests {
     }
 
     #[test]
-    fn groq_developer_tpm_caps_effective_window() {
+    fn groq_free_tpm_caps_effective_window() {
         let groq = InferenceProvider::Named("groq".into());
         let tpm = limits().per_request_token_cap(
             &groq,
-            "developer",
+            "free",
             "llama-3.3-70b-versatile",
         );
         assert_eq!(tpm, Some(12_000));

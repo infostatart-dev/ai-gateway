@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.3.0-beta.20] - 2026-06-17
+
+### Features
+
+- **Curated free providers (Tier 1):** `longcat`, `doubao`, `ollama-cloud`,
+  `inclusionai`, `sambanova`, `bluesminds`, `bazaarlink`, `cohere` as
+  OpenAI-compatible providers with credential slots, limits, and autodefault
+  placement
+- **Groq free reclassification:** `groq-default` uses `tier: free` /
+  `cost-class: free`
+- **OpenRouter Tier 2:** `openrouter/free` router plus additional live `:free`
+  slugs (Nemotron, Liquid, Poolside, and others verified 2026-06-17)
+- Autodefault priority extended for new free providers; cost-first mappings for
+  `gpt-5.4-nano` and `gpt-5-mini`
+
 ## [0.3.0-beta.19] - 2026-06-16
 
 ### Features

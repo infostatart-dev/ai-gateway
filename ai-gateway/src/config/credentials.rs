@@ -257,6 +257,11 @@ mod tests {
             serde_yml::from_str(CREDENTIALS_YAML).unwrap();
         assert!(catalog.credentials.contains_key("gemini-free"));
         assert!(catalog.credentials.contains_key("openrouter-default"));
+        assert!(catalog.credentials.contains_key("longcat-default"));
+        assert!(catalog.credentials.contains_key("cohere-default"));
+        let groq = catalog.credentials.get("groq-default").unwrap();
+        assert_eq!(groq.tier, "free");
+        assert_eq!(groq.cost_class, Some(CostClass::Free));
     }
 
     #[test]

@@ -64,6 +64,14 @@ fn named(cap: &mut ModelCapability, n: &str, model_name: &str) {
         "cloudflare" => cloudflare(cap, model_name),
         "chatgpt-web" => chatgpt_web(cap),
         "deepseek-web" => deepseek_web(cap, model_name),
+        "longcat" => longcat(cap, model_name),
+        "ollama-cloud" => ollama_cloud(cap, model_name),
+        "sambanova" => sambanova(cap, model_name),
+        "bluesminds" => bluesminds(cap, model_name),
+        "bazaarlink" => bazaarlink(cap, model_name),
+        "cohere" => cohere(cap, model_name),
+        "doubao" => doubao(cap),
+        "inclusionai" => inclusionai(cap),
         _ => {}
     }
 }
@@ -231,6 +239,78 @@ mod cloudflare {
     pub fn supports_reasoning(model_name: &str) -> bool {
         REASONING_MODELS.iter().any(|m| model_name.contains(m))
     }
+}
+
+fn longcat(cap: &mut ModelCapability, model_name: &str) {
+    cap.supports_tools = true;
+    cap.context_window = Some(131_072);
+    cap.supports_json_schema =
+        !model_name.contains("Thinking") && !model_name.contains("Omni");
+    if model_name.contains("Thinking") {
+        cap.reasoning = true;
+    }
+}
+
+fn ollama_cloud(cap: &mut ModelCapability, model_name: &str) {
+    cap.supports_tools = true;
+    cap.context_window = Some(262_144);
+    cap.supports_json_schema = model_name.contains("kimi");
+    if model_name.contains("deepseek") {
+        cap.reasoning = true;
+    }
+}
+
+fn sambanova(cap: &mut ModelCapability, model_name: &str) {
+    cap.supports_tools = true;
+    cap.context_window = Some(131_072);
+    cap.supports_json_schema = true;
+    cap.json_schema_rank = 1;
+    if model_name.contains("gpt-oss") {
+        cap.reasoning = true;
+    }
+}
+
+fn bluesminds(cap: &mut ModelCapability, model_name: &str) {
+    cap.supports_tools = true;
+    cap.context_window = Some(128_000);
+    cap.supports_json_schema = !model_name.contains("reasoner");
+    if model_name.contains("reasoner") {
+        cap.reasoning = true;
+    }
+}
+
+fn bazaarlink(cap: &mut ModelCapability, model_name: &str) {
+    cap.supports_tools = true;
+    cap.context_window = Some(131_072);
+    cap.supports_json_schema = true;
+    if model_name.contains("gemini") {
+        cap.context_window = Some(1_000_000);
+    }
+    if model_name.contains("kimi") {
+        cap.context_window = Some(262_144);
+    }
+    let _ = model_name;
+}
+
+fn cohere(cap: &mut ModelCapability, model_name: &str) {
+    cap.supports_tools = true;
+    cap.context_window = Some(128_000);
+    cap.supports_json_schema = !model_name.contains("reasoning");
+    if model_name.contains("reasoning") {
+        cap.reasoning = true;
+    }
+}
+
+fn doubao(cap: &mut ModelCapability) {
+    cap.supports_tools = true;
+    cap.supports_json_schema = true;
+    cap.context_window = Some(32_768);
+}
+
+fn inclusionai(cap: &mut ModelCapability) {
+    cap.supports_tools = true;
+    cap.supports_json_schema = false;
+    cap.context_window = Some(131_072);
 }
 
 #[cfg(test)]
