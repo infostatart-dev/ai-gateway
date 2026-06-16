@@ -1,0 +1,97 @@
+name: Version tag
+
+# When `[workspace.package].version` in root Cargo.toml changes on `main`,
+# create `vX.Y.Z` (or `vX.Y.Z-beta.N`) and dispatch release workflows.
+# Idempotent: skips if the tag already exists locally or on the remote.
+#
+# Tag pushes from GITHUB_TOKEN do not trigger other workflows (`push: tags`),
+# so we dispatch `release.yml` and `docker.yml` explicitly with `gh workflow run`.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Cargo.toml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  tag-and-release:
+    name: Tag and dispatch releases
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Read workspace version
+        id: ver
+        run: |
+          set -euo pipefail
+          version=$(grep -E '^version[[:space:]]*=' Cargo.toml \
+            | head -n1 \
+            | sed -E 's/^version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/')
+          if [ -z "$version" ]; then
+            echo "::error file=Cargo.toml::Could not read [workspace.package].version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "Workspace version: $version"
+
+      - name: Check if tag already exists
+        id: existing
+        run: |
+          set -euo pipefail
+          tag="${{ steps.ver.outputs.tag }}"
+          if git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1 \
+            || git ls-remote --tags --exit-code origin "$tag" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $tag already exists — nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $tag is new — will create and dispatch releases."
+          fi
+
+      - name: Configure git identity
+        if: steps.existing.outputs.exists == 'false'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Create and push annotated tag
+        if: steps.existing.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+          tag="${{ steps.ver.outputs.tag }}"
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
+
+      - name: Dispatch versioned binary release
+        if: steps.existing.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.ver.outputs.tag }}"
+          gh workflow run release.yml \
+            --repo "${{ github.repository }}" \
+            --ref "$tag"
+          echo "Dispatched release.yml for $tag."
+
+      - name: Dispatch Docker release
+        if: steps.existing.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.ver.outputs.tag }}"
+          gh workflow run docker.yml \
+            --repo "${{ github.repository }}" \
+            --ref "$tag"
+          echo "Dispatched docker.yml for $tag."

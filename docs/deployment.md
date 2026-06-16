@@ -53,6 +53,27 @@ builds and pushes on `main` and version tags when secrets are configured:
 
 Image tags follow `docker/metadata-action` defaults (branch, semver, sha).
 
+## GitHub releases
+
+Two release channels:
+
+| Channel | Workflow | When |
+| --- | --- | --- |
+| **Versioned** (`v0.3.0-beta.19`, …) | [`release.yml`](../.github/workflows/release.yml) | Tag `v*` exists |
+| **Rolling `latest`** | [`release-latest.yml`](../.github/workflows/release-latest.yml) | After each green Rust CI on `main` |
+
+### Cut a versioned release
+
+1. Bump `[workspace.package].version` in root [`Cargo.toml`](../Cargo.toml) and update [`CHANGELOG.md`](../CHANGELOG.md).
+2. Push to `main`. Workflow [`version-tag.yml`](../.github/workflows/version-tag.yml) creates `v{version}` and dispatches `release.yml` plus `docker.yml` for that tag.
+3. Binaries appear on the GitHub Releases page as `ai-gateway-v{version}-{linux,darwin,windows}`.
+
+To backfill a tag for the current version without changing `Cargo.toml`, run **Version tag** manually (`workflow_dispatch`) on GitHub Actions.
+
+Manual alternative: `git tag -a v0.3.0-beta.19 -m "Release v0.3.0-beta.19" && git push fork v0.3.0-beta.19` (then trigger **Release binaries** if the tag push does not start CI).
+
+Prerelease tags (names containing `-`, e.g. `-beta.`) are published as GitHub prereleases and are not marked “Latest”.
+
 ## Environment variables
 
 ### Required for providers you use
