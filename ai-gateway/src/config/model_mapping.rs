@@ -98,4 +98,37 @@ gpt-5-mini:
              {first_openrouter}"
         );
     }
+
+    #[test]
+    fn gpt_5_4_nano_default_mapping_prefers_free_openrouter_before_anthropic() {
+        let config = ModelMappingConfig::default();
+        let mappings = config
+            .as_ref()
+            .get(&ModelName::owned("gpt-5.4-nano".into()))
+            .expect("gpt-5.4-nano mapping");
+
+        let providers: Vec<_> = mappings
+            .iter()
+            .map(|model| model.inference_provider().expect("provider"))
+            .collect();
+
+        let first = providers.first().expect("first mapping");
+        assert_eq!(*first, InferenceProvider::OpenRouter);
+
+        let anthropic_pos = providers
+            .iter()
+            .position(|p| *p == InferenceProvider::Anthropic)
+            .expect("anthropic fallback");
+        let openrouter_pos = providers
+            .iter()
+            .position(|p| *p == InferenceProvider::OpenRouter)
+            .expect("openrouter entry");
+        assert!(openrouter_pos < anthropic_pos);
+
+        let first_model = mappings.first().to_string();
+        assert!(
+            first_model.contains("gpt-oss-120b:free"),
+            "first nano mapping must be free openrouter, got {first_model}"
+        );
+    }
 }

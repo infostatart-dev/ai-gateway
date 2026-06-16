@@ -71,13 +71,16 @@ aliases apply only to the first slot (`gemini-free`).
 
 ### ChatGPT Web
 
-Not an `AI_GATEWAY_CREDENTIAL_*` slot. Uses a session file path instead — see
-[chatgpt-web.md](chatgpt-web.md).
+Session file path in `AI_GATEWAY_CREDENTIAL_CHATGPT_WEB_DEFAULT` (value = path
+to session JSON). Fallback env: `CHATGPT_BROWSER_CLI`. Cost-class:
+**`paid-browser`** — autodefault tries ChatGPT Web **last**, after free API
+keys and paid API fallbacks. See [chatgpt-web.md](chatgpt-web.md).
 
 ### DeepSeek Web
 
 Session file with `userToken` from chat.deepseek.com localStorage — see
-[deepseek-web.md](deepseek-web.md).
+[deepseek-web.md](deepseek-web.md). Cost-class: **`free`**, ordered **after**
+Gemini free slots and **before** paid `gemini-default`.
 
 ```bash
 cargo run --features deepseek-login -p ai-gateway -- deepseek login
@@ -88,6 +91,7 @@ cargo run --features deepseek-login -p ai-gateway -- deepseek probe
 
 | Slot | Env var (value = path to session JSON) |
 |------|----------------------------------------|
+| `chatgpt-web-default` | `AI_GATEWAY_CREDENTIAL_CHATGPT_WEB_DEFAULT` |
 | `deepseek-web-default` | `AI_GATEWAY_CREDENTIAL_DEEPSEEK_WEB_DEFAULT` |
 
 CLI writes to `DEEPSEEK_BROWSER_CLI` (default account path).

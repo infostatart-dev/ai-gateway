@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.3.0-beta.17] - 2026-06-16
+
+### Features
+
+- **Cost-class-first autodefault routing:** credential slots carry `cost-class`
+  (`free` | `paid` | `paid-browser`); candidates sort by cost-class before
+  `budget-rank` and provider priority
+- Autodefault provider order rebalanced: free API → Gemini free → DeepSeek Web →
+  paid API → ChatGPT Web **last**
+- `gpt-5.4-nano` and `gpt-5.4-mini` model bindings reordered cost-first (mirror
+  `gpt-5-mini` pattern)
+- CLI/banner default autodefault model: `openai/gpt-5.4-nano` (override:
+  `AI_GATEWAY_AUTODEFAULT_DEFAULT_MODEL`)
+- `chatgpt-web-default` slot added to embedded `credentials.yaml`
+
+### Breaking
+
+- Operators who relied on browser-first autodefault (ChatGPT Web primary when
+  `CHATGPT_BROWSER_CLI` is set) now get free API paths first; ChatGPT Web is
+  last-resort only
+
+## [0.3.0-beta.16] - 2026-06-16
+
+### Features
+
+- Payload-aware autodefault routing: token estimate, TPM/context window filter,
+  Gemini quota sibling skip, `json_schema_rank`, route trace headers
+
+## [0.3.0-beta.15] - 2026-06-16
+
+### Features
+
+- GitHub Models provider (PAT via `AI_GATEWAY_CREDENTIAL_GITHUB_MODELS_DEFAULT`)
+
+## [0.3.0-beta.14] - 2026-06-16
+
+### Features
+
+- DeepSeek Web browser-session provider (PoW challenge, SSE completion stream)
+
+## [0.3.0-beta.13] - 2026-06-16
+
+### Features
+
+- ChatGPT Web stabilization: warmup cache, abuse-block 4h cooldown, pacing
+  (4 rpm / 12s min interval / 1 concurrent)
+
+## [0.3.0-beta.12] - 2026-06-16
+
+### Features
+
+- Gemini free multi-account: four `gemini-free*` slots with round-robin
+  load balancing in budget-aware router
+
 ## [0.3.0-beta.11] - 2026-06-15
 
 ### Build

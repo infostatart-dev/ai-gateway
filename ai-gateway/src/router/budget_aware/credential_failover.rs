@@ -116,6 +116,11 @@ mod tests {
         BudgetCandidate {
             credential_id: cred,
             credential_budget_rank: budget_rank,
+            credential_cost_class: if budget_rank == 0 {
+                crate::config::cost_class::CostClass::Free
+            } else {
+                crate::config::cost_class::CostClass::Paid
+            },
             credential_tier: if budget_rank == 0 {
                 "free".into()
             } else {
@@ -160,6 +165,7 @@ mod tests {
         BudgetCandidate {
             credential_id: cred,
             credential_budget_rank: 0,
+            credential_cost_class: crate::config::cost_class::CostClass::Paid,
             credential_tier: "tier-3".into(),
             capability: ModelCapability {
                 provider,

@@ -14,8 +14,8 @@ use super::{
 use crate::{
     app_state::AppState,
     config::{
-        credentials::ProviderCredentialId, providers::GlobalProviderConfig,
-        router::RouterConfig,
+        cost_class::CostClass, credentials::ProviderCredentialId,
+        providers::GlobalProviderConfig, router::RouterConfig,
     },
     dispatcher::Dispatcher,
     endpoints::EndpointType,
@@ -57,6 +57,7 @@ async fn push_anonymous_candidates(
         candidates.push(BudgetCandidate {
             credential_id: credential_id.clone(),
             credential_budget_rank,
+            credential_cost_class: CostClass::Free,
             credential_tier: credential_tier.clone(),
             capability,
             service,
@@ -121,6 +122,7 @@ pub(super) async fn build(
                 candidates.push(BudgetCandidate {
                     credential_id: credential.id.clone(),
                     credential_budget_rank: credential.budget_rank,
+                    credential_cost_class: credential.cost_class,
                     credential_tier: credential.tier.clone(),
                     capability,
                     service,

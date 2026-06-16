@@ -134,6 +134,7 @@ mod structured_output_failover {
                 provider
             )),
             credential_budget_rank: 0,
+            credential_cost_class: crate::config::cost_class::CostClass::Free,
             credential_tier: "free".into(),
             capability: ModelCapability {
                 provider,

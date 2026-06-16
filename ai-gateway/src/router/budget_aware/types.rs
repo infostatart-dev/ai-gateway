@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 use super::credential_balance::CredentialRoundRobin;
 use crate::{
     app_state::AppState,
-    config::credentials::ProviderCredentialId,
+    config::{cost_class::CostClass, credentials::ProviderCredentialId},
     dispatcher::DispatcherService,
     endpoints::EndpointType,
     middleware::mapper::model::ModelMapper,
@@ -21,6 +21,7 @@ use crate::{
 pub(crate) struct BudgetCandidate {
     pub credential_id: ProviderCredentialId,
     pub credential_budget_rank: u16,
+    pub credential_cost_class: CostClass,
     pub credential_tier: String,
     pub capability: ModelCapability,
     pub service: DispatcherService,

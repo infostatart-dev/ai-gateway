@@ -114,25 +114,33 @@ gpt-4.5:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 gpt-5.4-nano:
-  - "anthropic/claude-3-7-sonnet"
-  - "gemini/gemini-2.5-pro"
-  - "ollama/deepseek-r1"
-  - "mistral/mistral-saba"
-  - "xai/grok-4"
-  - "hyperbolic/deepseek-ai/DeepSeek-R1"
-  - "groq/deepseek-r1-distill-llama-70b"
-  - "bedrock/us.deepseek.r1-v1:0"
-  - "deepseek/deepseek-chat"
+  - openrouter/openai/gpt-oss-120b:free
+  - opencode/nemotron-3-ultra-free
+  - opencode/mimo-v2.5-free
+  - opencode/deepseek-v4-flash-free
+  - openrouter/qwen/qwen3-next-80b-a3b-instruct:free
+  - github-models/openai/gpt-4o-mini
+  - groq/llama-3.1-8b-instant
+  - cerebras/gpt-oss-120b
+  - mistral/mistral-small-latest
+  - cloudflare/@cf/meta/llama-3.2-3b-instruct
+  - gemini/gemini-2.0-flash
+  - anthropic/claude-3-5-haiku
+  - deepseek/deepseek-chat
 gpt-5.4-mini:
-  - "anthropic/claude-3-5-haiku"
-  - "gemini/gemini-2.0-flash"
-  - "ollama/llama3.3"
-  - "mistral/mistral-small"
-  - "xai/grok-3-mini"
-  - "hyperbolic/Qwen/Qwen2.5-72B-Instruct"
-  - "groq/llama-3.1-8b-instant"
-  - "bedrock/us.anthropic.claude-3-5-haiku-20241022-v1:0"
-  - "deepseek/deepseek-chat"
+  - openrouter/openai/gpt-oss-120b:free
+  - opencode/nemotron-3-ultra-free
+  - opencode/mimo-v2.5-free
+  - opencode/deepseek-v4-flash-free
+  - openrouter/qwen/qwen3-next-80b-a3b-instruct:free
+  - github-models/openai/gpt-4o-mini
+  - groq/llama-3.1-8b-instant
+  - cerebras/gpt-oss-120b
+  - mistral/mistral-small-latest
+  - cloudflare/@cf/meta/llama-3.2-3b-instruct
+  - gemini/gemini-2.0-flash
+  - anthropic/claude-3-5-haiku
+  - deepseek/deepseek-chat
 o1:
   - "anthropic/claude-sonnet-4-0"
   - "gemini/gemini-2.5-pro"

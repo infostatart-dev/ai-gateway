@@ -16,13 +16,48 @@ Endpoint:
 POST /router/autodefault/chat/completions
 ```
 
-Provider priority (lower index = higher priority when multiple are available):
+Provider priority (lower index = higher priority when multiple are available).
+Candidates are sorted by **cost-class** first (`free` → `paid` → `paid-browser`),
+then `budget-rank`, then provider index:
 
-1. `chatgpt-web` — only if `CHATGPT_BROWSER_CLI` session file exists
-2. `opencode` → `openrouter` → `mistral` → `groq` → `cerebras` → `cloudflare`
-   → `gemini` → `anthropic`
+| cost-class | rank base | meaning |
+|------------|-----------|---------|
+| `free` | 0 | $0 marginal API keys and DeepSeek Web |
+| `paid` | 200 | Metered / tier-3 API (Anthropic, OpenAI, paid Gemini) |
+| `paid-browser` | 300 | ChatGPT Plus/Pro browser session |
 
-Startup banner shows default policy tier, cascade mode, and fallback chain.
+Within the `free` band (availability-gated):
+
+1. `opencode`
+2. `openrouter`
+3. `github-models`
+4. `mistral`
+5. `groq`
+6. `cerebras`
+7. `cloudflare`
+8. `gemini` (free slots first via `budget-rank`; `gemini-default` is `paid`)
+9. `deepseek-web` — only if session file exists
+
+Then `paid`:
+
+10. `anthropic`
+11. `openai`
+
+Then `paid-browser`:
+
+12. `chatgpt-web` — **last resort**; only if `CHATGPT_BROWSER_CLI` session file exists
+
+Default example model for autodefault: **`openai/gpt-5.4-nano`** (override with
+`AI_GATEWAY_AUTODEFAULT_DEFAULT_MODEL`).
+
+**Breaking change (beta.17):** ChatGPT Web is no longer the first autodefault
+provider when a session file is present. Free API keys are tried first; browser
+sessions are last-resort fallbacks.
+
+Payload-aware filtering (beta.16) runs after cost-class ranking. When every
+candidate fails the TPM/context filter, the best-effort tail may still jump to
+large-context paid providers — see design notes in OpenSpec.
+
 Override per request with header:
 
 ```
@@ -36,7 +71,7 @@ just providers). Each candidate carries:
 
 - `credential-id` (for example `openrouter-default`)
 - Provider and model after capability checks
-- `budget-rank` from `credentials.yaml`
+- `cost-class` and `budget-rank` from `credentials.yaml`
 
 When an upstream call fails or returns rate-limit signals, the router tries the
 next candidate. Multiple credential slots for the same provider and model are

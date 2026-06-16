@@ -3,6 +3,7 @@ pub mod cache;
 pub mod chatgpt_web;
 pub mod cloudflare;
 pub mod control_plane;
+pub mod cost_class;
 pub mod credential_env;
 pub mod credentials;
 pub mod database;

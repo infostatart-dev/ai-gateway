@@ -26,6 +26,7 @@ impl BudgetAwareRouter {
         &self,
         candidate: &super::types::BudgetCandidate,
     ) -> u16 {
+        let cost_base = candidate.credential_cost_class.rank_base();
         let provider_rank = self
             .provider_priorities
             .get(&candidate.capability.provider)
@@ -33,9 +34,8 @@ impl BudgetAwareRouter {
             .unwrap_or_else(|| {
                 rank::default_budget_rank(&candidate.capability)
             });
-        candidate
-            .credential_budget_rank
-            .saturating_mul(100)
+        cost_base
+            .saturating_add(candidate.credential_budget_rank.saturating_mul(10))
             .saturating_add(provider_rank)
     }
 }

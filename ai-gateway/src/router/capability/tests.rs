@@ -154,6 +154,20 @@ fn test_supports_logic() {
 }
 
 #[test]
+fn deepseek_web_excluded_when_tools_required() {
+    let provider = InferenceProvider::Named("deepseek-web".into());
+    let model = test_model(provider.clone(), "deepseek-chat");
+    let cap = get_model_capability(&provider, &model, None);
+    assert!(!cap.supports_tools);
+
+    let reqs = RequestRequirements {
+        tools_required: true,
+        ..RequestRequirements::default()
+    };
+    assert!(!supports(&reqs, &cap));
+}
+
+#[test]
 fn github_models_o1_is_reasoning_without_tools_or_json_schema() {
     use crate::config::providers::ProvidersConfig;
 

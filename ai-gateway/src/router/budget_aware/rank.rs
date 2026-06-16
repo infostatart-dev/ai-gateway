@@ -29,22 +29,25 @@ pub(super) fn default_budget_rank(capability: &ModelCapability) -> u16 {
     default_provider_budget_rank(&capability.provider)
 }
 
+/// Provider priority within a cost-class band (lower = tried first).
+#[allow(clippy::match_same_arms)]
 pub(crate) fn default_provider_budget_rank(
     provider: &InferenceProvider,
 ) -> u16 {
     match provider {
-        InferenceProvider::Named(name) if name == "chatgpt-web" => 0,
-        InferenceProvider::Named(name) if name == "deepseek-web" => 0,
         InferenceProvider::Named(name) if name == "opencode" => 0,
         InferenceProvider::Ollama | InferenceProvider::OpenRouter => 1,
-        InferenceProvider::Named(name) if name == "mistral" => 1,
-        InferenceProvider::Named(name) if name == "groq" => 2,
-        InferenceProvider::Named(name) if name == "cerebras" => 3,
-        InferenceProvider::Named(name) if name == "cloudflare" => 4,
-        InferenceProvider::GoogleGemini => 10,
+        InferenceProvider::Named(name) if name == "github-models" => 2,
+        InferenceProvider::Named(name) if name == "mistral" => 3,
+        InferenceProvider::Named(name) if name == "groq" => 4,
+        InferenceProvider::Named(name) if name == "cerebras" => 5,
+        InferenceProvider::Named(name) if name == "cloudflare" => 6,
+        InferenceProvider::GoogleGemini => 7,
+        InferenceProvider::Named(name) if name == "deepseek-web" => 8,
+        InferenceProvider::Anthropic => 0,
+        InferenceProvider::OpenAI => 1,
+        InferenceProvider::Named(name) if name == "chatgpt-web" => 0,
         InferenceProvider::Named(name) if name == "deepseek" => 10,
-        InferenceProvider::Anthropic => 20,
-        InferenceProvider::OpenAI => 30,
         InferenceProvider::Bedrock => 50,
         InferenceProvider::Named(_) => 25,
     }

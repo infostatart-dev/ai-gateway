@@ -5,7 +5,10 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    config::providers::ProvidersConfig,
+    config::{
+        cost_class::{self, CostClass},
+        providers::ProvidersConfig,
+    },
     types::provider::{InferenceProvider, ProviderKey},
 };
 
@@ -45,6 +48,7 @@ pub struct ProviderCredential {
     pub id: ProviderCredentialId,
     pub provider: InferenceProvider,
     pub tier: String,
+    pub cost_class: CostClass,
     pub key: ProviderKey,
     pub budget_rank: u16,
 }
@@ -68,6 +72,8 @@ struct CredentialSpec {
     provider: InferenceProvider,
     tier: String,
     #[serde(default)]
+    cost_class: Option<CostClass>,
+    #[serde(default)]
     key_env: Option<String>,
     #[serde(default)]
     alt_key_envs: Vec<String>,
@@ -75,7 +81,40 @@ struct CredentialSpec {
     budget_rank: u16,
 }
 
+impl CredentialSpec {
+    fn resolved_cost_class(&self) -> CostClass {
+        cost_class::derive_cost_class(
+            self.cost_class,
+            &self.provider,
+            &self.tier,
+        )
+    }
+}
+
 impl CredentialRegistry {
+    fn try_push_session_slot(
+        &mut self,
+        providers_config: &ProvidersConfig,
+        id: String,
+        spec: &CredentialSpec,
+        cost_class: CostClass,
+        path: &std::path::Path,
+    ) {
+        if !providers_config.contains_key(&spec.provider) {
+            return;
+        }
+        self.push(ProviderCredential {
+            id: ProviderCredentialId::new(id),
+            provider: spec.provider.clone(),
+            tier: spec.tier.clone(),
+            cost_class,
+            key: ProviderKey::Secret(crate::types::secret::Secret::from(
+                path.display().to_string(),
+            )),
+            budget_rank: spec.budget_rank,
+        });
+    }
+
     #[must_use]
     pub fn build(providers_config: &ProvidersConfig) -> Self {
         let catalog: CredentialCatalog = serde_yml::from_str(CREDENTIALS_YAML)
@@ -83,6 +122,25 @@ impl CredentialRegistry {
         let mut registry = Self::default();
 
         for (id, spec) in catalog.credentials {
+            let cost_class = spec.resolved_cost_class();
+            if crate::config::chatgpt_web::is_chatgpt_web(&spec.provider) {
+                let Some(path) =
+                    crate::config::chatgpt_web::session_path_for_credential(
+                        &id,
+                    )
+                else {
+                    continue;
+                };
+                registry.try_push_session_slot(
+                    providers_config,
+                    id,
+                    &spec,
+                    cost_class,
+                    &path,
+                );
+                continue;
+            }
+
             if crate::config::deepseek_web::is_deepseek_web(&spec.provider) {
                 let Some(path) =
                     crate::config::deepseek_web::session_path_for_credential(
@@ -91,20 +149,13 @@ impl CredentialRegistry {
                 else {
                     continue;
                 };
-                if !providers_config.contains_key(&spec.provider) {
-                    continue;
-                }
-                registry.push(ProviderCredential {
-                    id: ProviderCredentialId::new(id),
-                    provider: spec.provider,
-                    tier: spec.tier,
-                    key: ProviderKey::Secret(
-                        crate::types::secret::Secret::from(
-                            path.display().to_string(),
-                        ),
-                    ),
-                    budget_rank: spec.budget_rank,
-                });
+                registry.try_push_session_slot(
+                    providers_config,
+                    id,
+                    &spec,
+                    cost_class,
+                    &path,
+                );
                 continue;
             }
 
@@ -117,20 +168,13 @@ impl CredentialRegistry {
                 else {
                     continue;
                 };
-                if !providers_config.contains_key(&spec.provider) {
-                    continue;
-                }
-                registry.push(ProviderCredential {
-                    id: ProviderCredentialId::new(id),
-                    provider: spec.provider,
-                    tier: spec.tier,
-                    key: ProviderKey::Secret(
-                        crate::types::secret::Secret::from(
-                            path.display().to_string(),
-                        ),
-                    ),
-                    budget_rank: spec.budget_rank,
-                });
+                registry.try_push_session_slot(
+                    providers_config,
+                    id,
+                    &spec,
+                    cost_class,
+                    &path,
+                );
                 continue;
             }
 
@@ -156,6 +200,7 @@ impl CredentialRegistry {
                 id: ProviderCredentialId::new(id),
                 provider: spec.provider,
                 tier: spec.tier,
+                cost_class,
                 key,
                 budget_rank: spec.budget_rank,
             });
@@ -220,6 +265,7 @@ impl CredentialRegistry {
                 id: ProviderCredentialId::new("chatgpt-web-default"),
                 provider: chatgpt,
                 tier: "session".into(),
+                cost_class: CostClass::PaidBrowser,
                 key: ProviderKey::NotRequired,
                 budget_rank: 0,
             });
@@ -234,6 +280,7 @@ impl CredentialRegistry {
                 id: ProviderCredentialId::new("deepseek-web-default"),
                 provider: deepseek,
                 tier: "session".into(),
+                cost_class: CostClass::Free,
                 key: ProviderKey::NotRequired,
                 budget_rank: 0,
             });
@@ -256,6 +303,9 @@ impl CredentialRegistry {
                 id,
                 provider: provider.clone(),
                 tier: "default".into(),
+                cost_class: cost_class::derive_cost_class(
+                    None, provider, "default",
+                ),
                 key,
                 budget_rank: 0,
             });
@@ -308,9 +358,16 @@ mod tests {
         assert!(catalog.credentials.contains_key("gemini-default"));
         assert!(catalog.credentials.contains_key("openrouter-default"));
         assert!(catalog.credentials.contains_key("deepseek-web-default"));
+        assert!(catalog.credentials.contains_key("chatgpt-web-default"));
         let gemini_default = catalog.credentials.get("gemini-default").unwrap();
         assert_eq!(gemini_default.tier, "tier-3");
         assert_eq!(gemini_default.budget_rank, 10);
+        let deepseek_web =
+            catalog.credentials.get("deepseek-web-default").unwrap();
+        assert_eq!(deepseek_web.cost_class, Some(CostClass::Free));
+        let chatgpt_web =
+            catalog.credentials.get("chatgpt-web-default").unwrap();
+        assert_eq!(chatgpt_web.cost_class, Some(CostClass::PaidBrowser));
     }
 
     #[test]

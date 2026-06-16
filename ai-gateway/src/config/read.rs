@@ -119,14 +119,7 @@ fn build_autodefault_router(config: &Config) -> Option<RouterConfig> {
 }
 
 fn autodefault_provider_order() -> Vec<InferenceProvider> {
-    let mut order = Vec::new();
-    if crate::config::chatgpt_web::session_file_available() {
-        order.push(InferenceProvider::Named("chatgpt-web".into()));
-    }
-    if crate::config::deepseek_web::session_file_available() {
-        order.push(InferenceProvider::Named("deepseek-web".into()));
-    }
-    order.extend([
+    let mut order = vec![
         InferenceProvider::Named("opencode".into()),
         InferenceProvider::OpenRouter,
         InferenceProvider::Named("github-models".into()),
@@ -135,8 +128,14 @@ fn autodefault_provider_order() -> Vec<InferenceProvider> {
         InferenceProvider::Named("cerebras".into()),
         InferenceProvider::Named("cloudflare".into()),
         InferenceProvider::GoogleGemini,
-        InferenceProvider::Anthropic,
-    ]);
+    ];
+    if crate::config::deepseek_web::session_file_available() {
+        order.push(InferenceProvider::Named("deepseek-web".into()));
+    }
+    order.extend([InferenceProvider::Anthropic, InferenceProvider::OpenAI]);
+    if crate::config::chatgpt_web::session_file_available() {
+        order.push(InferenceProvider::Named("chatgpt-web".into()));
+    }
     order
 }
 

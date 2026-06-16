@@ -116,6 +116,7 @@ mod autodefault_scenario_tests {
         nonempty_collections::nes![
             InferenceProvider::Named("opencode".into()),
             InferenceProvider::OpenRouter,
+            InferenceProvider::Named("github-models".into()),
             InferenceProvider::Named("mistral".into()),
             InferenceProvider::Named("groq".into()),
             InferenceProvider::Named("cerebras".into()),
@@ -132,14 +133,16 @@ mod autodefault_scenario_tests {
             .insert(InferenceProvider::Named("opencode".into()), 0);
         provider_priorities.insert(InferenceProvider::OpenRouter, 1);
         provider_priorities
-            .insert(InferenceProvider::Named("mistral".into()), 2);
-        provider_priorities.insert(InferenceProvider::Named("groq".into()), 3);
+            .insert(InferenceProvider::Named("github-models".into()), 2);
         provider_priorities
-            .insert(InferenceProvider::Named("cerebras".into()), 4);
+            .insert(InferenceProvider::Named("mistral".into()), 3);
+        provider_priorities.insert(InferenceProvider::Named("groq".into()), 4);
         provider_priorities
-            .insert(InferenceProvider::Named("cloudflare".into()), 5);
-        provider_priorities.insert(InferenceProvider::GoogleGemini, 10);
-        provider_priorities.insert(InferenceProvider::Anthropic, 20);
+            .insert(InferenceProvider::Named("cerebras".into()), 5);
+        provider_priorities
+            .insert(InferenceProvider::Named("cloudflare".into()), 6);
+        provider_priorities.insert(InferenceProvider::GoogleGemini, 7);
+        provider_priorities.insert(InferenceProvider::Anthropic, 8);
 
         BudgetAwareRouter::new_budget_then_capability(
             app_state,
