@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.3.0-beta.22] - 2026-06-17
+
+### Features
+
+- **Routing load verification:** extended in-process `routing_load` harness (10
+  concurrent scenarios) covering payload pre-flight, daily quota pacing, pacing
+  burst, and failover rotation invariants
+- **Catalog quota pacing:** proactive RPM/TPM/RPD/TPD gates per credential scope
+  with UTC daily reset from `provider-limits.yaml`
+- **OpenRouter budget probe:** runtime `key-info` snapshot; skip paid routes when
+  credits are exhausted; refresh on HTTP 402
+- **ChatGPT Web observability:** `chatgpt_web_turns` and
+  `chatgpt_web_upload_parts` in route summary and provider-stats
+- **ChatGPT Web chunking:** 45k-token upload parts (parity with DeepSeek Web) for
+  large autodefault payloads
+
+### Changed
+
+- **Autodefault guardrails** (informed by concurrent load harness runs): hard
+  payload pre-flight (no best-effort overflow tail); provider priority order aligned
+  with routing-priority spec; longcat removed from default model mappings
+- **Failover policy:** Gemini HTTP 503 classified as transient — rotate across
+  free sibling slots instead of skipping the provider band
+- **GitHub Models:** normalize OpenAI-compatible response content arrays before
+  deserialize
+- **Cooldown policy:** provider `quota-exhausted` overrides for daily-cap providers
+  (e.g. cloudflare, cerebras)
+
 ## [0.3.0-beta.21] - 2026-06-17
 
 ### Features
