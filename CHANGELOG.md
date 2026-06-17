@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.3.0-beta.21] - 2026-06-17
+
+### Features
+
+- **`upstream-emulator` crate:** catalog-faithful OpenAI-compatible upstream for
+  local autodefault routing, failover, pacing, and `provider-stats` without live
+  API keys
+- **Emulated dev stack:** `mise run dev:emulated`, `dev/secrets.emulated.yaml`,
+  `AI_GATEWAY_EMULATED` base-url rewrite, k6 `routing-autodefault.js` benchmark
+- **Gemini free slots:** `gemini-free-5` … `gemini-free-8` credential slots
+- **Mapper registry:** auto-register OpenAI-compatible converters for catalog
+  Named API-key providers (fixes failover `Converter not present` for longcat,
+  bazaarlink, and peers)
+
+### Changed
+
+- **Autodefault:** exclude `opencode` even when credentials are configured;
+  longcat leads free-provider budget rank
+- **Routing load:** pacing burst scenario uses `PacingRegistry` instead of ad-hoc
+  limits
+
 ## [0.3.0-beta.20] - 2026-06-17
 
 ### Features

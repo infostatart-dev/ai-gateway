@@ -25,7 +25,6 @@ fn payload_too_large_triggers_provider_failover() {
 
 #[test]
 fn default_provider_budget_order_matches_autodefault_policy() {
-    let opencode = InferenceProvider::Named("opencode".into());
     let longcat = InferenceProvider::Named("longcat".into());
     let github = InferenceProvider::Named("github-models".into());
     let mistral = InferenceProvider::Named("mistral".into());
@@ -35,10 +34,6 @@ fn default_provider_budget_order_matches_autodefault_policy() {
     let cloudflare = InferenceProvider::Named("cloudflare".into());
     let deepseek_web = InferenceProvider::Named("deepseek-web".into());
 
-    assert!(
-        default_provider_budget_rank(&opencode)
-            < default_provider_budget_rank(&longcat)
-    );
     assert!(
         default_provider_budget_rank(&longcat)
             < default_provider_budget_rank(&mistral)

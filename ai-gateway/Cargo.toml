@@ -109,6 +109,7 @@ tiktoken-rs = { version = "0.12.0", default-features = false }
 [dev-dependencies]
 cargo-husky = { workspace = true, features = ["user-hooks"] }
 pretty_assertions = { workspace = true }
+upstream-emulator = { path = "../crates/upstream-emulator" }
 
 [features]
 default = []
@@ -201,6 +202,7 @@ required-features = ["testing"]
 [[test]]
 name = "routing_load"
 required-features = ["testing"]
+
 
 # jemalloc does not build on Windows MSVC in CI; use the system allocator there.
 [target.'cfg(not(windows))'.dependencies]

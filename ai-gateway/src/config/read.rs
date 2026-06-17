@@ -137,7 +137,6 @@ fn build_autodefault_router(config: &Config) -> Option<RouterConfig> {
 
 fn autodefault_provider_order() -> Vec<InferenceProvider> {
     let mut order = vec![
-        InferenceProvider::Named("opencode".into()),
         InferenceProvider::Named("longcat".into()),
         InferenceProvider::Named("mistral".into()),
         InferenceProvider::OpenRouter,
@@ -189,6 +188,12 @@ fn is_available_for_autodefault(
     credentials: &crate::config::credentials::CredentialRegistry,
 ) -> bool {
     if !providers_config.contains_key(provider) {
+        return false;
+    }
+    if matches!(
+        provider,
+        InferenceProvider::Named(name) if name == "opencode"
+    ) {
         return false;
     }
     if crate::config::chatgpt_web::is_chatgpt_web(provider)
@@ -288,12 +293,12 @@ mod tests {
     }
 
     #[test]
-    fn autodefault_includes_opencode_with_secrets_entry() {
+    fn autodefault_excludes_opencode_even_with_secrets_entry() {
         let credentials = registry_from_secrets(
             "credentials:\n  opencode-default:\n    api-key: test-key\n",
         );
         let opencode = InferenceProvider::Named("opencode".into());
-        assert!(is_available_for_autodefault(
+        assert!(!is_available_for_autodefault(
             &opencode,
             &ProvidersConfig::default(),
             &credentials,

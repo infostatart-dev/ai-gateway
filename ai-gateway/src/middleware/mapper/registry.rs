@@ -339,7 +339,92 @@ impl EndpointConverterRegistryInner {
         ));
         registry.register_converter(key, converter);
 
+        registry.register_catalog_named_compatible(model_mapper);
+
         registry
+    }
+
+    fn register_catalog_named_compatible(
+        &mut self,
+        model_mapper: &ModelMapper,
+    ) {
+        use crate::config::{
+            provider_limits::ProviderLimitCatalog, providers::ProvidersConfig,
+        };
+        let providers = ProvidersConfig::default();
+        let limits = ProviderLimitCatalog::default();
+        let source = ApiEndpoint::OpenAI(OpenAI::chat_completions());
+        self.register_named_api_key_providers(
+            model_mapper,
+            &providers,
+            &limits,
+            &source,
+        );
+    }
+
+    fn register_named_api_key_providers(
+        &mut self,
+        model_mapper: &ModelMapper,
+        providers: &crate::config::providers::ProvidersConfig,
+        limits: &crate::config::provider_limits::ProviderLimitCatalog,
+        source: &ApiEndpoint,
+    ) {
+        for (provider, _) in providers.iter() {
+            let InferenceProvider::Named(_) = provider else {
+                continue;
+            };
+            if limits
+                .provider(provider)
+                .and_then(|entry| entry.scope.as_deref())
+                == Some("browser-session")
+            {
+                continue;
+            }
+            let target = ApiEndpoint::OpenAICompatible {
+                provider: provider.clone(),
+                openai_endpoint: OpenAI::chat_completions(),
+            };
+            let key = RegistryKey::new(source.clone(), target);
+            if self.converters.contains_key(&key) {
+                continue;
+            }
+            let converter = TypedEndpointConverter::<
+                endpoints::openai::ChatCompletions,
+                endpoints::openai::OpenAICompatibleChatCompletions,
+                OpenAICompatibleConverter,
+            >::new(OpenAICompatibleConverter::new(
+                provider.clone(),
+                model_mapper.clone(),
+            ));
+            self.register_converter(key, converter);
+        }
+    }
+
+    #[cfg(test)]
+    pub fn named_api_key_provider_keys(
+        providers: &crate::config::providers::ProvidersConfig,
+        limits: &crate::config::provider_limits::ProviderLimitCatalog,
+    ) -> Vec<RegistryKey> {
+        let source = ApiEndpoint::OpenAI(OpenAI::chat_completions());
+        let mut keys = Vec::new();
+        for (provider, _) in providers.iter() {
+            let InferenceProvider::Named(_) = provider else {
+                continue;
+            };
+            if limits
+                .provider(provider)
+                .and_then(|entry| entry.scope.as_deref())
+                == Some("browser-session")
+            {
+                continue;
+            }
+            let target = ApiEndpoint::OpenAICompatible {
+                provider: provider.clone(),
+                openai_endpoint: OpenAI::chat_completions(),
+            };
+            keys.push(RegistryKey::new(source.clone(), target));
+        }
+        keys
     }
 
     fn register_converter<C>(&mut self, key: RegistryKey, converter: C)
@@ -347,5 +432,43 @@ impl EndpointConverterRegistryInner {
         C: EndpointConverter + Send + Sync + 'static,
     {
         self.converters.insert(key, Box::new(converter));
+    }
+}
+
+#[cfg(test)]
+mod catalog_registry_tests {
+    use super::*;
+    use crate::config::{
+        provider_limits::ProviderLimitCatalog, providers::ProvidersConfig,
+    };
+
+    fn named_api_key_provider_in_catalog(name: &str) -> bool {
+        let providers = ProvidersConfig::default();
+        let limits = ProviderLimitCatalog::default();
+        let keys = EndpointConverterRegistryInner::named_api_key_provider_keys(
+            &providers, &limits,
+        );
+        let target = ApiEndpoint::OpenAICompatible {
+            provider: InferenceProvider::Named(name.into()),
+            openai_endpoint: OpenAI::chat_completions(),
+        };
+        let source = ApiEndpoint::OpenAI(OpenAI::chat_completions());
+        keys.contains(&RegistryKey::new(source, target))
+    }
+
+    #[test]
+    fn longcat_is_registered_as_named_api_key_provider() {
+        assert!(
+            named_api_key_provider_in_catalog("longcat"),
+            "longcat not in catalog as api-key provider"
+        );
+    }
+
+    #[test]
+    fn bazaarlink_is_registered_as_named_api_key_provider() {
+        assert!(
+            named_api_key_provider_in_catalog("bazaarlink"),
+            "bazaarlink not in catalog as api-key provider"
+        );
     }
 }

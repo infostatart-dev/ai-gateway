@@ -89,3 +89,37 @@ use `GROQ_FILTER_EXTRA_CHARS` from `routing_load::payload` and model `openai/gpt
 cargo build          # debug
 cargo build --release
 ```
+
+### Emulated autodefault stack (no live API keys)
+
+Measure routing, failover, and `provider-stats` against a **catalog-faithful
+upstream emulator** — not live providers.
+
+```bash
+# Terminal 1 — emulator + gateway (ports 5151 / 8080)
+mise run dev:emulated
+
+# Terminal 2 — smoke (hello + fat payload + stats)
+chmod +x dev/emulated-smoke.sh
+./dev/emulated-smoke.sh
+
+# Optional k6
+k6 run benchmarks/suite/routing-autodefault.js
+```
+
+| Payload class | Purpose | Pass criteria |
+|---------------|---------|---------------|
+| `hello` | wiring smoke | HTTP 200, stats `attempts >= 1` |
+| `fat` | payload-aware / TPM | `usage.prompt_tokens > 1000` (not stub 6+1) |
+| `burst` | RPM / failover | 429 when catalog RPM exceeded; multiple stats rows |
+
+Env vars:
+
+- `AI_GATEWAY_EMULATED=1` — rewrite all API-key `base-url` → emulator
+- `AI_GATEWAY_EMULATOR_URL` — default `http://127.0.0.1:5151`
+- `AI_GATEWAY_SECRETS_FILE` — use `dev/secrets.emulated.yaml` (synthetic keys)
+- Model: `openai/gpt-5.4-nano` (same as CLI banner)
+
+**Anti-patterns (v0 failures):** hardcoded `usage: 6+1`; manual provider URL
+lists in overlay config; `HttpFetch` web shim; missing mapper for catalog Named
+providers (`Converter not present` on failover); plain-text 429 bodies.

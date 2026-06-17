@@ -114,7 +114,7 @@ mod autodefault_scenario_tests {
     fn autodefault_providers() -> nonempty_collections::NESet<InferenceProvider>
     {
         nonempty_collections::nes![
-            InferenceProvider::Named("opencode".into()),
+            InferenceProvider::Named("longcat".into()),
             InferenceProvider::OpenRouter,
             InferenceProvider::Named("github-models".into()),
             InferenceProvider::Named("mistral".into()),
@@ -130,9 +130,9 @@ mod autodefault_scenario_tests {
         let app_state = AppState::test_default().await;
         let mut provider_priorities = indexmap::IndexMap::new();
         provider_priorities
-            .insert(InferenceProvider::Named("opencode".into()), 0);
+            .insert(InferenceProvider::Named("longcat".into()), 0);
         provider_priorities
-            .insert(InferenceProvider::Named("mistral".into()), 2);
+            .insert(InferenceProvider::Named("mistral".into()), 1);
         provider_priorities.insert(InferenceProvider::OpenRouter, 3);
         provider_priorities
             .insert(InferenceProvider::Named("github-models".into()), 4);
@@ -195,13 +195,13 @@ mod autodefault_scenario_tests {
 
         assert_eq!(
             ordered[0].0,
-            InferenceProvider::Named("opencode".into()),
+            InferenceProvider::Named("longcat".into()),
             "cheapest provider first: {ordered:?}"
         );
         assert!(
-            ordered[0].1.contains("nemotron-3-ultra-free"),
-            "json_schema + gpt-5-mini reasoning profile must pick nemotron on \
-             opencode, got {}",
+            ordered[0].1.contains("LongCat-Flash-Lite"),
+            "json_schema + gpt-5-mini must pick longcat flash lite first, got \
+             {}",
             ordered[0].1
         );
 
@@ -291,11 +291,10 @@ mod autodefault_scenario_tests {
 
         let ordered: Vec<_> = candidates.iter().map(candidate_key).collect();
 
-        assert_eq!(ordered[0].0, InferenceProvider::Named("opencode".into()));
+        assert_eq!(ordered[0].0, InferenceProvider::Named("longcat".into()));
         assert!(
-            ordered[0].1.contains("nemotron-3-ultra-free"),
-            "reasoning profile must pick nemotron (reasoning+json_schema) on \
-             opencode, got {}",
+            ordered[0].1.contains("LongCat-Flash-Lite"),
+            "gpt-5-mini must map to longcat first, got {}",
             ordered[0].1
         );
         assert!(

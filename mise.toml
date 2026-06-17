@@ -50,3 +50,19 @@ run = "openspec validate --strict"
 [tasks."openspec:list"]
 description = "List active OpenSpec changes"
 run = "openspec list"
+
+[tasks."dev:emulated"]
+description = "Emulated autodefault stack: upstream-emulator :5151 + gateway :8080 (no live keys)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+export AI_GATEWAY_SECRETS_FILE="${AI_GATEWAY_SECRETS_FILE:-$ROOT/dev/secrets.emulated.yaml}"
+export AI_GATEWAY_EMULATED=1
+export AI_GATEWAY_EMULATOR_URL="${AI_GATEWAY_EMULATOR_URL:-http://127.0.0.1:5151}"
+cargo run -p upstream-emulator -- --port 5151 &
+EMU_PID=$!
+trap 'kill $EMU_PID 2>/dev/null || true' EXIT
+sleep 1
+cargo run -p ai-gateway -- -c ./ai-gateway/config/emulated.yaml
+"""

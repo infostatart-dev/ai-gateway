@@ -35,9 +35,8 @@ pub(crate) fn default_provider_budget_rank(
     provider: &InferenceProvider,
 ) -> u16 {
     match provider {
-        InferenceProvider::Named(name) if name == "opencode" => 0,
-        InferenceProvider::Named(name) if name == "longcat" => 1,
-        InferenceProvider::Named(name) if name == "mistral" => 2,
+        InferenceProvider::Named(name) if name == "longcat" => 0,
+        InferenceProvider::Named(name) if name == "mistral" => 1,
         InferenceProvider::Ollama | InferenceProvider::OpenRouter => 3,
         InferenceProvider::Named(name) if name == "github-models" => 4,
         InferenceProvider::Named(name) if name == "bazaarlink" => 5,

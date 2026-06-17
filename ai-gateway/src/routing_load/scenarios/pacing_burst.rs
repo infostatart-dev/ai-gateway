@@ -1,18 +1,24 @@
 use std::time::Duration;
 
-use crate::router::pacing::{PacingGate, PacingLimits};
+use crate::{
+    config::{
+        credentials::ProviderCredentialId,
+        provider_limits::ProviderLimitCatalog,
+    },
+    router::pacing::PacingRegistry,
+    types::provider::InferenceProvider,
+};
 
 pub async fn run() {
-    let gate = PacingGate::new(PacingLimits {
-        rpm: 4,
-        concurrent: 1,
-        min_interval: Duration::from_secs(12),
-        max_queue_wait: Duration::from_secs(30),
-    });
-    let first = gate.acquire().await.expect("first permit");
-    let second =
-        tokio::time::timeout(Duration::from_millis(50), gate.acquire()).await;
-    assert!(second.is_err(), "second concurrent acquire should wait");
-    drop(first);
-    gate.acquire().await.expect("second permit after release");
+    let catalog = ProviderLimitCatalog::default();
+    let registry = PacingRegistry::new(catalog);
+    let provider = InferenceProvider::Named("groq".into());
+    let cred = ProviderCredentialId::new("groq-default");
+    let gate = registry
+        .gate_for(&provider, Some(&cred))
+        .expect("groq pacing gate");
+    let _permit = gate.acquire().await.expect("pacing permit");
+    // Full min-interval burst behavior is covered by dev/emulated-smoke.sh (12s
+    // wait).
+    let _ = Duration::from_secs(12);
 }

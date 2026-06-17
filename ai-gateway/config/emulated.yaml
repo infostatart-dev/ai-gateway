@@ -1,0 +1,13 @@
+telemetry:
+  level: "info,ai_gateway=info"
+  exporter: stdout
+
+server:
+  port: 8080
+
+helicone:
+  features: none
+
+observability:
+  provider-stats:
+    enabled: true

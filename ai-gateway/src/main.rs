@@ -231,6 +231,8 @@ fn load_and_validate_config(
         tracing::error!(error = %e, "configuration validation failed");
     })?;
 
+    ai_gateway::emulated::apply_if_enabled(&mut config);
+
     if !config.has_autodefault_router()
         && config.credentials.has_for(
             &ai_gateway::types::provider::InferenceProvider::Named(
