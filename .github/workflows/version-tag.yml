@@ -46,32 +46,38 @@ jobs:
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
           echo "Workspace version: $version"
 
-      - name: Resolve release tag at HEAD
+      - name: Resolve release tag
         id: tag
         run: |
           set -euo pipefail
           tag="${{ steps.ver.outputs.tag }}"
           head=$(git rev-parse HEAD)
 
+          resolve_tag() {
+            local tagged="$1"
+            if [ "$tagged" = "$head" ]; then
+              echo "created=false" >> "$GITHUB_OUTPUT"
+              echo "Tag $tag already at HEAD."
+              return 0
+            fi
+            if git merge-base --is-ancestor "$tagged" "$head"; then
+              echo "created=false" >> "$GITHUB_OUTPUT"
+              echo "Tag $tag at $tagged is an ancestor of HEAD — reusing for dispatch."
+              return 0
+            fi
+            echo "::error::Tag $tag points to $tagged but is not an ancestor of HEAD ($head)"
+            exit 1
+          }
+
           if git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1; then
             tagged=$(git rev-parse "$tag^{commit}")
-            if [ "$tagged" != "$head" ]; then
-              echo "::error::Tag $tag points to $tagged but HEAD is $head"
-              exit 1
-            fi
-            echo "created=false" >> "$GITHUB_OUTPUT"
-            echo "Tag $tag already at HEAD."
+            resolve_tag "$tagged"
           else
             remote_sha=$(git ls-remote --tags origin "refs/tags/$tag" \
               | awk '{print $1}' | head -n1 || true)
             if [ -n "$remote_sha" ]; then
               tagged=$(git rev-parse "$remote_sha^{commit}" 2>/dev/null || echo "$remote_sha")
-              if [ "$tagged" != "$head" ]; then
-                echo "::error::Remote tag $tag does not match HEAD ($head)"
-                exit 1
-              fi
-              echo "created=false" >> "$GITHUB_OUTPUT"
-              echo "Remote tag $tag already at HEAD."
+              resolve_tag "$tagged"
             else
               echo "created=true" >> "$GITHUB_OUTPUT"
               echo "Tag $tag is new — will create at HEAD."
