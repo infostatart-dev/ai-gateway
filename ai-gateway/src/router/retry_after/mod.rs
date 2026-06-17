@@ -9,7 +9,7 @@ mod abuse;
 
 use std::time::Duration;
 
-use abuse::looks_like_abuse_block;
+use abuse::{looks_like_abuse_block, looks_like_unsupported_model};
 pub use body::extract_retry_after_from_body;
 use bytes::Bytes;
 pub use classify::FailureKind;
@@ -138,6 +138,25 @@ pub async fn classify_and_cooldown(
         return (response, cooldown, class);
     }
 
+    if matches!(status, StatusCode::BAD_REQUEST) {
+        let (parts, body_bytes) = collect_response_body(response).await;
+        let cooldown =
+            if looks_like_unsupported_model(Some(body_bytes.as_ref())) {
+                tracing::warn!(
+                    cooldown_kind = "auth-error",
+                    "upstream 400 classified as unsupported model"
+                );
+                config.auth_error + config.retry_after_buffer
+            } else {
+                config.provider_error + config.retry_after_buffer
+            };
+        let response = Response::from_parts(
+            parts,
+            axum_core::body::Body::from(body_bytes),
+        );
+        return (response, cooldown, FailoverClass::Transient);
+    }
+
     if matches!(
         status,
         StatusCode::UNAUTHORIZED
@@ -179,7 +198,7 @@ pub async fn classify_and_cooldown(
             parts,
             axum_core::body::Body::from(body_bytes),
         );
-        return (response, cooldown, FailoverClass::Overload);
+        return (response, cooldown, FailoverClass::Transient);
     }
 
     (response, config.provider_error, FailoverClass::Transient)
@@ -226,6 +245,24 @@ mod tests {
         assert_eq!(
             cooldown,
             config.quota_exhausted + config.retry_after_buffer
+        );
+    }
+
+    #[test]
+    fn cloudflare_quota_exhausted_uses_provider_override() {
+        let catalog = ProviderLimitCatalog::default();
+        let config = catalog
+            .cooldown_for(&InferenceProvider::Named("cloudflare".into()));
+        let body =
+            br#"{"error":{"message":"daily free allocation exhausted"}}"#;
+        let cooldown = rate_limit_cooldown(
+            &HeaderMap::new(),
+            Some(body.as_ref()),
+            &config,
+        );
+        assert_eq!(
+            cooldown,
+            Duration::from_secs(24 * 3600) + config.retry_after_buffer
         );
     }
 

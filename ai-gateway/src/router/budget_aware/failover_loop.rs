@@ -21,6 +21,7 @@ use crate::{
     },
 };
 
+#[allow(clippy::too_many_lines)]
 pub async fn run_failover_candidates(
     this: BudgetAwareRouter,
     parts: Parts,
@@ -44,6 +45,11 @@ pub async fn run_failover_candidates(
             route_trace.record_skipped(1);
             continue;
         }
+        let model_id = candidate.capability.model.to_string();
+        if budget_probe_skips(&this, candidate, model_id.as_str()).await {
+            route_trace.record_skipped(1);
+            continue;
+        }
 
         route_trace.record_attempt();
         let mut req =
@@ -55,6 +61,11 @@ pub async fn run_failover_candidates(
             credential: candidate.credential_id.to_string(),
         };
         req.extensions_mut().insert(attempt_ctx.clone());
+        if let Some(tokens) = requirements.min_context_tokens {
+            req.extensions_mut().insert(
+                crate::types::extensions::GatewayPayloadEstimate(tokens),
+            );
+        }
         let start = std::time::Instant::now();
         let response = call::call_candidate(candidate, req).await?;
         let elapsed = start.elapsed();
@@ -290,6 +301,9 @@ async fn handle_successful_candidate(
     if let Some(ds) = response.extensions().get::<trace::DeepSeekWebTrace>() {
         route_trace.record_deepseek_web(*ds);
     }
+    if let Some(cg) = response.extensions().get::<trace::ChatGptWebTrace>() {
+        route_trace.record_chatgpt_web(*cg);
+    }
     Ok(Some(response))
 }
 
@@ -357,10 +371,7 @@ fn skip_free_siblings_on_exhaustion(
     class: FailoverClass,
     failed_credentials: &mut HashSet<ProviderCredentialId>,
 ) -> usize {
-    if !matches!(
-        class,
-        FailoverClass::QuotaExhausted | FailoverClass::Overload
-    ) {
+    if !matches!(class, FailoverClass::QuotaExhausted) {
         return 0;
     }
     let mut skipped = 0;
@@ -384,4 +395,30 @@ fn next_distinct_provider<'a>(
         .iter()
         .find(|next| !failed_credentials.contains(&next.credential_id))
         .map(|c| &c.capability.provider)
+}
+
+async fn budget_probe_skips(
+    router: &BudgetAwareRouter,
+    candidate: &BudgetCandidate,
+    model: &str,
+) -> bool {
+    let skip = router
+        .app_state
+        .budget_probe()
+        .should_skip_candidate(
+            &router.app_state.config().credentials,
+            &candidate.capability.provider,
+            &candidate.credential_id,
+            model,
+        )
+        .await;
+    if skip {
+        tracing::debug!(
+            credential = %candidate.credential_id,
+            provider = %candidate.capability.provider,
+            model = %candidate.capability.model,
+            "skipping candidate with exhausted paid budget"
+        );
+    }
+    skip
 }

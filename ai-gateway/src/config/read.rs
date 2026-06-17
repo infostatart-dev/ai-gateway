@@ -137,10 +137,10 @@ fn build_autodefault_router(config: &Config) -> Option<RouterConfig> {
 
 fn autodefault_provider_order() -> Vec<InferenceProvider> {
     let mut order = vec![
-        InferenceProvider::Named("longcat".into()),
-        InferenceProvider::Named("mistral".into()),
+        InferenceProvider::Named("opencode".into()),
         InferenceProvider::OpenRouter,
         InferenceProvider::Named("github-models".into()),
+        InferenceProvider::Named("mistral".into()),
         InferenceProvider::Named("bazaarlink".into()),
         InferenceProvider::Named("bluesminds".into()),
         InferenceProvider::Named("groq".into()),
@@ -156,6 +156,7 @@ fn autodefault_provider_order() -> Vec<InferenceProvider> {
     order.push(InferenceProvider::Named("deepseek-web".into()));
     order.extend([InferenceProvider::Anthropic, InferenceProvider::OpenAI]);
     order.push(InferenceProvider::Named("chatgpt-web".into()));
+    order.push(InferenceProvider::Named("longcat".into()));
     order
 }
 
@@ -357,12 +358,12 @@ credentials:
             .get(&github)
             .copied()
             .expect("github-models in autodefault");
-        assert!(mistral_rank < openrouter_rank);
         assert!(openrouter_rank < github_rank);
+        assert!(github_rank < mistral_rank);
     }
 
     #[test]
-    fn autodefault_longcat_precedes_openrouter_when_configured() {
+    fn autodefault_longcat_ranks_after_openrouter_when_configured() {
         let providers = ProvidersConfig::default();
         let credentials = registry_from_secrets(
             r#"
@@ -403,7 +404,7 @@ credentials:
             .get(&InferenceProvider::OpenRouter)
             .copied()
             .expect("openrouter in autodefault");
-        assert!(longcat_rank < openrouter_rank);
+        assert!(openrouter_rank < longcat_rank);
     }
 
     #[test]

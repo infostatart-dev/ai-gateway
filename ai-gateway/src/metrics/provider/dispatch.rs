@@ -128,6 +128,9 @@ pub fn emit_pending_route_trace(
             pending.deepseek_web.map_or(0, |d| d.upload_parts),
         deepseek_web_pow_cache_hits =
             pending.deepseek_web.map_or(0, |d| d.pow_cache_hits),
+        chatgpt_web_turns = pending.chatgpt_web.map_or(0, |c| c.turns),
+        chatgpt_web_upload_parts =
+            pending.chatgpt_web.map_or(0, |c| c.upload_parts),
         "budget-aware route summary"
     );
 }

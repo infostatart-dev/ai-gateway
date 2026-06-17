@@ -63,6 +63,10 @@ pub struct RouterRuntimeLabels {
     pub strategy: &'static str,
 }
 
+/// Estimated payload tokens attached by the budget-aware router for pacing.
+#[derive(Debug, Clone, Copy)]
+pub struct GatewayPayloadEstimate(pub u32);
+
 /// Upstream hop identity for provider observability (`gateway_provider_*`).
 #[derive(Debug, Clone)]
 pub struct UpstreamAttemptContext {
@@ -90,4 +94,5 @@ pub struct PendingRouteTrace {
     pub terminal_credential: Option<String>,
     pub terminal_status: Option<u16>,
     pub deepseek_web: Option<crate::router::budget_aware::DeepSeekWebTrace>,
+    pub chatgpt_web: Option<crate::router::budget_aware::ChatGptWebTrace>,
 }

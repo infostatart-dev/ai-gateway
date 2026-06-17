@@ -84,7 +84,7 @@ gpt-5-mini:
         let first = mappings.first();
         assert_eq!(
             first.inference_provider(),
-            Some(InferenceProvider::Named("longcat".into()))
+            Some(InferenceProvider::Named("bazaarlink".into()))
         );
 
         let openrouter_models: Vec<_> = mappings
@@ -118,22 +118,23 @@ gpt-5-mini:
             .collect();
 
         let first = providers.first().expect("first mapping");
-        assert_eq!(*first, InferenceProvider::Named("longcat".into()));
+        assert_eq!(*first, InferenceProvider::Named("bazaarlink".into()));
 
         let anthropic_pos = providers
             .iter()
             .position(|p| *p == InferenceProvider::Anthropic)
             .expect("anthropic fallback");
-        let longcat_pos = providers
+        let bazaarlink_pos = providers
             .iter()
-            .position(|p| *p == InferenceProvider::Named("longcat".into()))
-            .expect("longcat entry");
-        assert!(longcat_pos < anthropic_pos);
+            .position(|p| *p == InferenceProvider::Named("bazaarlink".into()))
+            .expect("bazaarlink entry");
+        assert!(bazaarlink_pos < anthropic_pos);
 
         let first_model = mappings.first().to_string();
-        assert_eq!(
-            first_model, "LongCat-Flash-Lite",
-            "first nano mapping must be longcat, got {first_model}"
+        assert!(
+            first_model.contains("auto:free"),
+            "first nano mapping must be bazaarlink free router, got \
+             {first_model}"
         );
     }
 }

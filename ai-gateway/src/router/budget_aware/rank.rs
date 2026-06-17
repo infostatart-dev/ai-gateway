@@ -30,30 +30,40 @@ pub(super) fn default_budget_rank(capability: &ModelCapability) -> u16 {
 }
 
 /// Provider priority within a cost-class band (lower = tried first).
+/// Order: opencode → openrouter → github-models → mistral → groq → cerebras →
+/// cloudflare → gemini → deepseek-web → anthropic → openai → chatgpt-web.
 #[allow(clippy::match_same_arms)]
 pub(crate) fn default_provider_budget_rank(
     provider: &InferenceProvider,
 ) -> u16 {
     match provider {
-        InferenceProvider::Named(name) if name == "longcat" => 0,
-        InferenceProvider::Named(name) if name == "mistral" => 1,
-        InferenceProvider::Ollama | InferenceProvider::OpenRouter => 3,
-        InferenceProvider::Named(name) if name == "github-models" => 4,
-        InferenceProvider::Named(name) if name == "bazaarlink" => 5,
-        InferenceProvider::Named(name) if name == "bluesminds" => 6,
-        InferenceProvider::Named(name) if name == "groq" => 7,
-        InferenceProvider::Named(name) if name == "cerebras" => 8,
-        InferenceProvider::Named(name) if name == "cloudflare" => 9,
-        InferenceProvider::Named(name) if name == "sambanova" => 10,
-        InferenceProvider::Named(name) if name == "inclusionai" => 11,
-        InferenceProvider::Named(name) if name == "ollama-cloud" => 12,
-        InferenceProvider::Named(name) if name == "cohere" => 13,
-        InferenceProvider::Named(name) if name == "doubao" => 14,
-        InferenceProvider::GoogleGemini => 15,
-        InferenceProvider::Named(name) if name == "deepseek-web" => 16,
-        InferenceProvider::Anthropic => 0,
-        InferenceProvider::OpenAI => 1,
-        InferenceProvider::Named(name) if name == "chatgpt-web" => 0,
+        InferenceProvider::Named(name) if name == "opencode" => 0,
+        InferenceProvider::Ollama | InferenceProvider::OpenRouter => 1,
+        InferenceProvider::Named(name) if name == "github-models" => 2,
+        InferenceProvider::Named(name) if name == "mistral" => 3,
+        InferenceProvider::Named(name) if name == "groq" => 4,
+        InferenceProvider::Named(name) if name == "cerebras" => 5,
+        InferenceProvider::Named(name) if name == "cloudflare" => 6,
+        InferenceProvider::GoogleGemini => 7,
+        InferenceProvider::Named(name) if name == "deepseek-web" => 8,
+        InferenceProvider::Anthropic => 9,
+        InferenceProvider::OpenAI => 10,
+        InferenceProvider::Named(name) if name == "chatgpt-web" => 11,
+        InferenceProvider::Named(name)
+            if matches!(
+                name.as_str(),
+                "bazaarlink"
+                    | "bluesminds"
+                    | "sambanova"
+                    | "inclusionai"
+                    | "ollama-cloud"
+                    | "cohere"
+                    | "doubao"
+            ) =>
+        {
+            20
+        }
+        InferenceProvider::Named(name) if name == "longcat" => 30,
         InferenceProvider::Named(name) if name == "deepseek" => 10,
         InferenceProvider::Bedrock => 50,
         InferenceProvider::Named(_) => 25,

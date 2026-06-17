@@ -11,10 +11,10 @@ pub async fn run() {
     let gate = registry
         .gate_for(&provider, None)
         .expect("chatgpt-web pacing gate");
-    let first = gate.acquire().await.expect("first permit");
+    let first = gate.acquire(0).await.expect("first permit");
     let second =
-        tokio::time::timeout(Duration::from_millis(50), gate.acquire()).await;
+        tokio::time::timeout(Duration::from_millis(50), gate.acquire(0)).await;
     assert!(second.is_err(), "second concurrent acquire should wait");
     drop(first);
-    gate.acquire().await.expect("second permit after release");
+    gate.acquire(0).await.expect("second permit after release");
 }

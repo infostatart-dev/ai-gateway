@@ -23,7 +23,7 @@ mod tower;
 mod trace;
 mod types;
 
-pub use trace::DeepSeekWebTrace;
+pub use trace::{ChatGptWebTrace, DeepSeekWebTrace};
 
 #[cfg(test)]
 mod tests;

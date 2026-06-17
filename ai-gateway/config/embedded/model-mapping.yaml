@@ -41,7 +41,6 @@ gpt-4o-mini:
   - "bedrock/us.anthropic.claude-3-5-haiku-20241022-v1:0"
   - "deepseek/deepseek-chat"
 gpt-5-mini:
-  - "longcat/LongCat-Flash-Lite"
   - "bazaarlink/auto:free"
   - "openrouter/openrouter/free"
   - "openrouter/nvidia/nemotron-3-nano-30b-a3b:free"
@@ -121,7 +120,6 @@ gpt-4.5:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 gpt-5.4-nano:
-  - longcat/LongCat-Flash-Lite
   - bazaarlink/auto:free
   - openrouter/openrouter/free
   - openrouter/nvidia/nemotron-3-nano-30b-a3b:free
@@ -142,7 +140,6 @@ gpt-5.4-nano:
   - anthropic/claude-3-5-haiku
   - deepseek/deepseek-chat
 gpt-5.4-mini:
-  - longcat/LongCat-Flash-Lite
   - bazaarlink/auto:free
   - openrouter/openrouter/free
   - openrouter/nvidia/nemotron-3-nano-30b-a3b:free

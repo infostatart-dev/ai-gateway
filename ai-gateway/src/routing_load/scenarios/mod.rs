@@ -1,4 +1,5 @@
 pub mod chatgpt_last_resort;
+pub mod failover_daily_quota;
 pub mod failover_quota;
 pub mod failover_rpm;
 pub mod harness_payload_filter;

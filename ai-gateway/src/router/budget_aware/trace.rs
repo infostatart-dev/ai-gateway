@@ -19,6 +19,13 @@ pub struct DeepSeekWebTrace {
     pub pow_cache_hits: u32,
 }
 
+/// `ChatGPT` Web multi-turn execution stats attached to dispatch responses.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ChatGptWebTrace {
+    pub turns: u32,
+    pub upload_parts: u32,
+}
+
 /// The terminal upstream a request settled on (or none).
 pub(super) struct RouteOutcome<'a> {
     pub label: &'static str,
@@ -33,6 +40,7 @@ pub(super) struct RouteTrace {
     attempts: u32,
     skipped: usize,
     deepseek_web: Option<DeepSeekWebTrace>,
+    chatgpt_web: Option<ChatGptWebTrace>,
 }
 
 impl RouteTrace {
@@ -43,11 +51,16 @@ impl RouteTrace {
             attempts: 0,
             skipped: 0,
             deepseek_web: None,
+            chatgpt_web: None,
         }
     }
 
     pub(super) fn record_deepseek_web(&mut self, trace: DeepSeekWebTrace) {
         self.deepseek_web = Some(trace);
+    }
+
+    pub(super) fn record_chatgpt_web(&mut self, trace: ChatGptWebTrace) {
+        self.chatgpt_web = Some(trace);
     }
 
     pub(super) fn record_attempt(&mut self) {
@@ -81,6 +94,7 @@ impl RouteTrace {
                 .map(ProviderCredentialId::to_string),
             terminal_status: outcome.status,
             deepseek_web: self.deepseek_web,
+            chatgpt_web: self.chatgpt_web,
         }
     }
 

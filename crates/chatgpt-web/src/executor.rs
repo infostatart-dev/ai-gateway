@@ -41,10 +41,17 @@ pub struct ExecuteRequest {
     pub session_path: Option<std::path::PathBuf>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ExecuteStats {
+    pub turns: u32,
+    pub upload_parts: u32,
+}
+
 #[derive(Debug, Clone)]
 pub struct ExecuteResult {
     pub status: u16,
     pub body: Vec<u8>,
+    pub stats: ExecuteStats,
 }
 
 pub struct Executor {
@@ -113,7 +120,7 @@ impl Executor {
                 )
                 .await
             {
-                Ok((new_cookie, response)) => {
+                Ok((new_cookie, response, stats)) => {
                     if new_cookie != cookie {
                         cookie = new_cookie.clone();
                         if let Some(path) = &req.session_path {
@@ -148,6 +155,7 @@ impl Executor {
                     return Ok(ExecuteResult {
                         status: 200,
                         body: serde_json::to_vec(&response)?,
+                        stats,
                     });
                 }
                 Err(e) => return Err(e),
@@ -163,7 +171,7 @@ impl Executor {
         messages: &[Value],
         retry_suffix: Option<&'static str>,
         reserved_output_tokens: u32,
-    ) -> Result<(String, Value), Error> {
+    ) -> Result<(String, Value, ExecuteStats), Error> {
         let token = exchange_session(self.fetch.as_ref(), cookie).await?;
         let cookie = token
             .refreshed_cookie
@@ -252,8 +260,27 @@ impl Executor {
                 && plan.turns[0].user_msg.trim().is_empty()
                 && plan.turns[0].system_msg.trim().is_empty())
         {
-            return Ok((cookie, serde_json::json!({})));
+            return Ok((
+                cookie,
+                serde_json::json!({}),
+                ExecuteStats::default(),
+            ));
         }
+
+        let upload_parts = plan
+            .turns
+            .iter()
+            .filter(|t| {
+                matches!(
+                    t.kind,
+                    web_message_budget::WebTurnKind::ContextUpload { .. }
+                )
+            })
+            .count() as u32;
+        let mut stats = ExecuteStats {
+            upload_parts,
+            ..ExecuteStats::default()
+        };
 
         let model_slug = map_model(model);
         let mut conversation_id: Option<String> = None;
@@ -261,6 +288,7 @@ impl Executor {
         let turn_count = plan.turns.len();
 
         for (idx, turn) in plan.turns.iter().enumerate() {
+            stats.turns += 1;
             let is_final = idx + 1 == turn_count;
             let mut system_msg = turn.system_msg.clone();
             if is_final && let Some(suffix) = retry_suffix {
@@ -329,6 +357,7 @@ impl Executor {
                 return Ok((
                     cookie,
                     build_non_streaming_response(model, &meta.content),
+                    stats,
                 ));
             }
             conversation_id =
@@ -426,6 +455,7 @@ fn error_body(status: u16, message: &str) -> ExecuteResult {
         })
         .to_string()
         .into_bytes(),
+        stats: ExecuteStats::default(),
     }
 }
 

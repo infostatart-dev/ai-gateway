@@ -114,7 +114,7 @@ mod autodefault_scenario_tests {
     fn autodefault_providers() -> nonempty_collections::NESet<InferenceProvider>
     {
         nonempty_collections::nes![
-            InferenceProvider::Named("longcat".into()),
+            InferenceProvider::Named("bazaarlink".into()),
             InferenceProvider::OpenRouter,
             InferenceProvider::Named("github-models".into()),
             InferenceProvider::Named("mistral".into()),
@@ -130,12 +130,12 @@ mod autodefault_scenario_tests {
         let app_state = AppState::test_default().await;
         let mut provider_priorities = indexmap::IndexMap::new();
         provider_priorities
-            .insert(InferenceProvider::Named("longcat".into()), 0);
+            .insert(InferenceProvider::Named("bazaarlink".into()), 20);
         provider_priorities
-            .insert(InferenceProvider::Named("mistral".into()), 1);
-        provider_priorities.insert(InferenceProvider::OpenRouter, 3);
+            .insert(InferenceProvider::Named("mistral".into()), 3);
+        provider_priorities.insert(InferenceProvider::OpenRouter, 1);
         provider_priorities
-            .insert(InferenceProvider::Named("github-models".into()), 4);
+            .insert(InferenceProvider::Named("github-models".into()), 2);
         provider_priorities.insert(InferenceProvider::Named("groq".into()), 7);
         provider_priorities
             .insert(InferenceProvider::Named("cerebras".into()), 8);
@@ -195,14 +195,8 @@ mod autodefault_scenario_tests {
 
         assert_eq!(
             ordered[0].0,
-            InferenceProvider::Named("longcat".into()),
+            InferenceProvider::OpenRouter,
             "cheapest provider first: {ordered:?}"
-        );
-        assert!(
-            ordered[0].1.contains("LongCat-Flash-Lite"),
-            "json_schema + gpt-5-mini must pick longcat flash lite first, got \
-             {}",
-            ordered[0].1
         );
 
         let groq = ordered
@@ -291,12 +285,7 @@ mod autodefault_scenario_tests {
 
         let ordered: Vec<_> = candidates.iter().map(candidate_key).collect();
 
-        assert_eq!(ordered[0].0, InferenceProvider::Named("longcat".into()));
-        assert!(
-            ordered[0].1.contains("LongCat-Flash-Lite"),
-            "gpt-5-mini must map to longcat first, got {}",
-            ordered[0].1
-        );
+        assert_eq!(ordered[0].0, InferenceProvider::OpenRouter);
         assert!(
             ordered.windows(2).all(|window| {
                 let left = candidates

@@ -1,6 +1,12 @@
 use serde_json::Value;
 
 #[must_use]
+pub fn looks_like_unsupported_model(body: Option<&[u8]>) -> bool {
+    let text = body_to_lower_text(body);
+    text.contains("unsupported model")
+}
+
+#[must_use]
 pub fn looks_like_abuse_block(body: Option<&[u8]>) -> bool {
     let text = body_to_lower_text(body);
     if text.is_empty() {
@@ -37,6 +43,12 @@ fn body_to_lower_text(body: Option<&[u8]>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unsupported_model_body_triggers_auth_cooldown() {
+        let body = br#"{"error":{"message":"Unsupported model (model=LongCat-Flash-Lite)"}}"#;
+        assert!(looks_like_unsupported_model(Some(body)));
+    }
 
     #[test]
     fn unusual_activity_body_is_abuse() {

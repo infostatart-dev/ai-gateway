@@ -146,6 +146,7 @@ fn turn_pacing_hook(
                 &app_state,
                 &provider,
                 credential_id.as_ref(),
+                0,
             )
             .await
             .map_err(|e| deepseek_web::Error::Other(e.to_string()))?;

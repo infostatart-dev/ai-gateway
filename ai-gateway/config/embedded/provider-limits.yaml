@@ -655,6 +655,8 @@ groq:
 cerebras:
   cooldown:
     provider-error: 20s
+    quota-exhausted: 24h
+  daily-reset-utc-hour: 0
   observed-at: "2026-06-13"
   scope: api-key
   source: cerebras-inference-docs
@@ -736,6 +738,8 @@ github-models:
 cloudflare:
   cooldown:
     provider-error: 30s
+    quota-exhausted: 24h
+  daily-reset-utc-hour: 0
   observed-at: "2026-06-13"
   scope: account
   source: cloudflare-workers-ai-pricing
@@ -885,6 +889,9 @@ longcat:
   notes:
     - Public beta; no paid quota. Flash-Lite ~50M tokens/day; Flash-Chat ~500K/day
       (up to 5M/day after quota request).
+    - Exclude from autodefault until API access and model slug are confirmed.
+  cooldown:
+    auth-error: 24h
   tiers:
     free:
       endpoints:

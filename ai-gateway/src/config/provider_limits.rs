@@ -103,6 +103,10 @@ pub struct ProviderLimitConfig {
     pub scope: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub daily_reset_utc_hour: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_ttfb_ms: Option<u64>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<String>,
     #[serde(
@@ -121,6 +125,8 @@ impl Default for ProviderLimitConfig {
             observed_at: None,
             scope: None,
             source: None,
+            daily_reset_utc_hour: None,
+            expected_ttfb_ms: None,
             notes: Vec::new(),
             cooldown: ProviderCooldownOverrides::default(),
             runtime_sources: IndexMap::new(),

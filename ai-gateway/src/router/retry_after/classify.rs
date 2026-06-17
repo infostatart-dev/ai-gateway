@@ -40,6 +40,7 @@ fn quota_patterns() -> &'static [regex::Regex] {
         [
             r"(?i)daily.*limit",
             r"(?i)daily.*quota",
+            r"(?i)daily.*alloc",
             r"(?i)per.?day.*limit",
             r"(?i)monthly.*limit",
             r"(?i)monthly.*quota",

@@ -15,6 +15,7 @@ use crate::{
         outcome::{DispatchOutcome, outcome_from_bytes},
     },
     error::{api::ApiError, internal::InternalError},
+    router::budget_aware::ChatGptWebTrace,
     types::request::Request,
 };
 
@@ -82,6 +83,12 @@ impl Dispatcher {
             }
         };
 
+        tracing::info!(
+            chatgpt_web_turns = result.stats.turns,
+            chatgpt_web_upload_parts = result.stats.upload_parts,
+            "chatgpt-web executor stats"
+        );
+
         let status = StatusCode::from_u16(result.status)
             .unwrap_or(StatusCode::BAD_GATEWAY);
         let mut headers = HeaderMap::new();
@@ -90,7 +97,7 @@ impl Dispatcher {
             http::HeaderValue::from_static("application/json"),
         );
         let response_body = Bytes::from(result.body);
-        outcome_from_bytes(
+        let mut outcome = outcome_from_bytes(
             status,
             headers,
             &response_body,
@@ -98,7 +105,12 @@ impl Dispatcher {
             req_body_bytes,
             request_headers,
         )
-        .map_err(ApiError::Internal)
+        .map_err(ApiError::Internal)?;
+        outcome.response.extensions_mut().insert(ChatGptWebTrace {
+            turns: result.stats.turns,
+            upload_parts: result.stats.upload_parts,
+        });
+        Ok(outcome)
     }
 }
 

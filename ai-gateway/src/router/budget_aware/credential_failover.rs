@@ -239,7 +239,7 @@ mod tests {
 
     #[tokio::test]
     #[serial_test::serial]
-    async fn gemini_overload_skips_remaining_free_siblings_to_paid() {
+    async fn gemini_overload_rotates_to_next_free_sibling() {
         clear_test_call_responses();
         push_test_call_response(Ok(overload_503()));
         push_test_call_response(Ok(ok_response()));
@@ -262,12 +262,12 @@ mod tests {
             RequestRequirements::default(),
         )
         .await
-        .expect("failover reaches paid after overload skip");
+        .expect("failover reaches next free sibling after overload");
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             routed_identity(&response),
-            "gemini-default/gemini-2.5-flash"
+            "gemini-free-2/gemini-2.5-flash"
         );
     }
 

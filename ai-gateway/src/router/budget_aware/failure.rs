@@ -28,6 +28,12 @@ pub(super) async fn record_classified_failure(
         .provider_limits
         .cooldown_for(provider);
     let status = response.status();
+    if status == http::StatusCode::PAYMENT_REQUIRED {
+        router
+            .app_state
+            .budget_probe()
+            .record_payment_required(provider, credential_id);
+    }
     let (response, cooldown, class) =
         classify_and_cooldown(response, &config).await;
     let entered_cooldown =

@@ -1,7 +1,7 @@
 use serde_json::Value;
 use web_message_budget::{
-    CHATGPT_WEB_CONTEXT_TOKENS, ChunkPlan, MessageBudget, ParsedChat,
-    plan_web_chunks,
+    CHATGPT_UPLOAD_PAYLOAD_TOKENS, CHATGPT_WEB_CONTEXT_TOKENS, ChunkPlan,
+    MessageBudget, ParsedChat, plan_web_chunks,
 };
 pub use web_message_budget::{
     ParsedChat as ParsedMessages, parse_openai_messages,
@@ -59,6 +59,7 @@ pub fn plan_conversation_turns(
         MessageBudget {
             max_context_tokens: CHATGPT_WEB_CONTEXT_TOKENS,
             reserved_output_tokens,
+            upload_part_token_cap: CHATGPT_UPLOAD_PAYLOAD_TOKENS,
             ..MessageBudget::default()
         },
     )

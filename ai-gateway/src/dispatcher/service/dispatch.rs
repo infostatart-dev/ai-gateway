@@ -82,6 +82,10 @@ impl Dispatcher {
 
         let skip_outer_pacing =
             crate::config::deepseek_web::is_deepseek_web(target_provider);
+        let estimated_tokens = req
+            .extensions()
+            .get::<crate::types::extensions::GatewayPayloadEstimate>()
+            .map_or(0, |e| e.0);
         let _pacing_permit = if skip_outer_pacing {
             None
         } else {
@@ -89,6 +93,7 @@ impl Dispatcher {
                 &self.app_state,
                 target_provider,
                 credential_id.as_ref(),
+                estimated_tokens,
             )
             .await?
         };

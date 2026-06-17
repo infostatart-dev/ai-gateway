@@ -51,9 +51,8 @@ pub struct OpenAICompatibleChatCompletions;
 impl Endpoint for OpenAICompatibleChatCompletions {
     const PATH: &'static str = "v1/chat/completions";
     type RequestBody = OpenAICompatibleChatCompletionRequest;
-    type ResponseBody = async_openai::types::chat::CreateChatCompletionResponse;
-    type StreamResponseBody =
-        async_openai::types::chat::CreateChatCompletionStreamResponse;
+    type ResponseBody = serde_json::Value;
+    type StreamResponseBody = serde_json::Value;
     type ErrorResponseBody = serde_json::Value;
 }
 

@@ -62,6 +62,10 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
     let upstream_pacing = Arc::new(crate::router::pacing::PacingRegistry::new(
         config.provider_limits.clone(),
     ));
+    let budget_probe =
+        Arc::new(crate::router::budget_probe::BudgetProbeRegistry::new(
+            config.provider_limits.clone(),
+        ));
 
     Ok(AppState(Arc::new(InnerAppState {
         config,
@@ -88,5 +92,6 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
         state_store: decision_state.state_store,
         policy_store: decision_state.policy_store,
         upstream_pacing,
+        budget_probe,
     })))
 }

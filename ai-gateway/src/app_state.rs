@@ -71,6 +71,13 @@ impl AppState {
     }
 
     #[must_use]
+    pub fn budget_probe(
+        &self,
+    ) -> &Arc<crate::router::budget_probe::BudgetProbeRegistry> {
+        &self.0.budget_probe
+    }
+
+    #[must_use]
     pub fn upstream_pacing(
         &self,
     ) -> &Arc<crate::router::pacing::PacingRegistry> {
@@ -108,6 +115,7 @@ pub struct InnerAppState {
     pub state_store: Arc<dyn crate::middleware::decision::budget::StateStore>,
     pub policy_store: Arc<dyn crate::middleware::decision::policy::PolicyStore>,
     pub upstream_pacing: Arc<crate::router::pacing::PacingRegistry>,
+    pub budget_probe: Arc<crate::router::budget_probe::BudgetProbeRegistry>,
 }
 
 impl fmt::Debug for InnerAppState {

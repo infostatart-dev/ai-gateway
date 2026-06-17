@@ -1,4 +1,5 @@
 pub mod budget_aware;
+pub mod budget_probe;
 pub mod capability;
 pub mod direct;
 pub mod failover;
