@@ -1,5 +1,8 @@
 name: Docker
 
+# Rolling `latest` image: after green Rust CI on main.
+# Semver images: dispatched by version-tag.yml on the release tag ref.
+
 on:
   workflow_run:
     workflows: ["Rust CI"]
@@ -7,9 +10,6 @@ on:
       - completed
     branches:
       - main
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
 
 env:

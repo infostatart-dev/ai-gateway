@@ -1,9 +1,9 @@
 name: Release binaries
 
+# Semver artifacts are dispatched by version-tag.yml (GITHUB_TOKEN tag pushes
+# do not trigger other workflows). Use workflow_dispatch for manual reruns.
+
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
 
 permissions:

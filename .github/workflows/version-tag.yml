@@ -1,11 +1,13 @@
 name: Version tag
 
-# When `[workspace.package].version` in root Cargo.toml changes on `main`,
-# create `vX.Y.Z` (or `vX.Y.Z-beta.N`) and dispatch release workflows.
-# Idempotent: skips if the tag already exists locally or on the remote.
+# When `[workspace.package].version` in root Cargo.toml changes on `main`:
+# 1. Ensure annotated `v{version}` exists at HEAD (create if missing).
+# 2. Dispatch `release.yml` and `docker.yml` on that tag ref.
 #
 # Tag pushes from GITHUB_TOKEN do not trigger other workflows (`push: tags`),
-# so we dispatch `release.yml` and `docker.yml` explicitly with `gh workflow run`.
+# so semver release/docker are workflow_dispatch-only — never push `v*` tags
+# manually from a developer machine (that duplicates jobs and skips dispatch
+# when version-tag sees the tag already exists).
 
 on:
   push:
@@ -44,28 +46,46 @@ jobs:
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
           echo "Workspace version: $version"
 
-      - name: Check if tag already exists
-        id: existing
+      - name: Resolve release tag at HEAD
+        id: tag
         run: |
           set -euo pipefail
           tag="${{ steps.ver.outputs.tag }}"
-          if git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1 \
-            || git ls-remote --tags --exit-code origin "$tag" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Tag $tag already exists — nothing to do."
+          head=$(git rev-parse HEAD)
+
+          if git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1; then
+            tagged=$(git rev-parse "$tag^{commit}")
+            if [ "$tagged" != "$head" ]; then
+              echo "::error::Tag $tag points to $tagged but HEAD is $head"
+              exit 1
+            fi
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $tag already at HEAD."
           else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "Tag $tag is new — will create and dispatch releases."
+            remote_sha=$(git ls-remote --tags origin "refs/tags/$tag" \
+              | awk '{print $1}' | head -n1 || true)
+            if [ -n "$remote_sha" ]; then
+              tagged=$(git rev-parse "$remote_sha^{commit}" 2>/dev/null || echo "$remote_sha")
+              if [ "$tagged" != "$head" ]; then
+                echo "::error::Remote tag $tag does not match HEAD ($head)"
+                exit 1
+              fi
+              echo "created=false" >> "$GITHUB_OUTPUT"
+              echo "Remote tag $tag already at HEAD."
+            else
+              echo "created=true" >> "$GITHUB_OUTPUT"
+              echo "Tag $tag is new — will create at HEAD."
+            fi
           fi
 
       - name: Configure git identity
-        if: steps.existing.outputs.exists == 'false'
+        if: steps.tag.outputs.created == 'true'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
       - name: Create and push annotated tag
-        if: steps.existing.outputs.exists == 'false'
+        if: steps.tag.outputs.created == 'true'
         run: |
           set -euo pipefail
           tag="${{ steps.ver.outputs.tag }}"
@@ -73,7 +93,6 @@ jobs:
           git push origin "$tag"
 
       - name: Dispatch versioned binary release
-        if: steps.existing.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -85,7 +104,6 @@ jobs:
           echo "Dispatched release.yml for $tag."
 
       - name: Dispatch Docker release
-        if: steps.existing.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

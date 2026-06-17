@@ -151,11 +151,11 @@ On failure: `gh run view <run-id> --repo infostatart-dev/ai-gateway --log-failed
 
 | Workflow | Purpose |
 |----------|---------|
-| `version-tag.yml` | On `Cargo.toml` version bump → creates `v*` tag, dispatches `release.yml` + `docker.yml` |
-| `release.yml` | Builds/publishes **versioned** binaries for `v*` tags (`softprops/action-gh-release@v3`) |
+| `version-tag.yml` | On `Cargo.toml` version bump → ensures `v*` tag at HEAD, dispatches `release.yml` + `docker.yml` (do **not** push semver tags manually) |
+| `release.yml` | Builds/publishes **versioned** binaries (`workflow_dispatch` only) |
 | `release-latest.yml` | Rolling **latest** prerelease after green Rust CI on `main` |
 
-To ship a version: bump `[workspace.package].version` in root `Cargo.toml`, update `CHANGELOG.md`, commit, push. For a one-off tag without a version bump, run **Version tag** via `workflow_dispatch`.
+To ship a version: bump `[workspace.package].version` in root `Cargo.toml`, update `CHANGELOG.md`, commit, push **main only**. For a one-off tag without a version bump, run **Version tag** via `workflow_dispatch`.
 
 Use `softprops/action-gh-release@v3` (Node 24). Do not pin `@v2` — it triggers Node 20 deprecation warnings on GitHub-hosted runners.
 
