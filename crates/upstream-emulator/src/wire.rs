@@ -115,6 +115,39 @@ pub fn high_demand_response() -> Response {
         .into_response()
 }
 
+pub fn never_purchased_response() -> Response {
+    (
+        StatusCode::PAYMENT_REQUIRED,
+        axum::Json(json!({
+            "error": {
+                "message": "You have never purchased credits. Only free models are available."
+            }
+        })),
+    )
+        .into_response()
+}
+
+pub fn free_models_per_day_response() -> Response {
+    let reset_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
+        .saturating_add(120_000);
+    (
+        StatusCode::TOO_MANY_REQUESTS,
+        [(
+            "x-ratelimit-reset",
+            HeaderValue::from_str(&reset_ms.to_string())
+                .unwrap_or_else(|_| HeaderValue::from_static("0")),
+        )],
+        axum::Json(json!({
+            "error": {
+                "message": "Rate limit exceeded: free-models-per-day"
+            }
+        })),
+    )
+        .into_response()
+}
+
 fn rate_limit_json(family: ProtocolFamily) -> Value {
     let message = match family {
         ProtocolFamily::GeminiOpenAiCompat => {
@@ -177,6 +210,15 @@ mod tests {
         assert_eq!(not_found.status(), StatusCode::NOT_FOUND);
         let high_demand = high_demand_response();
         assert_eq!(high_demand.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn openrouter_wire_profiles_match_live_shapes() {
+        let unpaid = never_purchased_response();
+        assert_eq!(unpaid.status(), StatusCode::PAYMENT_REQUIRED);
+        let daily = free_models_per_day_response();
+        assert_eq!(daily.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert!(daily.headers().contains_key("x-ratelimit-reset"));
     }
 
     #[test]

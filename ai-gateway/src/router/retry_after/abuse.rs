@@ -7,6 +7,16 @@ pub fn looks_like_unsupported_model(body: Option<&[u8]>) -> bool {
 }
 
 #[must_use]
+pub fn looks_like_unpaid_route(body: Option<&[u8]>) -> bool {
+    let text = body_to_lower_text(body);
+    text.contains("never purchased")
+        || text.contains("purchase credits")
+        || text.contains("haven't purchased")
+        || text.contains("have not purchased")
+        || text.contains("not purchased credits")
+}
+
+#[must_use]
 pub fn looks_like_high_demand(body: Option<&[u8]>) -> bool {
     let text = body_to_lower_text(body);
     text.contains("high demand")
@@ -86,5 +96,17 @@ mod tests {
     fn high_demand_body_is_detected() {
         let body = b"This model is currently experiencing high demand.";
         assert!(looks_like_high_demand(Some(body)));
+    }
+
+    #[test]
+    fn never_purchased_credits_is_unpaid_route() {
+        let body = br#"{"error":{"message":"You have never purchased credits. Only free models are available."}}"#;
+        assert!(looks_like_unpaid_route(Some(body)));
+    }
+
+    #[test]
+    fn billing_cap_is_not_unpaid_route() {
+        let body = br#"{"error":{"message":"Set up billing to continue."}}"#;
+        assert!(!looks_like_unpaid_route(Some(body)));
     }
 }

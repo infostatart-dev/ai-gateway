@@ -68,6 +68,12 @@ async fn set_profile(
         "high-demand" | "high_demand" | "503-high-demand" => {
             ForcedProfile::HighDemand
         }
+        "never-purchased" | "402-never-purchased" => {
+            ForcedProfile::NeverPurchased
+        }
+        "free-models-per-day" | "429-free-models-per-day" => {
+            ForcedProfile::FreeModelsPerDay
+        }
         _ => {
             return (
                 StatusCode::BAD_REQUEST,

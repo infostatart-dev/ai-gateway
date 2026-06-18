@@ -11,6 +11,7 @@ pub enum LadderBand {
     Fast,
     Capacity,
     Stability,
+    Deprioritized,
 }
 
 impl LadderBand {
@@ -20,6 +21,7 @@ impl LadderBand {
             Self::Fast => "fast",
             Self::Capacity => "capacity",
             Self::Stability => "stability",
+            Self::Deprioritized => "deprioritized",
         }
     }
 }
@@ -51,6 +53,8 @@ struct TierLadder {
     capacity: Vec<String>,
     #[serde(default)]
     stability: Vec<String>,
+    #[serde(default)]
+    deprioritized: Vec<String>,
 }
 
 impl Default for ModelLadderRegistry {
@@ -78,6 +82,7 @@ impl ModelLadderRegistry {
             (LadderBand::Fast, &tier_ladder.fast),
             (LadderBand::Capacity, &tier_ladder.capacity),
             (LadderBand::Stability, &tier_ladder.stability),
+            (LadderBand::Deprioritized, &tier_ladder.deprioritized),
         ]
         .into_iter()
         .enumerate()
@@ -109,6 +114,7 @@ impl ModelLadderRegistry {
             .iter()
             .chain(&tier_ladder.capacity)
             .chain(&tier_ladder.stability)
+            .chain(&tier_ladder.deprioritized)
             .cloned()
             .collect()
     }
@@ -163,5 +169,20 @@ mod tests {
                     panic!("ladder slug {slug} must resolve in catalog")
                 });
         }
+    }
+
+    #[test]
+    fn openrouter_nemotron_is_deprioritized_band() {
+        let registry = ModelLadderRegistry::default();
+        let provider = InferenceProvider::OpenRouter;
+        let nemotron = registry
+            .position(&provider, "free", "nvidia/nemotron-3-nano-30b-a3b:free")
+            .expect("nemotron");
+        let gpt_oss = registry
+            .position(&provider, "free", "openai/gpt-oss-120b:free")
+            .expect("gpt-oss");
+        assert_eq!(nemotron.band, LadderBand::Deprioritized);
+        assert_eq!(gpt_oss.band, LadderBand::Fast);
+        assert!(gpt_oss.band_index < nemotron.band_index);
     }
 }

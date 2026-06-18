@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.4.2-beta.4] - 2026-06-18
+
+### Discovered (live OpenRouter probe)
+
+- **Nemotron `:free` 429** (`free-models-per-day`, `X-RateLimit-Remaining: 0`) exhausts
+  that slug only; **gpt-oss `:free` still returns 200** on the same API key
+- **Paid slug 402** (`never purchased credits`) was incorrectly retiring the whole
+  OpenRouter credential via `ExhaustionScope::Project`
+
+### Features
+
+- **Unified per-model quota profile:** `quota-profile: per-model` drives pacing scope,
+  ladder filter, exhaustion classification, and rank for any provider (Gemini unchanged;
+  OpenRouter is the first additional consumer)
+- **OpenRouter free ladder:** fast → capacity → stability → deprioritized (Nemotron last);
+  per-slug `rpd: 50` limits in the embedded catalog
+- **Catalog verify:** `catalog:verify-openrouter` checks embedded slugs against a frozen
+  ListModels fixture (`mise run catalog:verify-openrouter`)
+- **Upstream emulator:** `402-never-purchased` and `429-free-models-per-day` wire profiles
+  for routing_load and local emulation
+
+### Fixed
+
+- **402 unpaid route → Model scope** on per-model providers so free `:free` siblings keep
+  routing after a paid-slug rejection
+- **429 `free-models-per-day` → QuotaExhausted** with model-scoped cooldown from
+  `X-RateLimit-Reset` (body is still read when only the reset header is present)
+- **Cooldown:** short per-model daily reset windows no longer fall back to the 1h
+  quota-exhausted default when `X-RateLimit-Reset` is under half that threshold
+- **Rank:** removed alphabetical model tie-break; ladder rank and deprioritized band decide
+  order among equal-cost candidates
+- **Budget probe:** consult cached probe state before the API-key gate;
+  `record_payment_required` runs only on Project-scope 402 (not whole-slot retirement)
+
+### Testing
+
+- **routing_load:** nemotron 429 → gpt-oss 200; paid 402 does not block free siblings
+- **intent_acceptance:** fast-thinking matrix — gpt-oss before groq; nemotron 429 failover
+  to gpt-oss
+- **Lib coverage floor:** workspace line coverage stays above 48% (`mise run coverage:gate`)
+
 ## [0.4.2-beta.3] - 2026-06-18
 
 ### Discovered (stage live probe)

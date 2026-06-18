@@ -81,3 +81,26 @@ pub fn not_found_404() -> crate::types::response::Response {
         ))
         .unwrap()
 }
+
+pub fn openrouter_free_models_per_day_429() -> crate::types::response::Response
+{
+    let reset_ms = u64::try_from(chrono::Utc::now().timestamp_millis().max(0))
+        .unwrap_or(0)
+        .saturating_add(120_000);
+    http::Response::builder()
+        .status(StatusCode::TOO_MANY_REQUESTS)
+        .header("X-RateLimit-Reset", reset_ms.to_string())
+        .body(Body::from(
+            r#"{"error":{"message":"Rate limit exceeded: free-models-per-day"}}"#,
+        ))
+        .unwrap()
+}
+
+pub fn openrouter_never_purchased_402() -> crate::types::response::Response {
+    http::Response::builder()
+        .status(StatusCode::PAYMENT_REQUIRED)
+        .body(Body::from(
+            r#"{"error":{"message":"You have never purchased credits. Only free models are available."}}"#,
+        ))
+        .unwrap()
+}

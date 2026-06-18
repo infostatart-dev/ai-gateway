@@ -27,6 +27,11 @@ pub fn classify_exhaustion_scope(
     profile: ProviderQuotaProfile,
 ) -> ExhaustionScope {
     if matches!(status, StatusCode::PAYMENT_REQUIRED) {
+        if profile == ProviderQuotaProfile::PerModel
+            && super::abuse::looks_like_unpaid_route(body)
+        {
+            return ExhaustionScope::Model;
+        }
         return ExhaustionScope::Project;
     }
     if matches!(class, FailoverClass::QuotaExhausted)
@@ -208,5 +213,46 @@ mod tests {
             ExhaustionScope::Model,
             ProviderQuotaProfile::PerModel,
         ));
+    }
+
+    #[test]
+    fn per_model_402_unpaid_is_model_scope() {
+        let body =
+            br#"{"error":{"message":"You have never purchased credits."}}"#;
+        let scope = classify_exhaustion_scope(
+            StatusCode::PAYMENT_REQUIRED,
+            Some(body.as_ref()),
+            FailoverClass::Transient,
+            ProviderQuotaProfile::PerModel,
+        );
+        assert_eq!(scope, ExhaustionScope::Model);
+        assert!(crate::router::retry_after::abuse::looks_like_unpaid_route(
+            Some(body.as_ref())
+        ));
+    }
+
+    #[test]
+    fn per_model_402_billing_cap_is_project_scope() {
+        let body = br#"{"error":{"message":"Set up billing to continue."}}"#;
+        let scope = classify_exhaustion_scope(
+            StatusCode::PAYMENT_REQUIRED,
+            Some(body.as_ref()),
+            FailoverClass::Transient,
+            ProviderQuotaProfile::PerModel,
+        );
+        assert_eq!(scope, ExhaustionScope::Project);
+    }
+
+    #[test]
+    fn per_slot_402_unpaid_is_project_scope() {
+        let body =
+            br#"{"error":{"message":"You have never purchased credits."}}"#;
+        let scope = classify_exhaustion_scope(
+            StatusCode::PAYMENT_REQUIRED,
+            Some(body.as_ref()),
+            FailoverClass::Transient,
+            ProviderQuotaProfile::PerSlot,
+        );
+        assert_eq!(scope, ExhaustionScope::Project);
     }
 }

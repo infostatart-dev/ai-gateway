@@ -50,6 +50,45 @@ mod tests {
     };
 
     #[tokio::test]
+    async fn openrouter_free_keeps_only_ladder_slugs() {
+        use crate::router::budget_aware::test_support::openrouter_model_candidate;
+
+        let app_state = AppState::test_default().await;
+        let limits = &app_state.config().provider_limits;
+        let ladders = ModelLadderRegistry::default();
+        let mut candidates = vec![
+            openrouter_model_candidate(
+                &app_state,
+                "openrouter-default",
+                "openai/gpt-oss-120b:free",
+            )
+            .await,
+            openrouter_model_candidate(
+                &app_state,
+                "openrouter-default",
+                "openai/gpt-4o-mini",
+            )
+            .await,
+            openrouter_model_candidate(
+                &app_state,
+                "openrouter-default",
+                "nvidia/nemotron-3-nano-30b-a3b:free",
+            )
+            .await,
+        ];
+        retain_ladder_eligible(&mut candidates, limits, &ladders);
+        let slugs: Vec<_> = candidates
+            .iter()
+            .map(|c| c.capability.model.to_string())
+            .collect();
+        assert!(slugs.contains(&"openai/gpt-oss-120b:free".to_string()));
+        assert!(
+            slugs.contains(&"nvidia/nemotron-3-nano-30b-a3b:free".to_string())
+        );
+        assert!(!slugs.contains(&"openai/gpt-4o-mini".to_string()));
+    }
+
+    #[tokio::test]
     async fn free_gemini_keeps_only_ladder_slugs() {
         let app_state = AppState::test_default().await;
         let limits = &app_state.config().provider_limits;

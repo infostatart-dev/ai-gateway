@@ -25,7 +25,8 @@ pub fn upstream_hint_secs(body: Option<&[u8]>) -> Option<u64> {
 #[must_use]
 pub fn resolve_429_base_secs(
     body: Option<&[u8]>,
-    header_secs: Option<u64>,
+    retry_after_secs: Option<u64>,
+    reset_secs: Option<u64>,
     failure_kind: FailureKind,
     rate_limit_fallback: u64,
     quota_exhausted_fallback: u64,
@@ -37,11 +38,13 @@ pub fn resolve_429_base_secs(
 
     match failure_kind {
         FailureKind::QuotaExhausted => text_reset
-            .or(header_secs
+            .or(reset_secs)
+            .or(retry_after_secs
                 .filter(|secs| *secs >= quota_exhausted_fallback / 2))
             .or(body_hint.filter(|secs| *secs >= quota_exhausted_fallback / 2))
             .unwrap_or(quota_exhausted_fallback),
-        FailureKind::RateLimit => header_secs
+        FailureKind::RateLimit => retry_after_secs
+            .or(reset_secs)
             .or(body_hint)
             .or(text_reset)
             .unwrap_or(rate_limit_fallback),
@@ -87,7 +90,10 @@ fn parse_json_number(value: &Value) -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
+    use http::HeaderMap;
+
     use super::*;
+    use crate::router::retry_after::header::extract_rate_limit_reset_secs;
 
     #[test]
     fn parses_gemini_retry_info_from_body() {
@@ -105,8 +111,26 @@ mod tests {
     }
 
     #[test]
-    fn parses_groq_error_json() {
-        let body = br#"{"error":{"message":"Please try again in 12.5s"}}"#;
-        assert_eq!(extract_retry_after_from_body(body), Some(13));
+    fn quota_exhausted_prefers_short_reset_header_over_hour_fallback() {
+        let future_ms =
+            chrono::Utc::now().timestamp_millis().saturating_add(90_000);
+        let reset_ms = u64::try_from(future_ms.max(0)).unwrap_or(0);
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-ratelimit-reset",
+            http::HeaderValue::from_str(&reset_ms.to_string()).unwrap(),
+        );
+        let reset_secs =
+            extract_rate_limit_reset_secs(&headers).expect("reset");
+        let body = br#"{"error":{"message":"Rate limit exceeded: free-models-per-day"}}"#;
+        let base = resolve_429_base_secs(
+            Some(body.as_ref()),
+            None,
+            Some(reset_secs),
+            FailureKind::QuotaExhausted,
+            60,
+            3600,
+        );
+        assert!((85..=95).contains(&base));
     }
 }

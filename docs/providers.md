@@ -139,12 +139,17 @@ Operational limits and cooldown hints per provider/tier are in
 Used for pacing gates and 429 cooldown resolution — see [routing.md](routing.md).
 
 **Quota scope (tier → slot → model):** `provider-limits.yaml` declares
-`quota-profile` per provider (`per-model` for Gemini, `per-session` for browser
-providers). Pacing gates and cooldown keys resolve at
-`(credential, upstream_model)` when `per-model`. Gemini free uses
+`quota-profile` per provider (`per-model` for Gemini and OpenRouter free,
+`per-session` for browser providers). Pacing gates and cooldown keys resolve at
+`(credential, upstream_model)` when `per-model`. Gemini and OpenRouter free use
 [`provider-ladders.yaml`](../ai-gateway/config/embedded/provider-ladders.yaml)
-for intra-slot failover order (fast → capacity → stability) before inter-slot
-round-robin.
+for intra-slot failover order (fast → capacity → stability → deprioritized)
+before inter-slot round-robin.
+
+**OpenRouter per-slug vs shared bucket:** upstream enforces **per-model** daily
+quotas on `:free` slugs (e.g. Nemotron exhausted while gpt-oss still works).
+The gateway maps each wire slug to its own pacing gate and model-scoped cooldown;
+a 402 on a paid slug does not retire `:free` routes on the same credential.
 
 **Adding per-model ladder for another provider:** (1) set `quota-profile:
 per-model` in `provider-limits.yaml`, (2) add tier model RPM/RPD rows, (3) add
@@ -167,6 +172,16 @@ Refresh the fixture after Google catalog changes, then run:
 
 ```bash
 mise run catalog:verify-gemini
+```
+
+### OpenRouter catalog verify (0.4.2-beta.4+)
+
+OpenRouter `upstream_slug` values, free-tier ladder slugs, and per-slug limit keys
+must exist in
+[`openrouter-listmodels.json`](../ai-gateway/tests/fixtures/openrouter-listmodels.json).
+
+```bash
+mise run catalog:verify-openrouter
 ```
 
 OpenAI-compat providers can follow the same pattern (fixture + verify test) when

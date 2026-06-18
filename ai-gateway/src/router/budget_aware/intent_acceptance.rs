@@ -433,4 +433,180 @@ mod acceptance {
             "gemini-free-8/gemini-3.1-flash-lite"
         );
     }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn acceptance_openrouter_gpt_oss_before_groq_on_fast_thinking() {
+        use std::str::FromStr;
+
+        use super::super::{
+            call::clear_test_call_responses,
+            failover_loop::run_failover_candidates,
+            push_test_call_response_for_credential,
+            test_support::{
+                balance_ranked, openrouter_model_candidate, request_parts,
+                scout_candidate,
+            },
+        };
+        use crate::{
+            router::intent::{IntentTier, extract_routing_intent},
+            routing_load::{
+                assert_identity::routed_identity,
+                payload::nano_json_strict_body,
+                responses::ok_nano_json_schema_completion,
+            },
+            types::model_id::ModelId,
+        };
+
+        clear_test_call_responses();
+        push_test_call_response_for_credential(
+            "openrouter-default",
+            Ok(ok_nano_json_schema_completion()),
+        );
+
+        let app_state = AppState::test_default().await;
+        let mut gpt_oss = openrouter_model_candidate(
+            &app_state,
+            "openrouter-default",
+            "openai/gpt-oss-120b:free",
+        )
+        .await;
+        gpt_oss.capability.intent_tier = IntentTier::FastThinking;
+        let mut nemotron = openrouter_model_candidate(
+            &app_state,
+            "openrouter-default",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+        )
+        .await;
+        nemotron.capability.intent_tier = IntentTier::FastThinking;
+        let router = intent_router(
+            &app_state,
+            vec![
+                nemotron,
+                gpt_oss,
+                scout_candidate(&app_state, "groq-test").await,
+            ],
+        )
+        .await;
+        let body = nano_json_strict_body();
+        let parsed: serde_json::Value =
+            serde_json::from_slice(&body).expect("body");
+        let requirements =
+            crate::router::capability::extract_requirements_from_value(&parsed);
+        let source =
+            ModelId::from_str("openai/gpt-5-nano").expect("source model");
+        let routing_intent = extract_routing_intent(&source);
+        let ordered = router
+            .ordered_candidates(&requirements, Some(&source))
+            .expect("ordered");
+        let gpt_oss_idx = ordered
+            .iter()
+            .position(|c| c.capability.model.to_string().contains("gpt-oss"))
+            .expect("gpt-oss candidate");
+        let nemotron_idx = ordered
+            .iter()
+            .position(|c| c.capability.model.to_string().contains("nemotron"))
+            .expect("nemotron candidate");
+        let groq_idx = ordered
+            .iter()
+            .position(|c| c.capability.provider.as_ref() == "groq")
+            .expect("groq candidate");
+        assert!(gpt_oss_idx < nemotron_idx);
+        assert!(gpt_oss_idx < groq_idx);
+        let ranked = balance_ranked(&router, ordered);
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            body,
+            ranked,
+            requirements,
+            Some(routing_intent),
+        )
+        .await
+        .expect("gpt-oss succeeds before groq");
+        assert_eq!(
+            routed_identity(&response),
+            "openrouter-default/openai/gpt-oss-120b:free"
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn acceptance_openrouter_nemotron_429_then_gpt_oss_on_fast_thinking()
+    {
+        use super::super::{
+            call::clear_test_call_responses,
+            failover_loop::run_failover_candidates,
+            push_test_call_response_for_credential,
+            test_support::{
+                balance_ranked, openrouter_model_candidate, request_parts,
+                scout_candidate,
+            },
+        };
+        use crate::{
+            router::intent::{IntentTier, extract_routing_intent},
+            routing_load::{
+                assert_identity::routed_identity,
+                payload::nano_json_strict_body,
+                responses::{
+                    ok_nano_json_schema_completion,
+                    openrouter_free_models_per_day_429,
+                },
+            },
+            types::model_id::ModelId,
+        };
+
+        clear_test_call_responses();
+        push_test_call_response_for_credential(
+            "openrouter-default",
+            Ok(openrouter_free_models_per_day_429()),
+        );
+        push_test_call_response_for_credential(
+            "openrouter-default",
+            Ok(ok_nano_json_schema_completion()),
+        );
+
+        let app_state = AppState::test_default().await;
+        let mut nemotron = openrouter_model_candidate(
+            &app_state,
+            "openrouter-default",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+        )
+        .await;
+        nemotron.capability.intent_tier = IntentTier::FastThinking;
+        let mut gpt_oss = openrouter_model_candidate(
+            &app_state,
+            "openrouter-default",
+            "openai/gpt-oss-120b:free",
+        )
+        .await;
+        gpt_oss.capability.intent_tier = IntentTier::FastThinking;
+        let groq = scout_candidate(&app_state, "groq-test").await;
+        let try_order = vec![nemotron, gpt_oss, groq];
+        let router = intent_router(&app_state, try_order.clone()).await;
+        let body = nano_json_strict_body();
+        let parsed: serde_json::Value =
+            serde_json::from_slice(&body).expect("body");
+        let requirements =
+            crate::router::capability::extract_requirements_from_value(&parsed);
+        let source =
+            ModelId::from_str("openai/gpt-5.4-nano").expect("source model");
+        let routing_intent = extract_routing_intent(&source);
+        // Explicit try order: nemotron exhausts first, then gpt-oss succeeds.
+        let ranked = balance_ranked(&router, try_order);
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            body,
+            ranked,
+            requirements,
+            Some(routing_intent),
+        )
+        .await
+        .expect("gpt-oss after nemotron 429");
+        assert_eq!(
+            routed_identity(&response),
+            "openrouter-default/openai/gpt-oss-120b:free"
+        );
+    }
 }

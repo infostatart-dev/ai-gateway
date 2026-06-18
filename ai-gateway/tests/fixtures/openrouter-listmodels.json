@@ -1,0 +1,175 @@
+{
+  "data": [
+    {
+      "id": "anthropic/claude-3-haiku"
+    },
+    {
+      "id": "anthropic/claude-3.5-haiku"
+    },
+    {
+      "id": "anthropic/claude-3.7-sonnet"
+    },
+    {
+      "id": "anthropic/claude-haiku-4.5"
+    },
+    {
+      "id": "anthropic/claude-opus-4"
+    },
+    {
+      "id": "anthropic/claude-opus-4.5"
+    },
+    {
+      "id": "anthropic/claude-sonnet-4"
+    },
+    {
+      "id": "anthropic/claude-sonnet-4.5"
+    },
+    {
+      "id": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
+    },
+    {
+      "id": "deepseek/deepseek-chat"
+    },
+    {
+      "id": "deepseek/deepseek-r1-distill-llama-70b"
+    },
+    {
+      "id": "google/gemini-2.0-flash-001"
+    },
+    {
+      "id": "google/gemini-2.0-flash-lite-001"
+    },
+    {
+      "id": "google/gemini-2.5-flash"
+    },
+    {
+      "id": "google/gemini-2.5-flash-lite"
+    },
+    {
+      "id": "google/gemini-2.5-pro"
+    },
+    {
+      "id": "google/gemma-4-26b-a4b-it:free"
+    },
+    {
+      "id": "google/gemma-4-31b-it:free"
+    },
+    {
+      "id": "liquid/lfm-2.5-1.2b-instruct:free"
+    },
+    {
+      "id": "liquid/lfm-2.5-1.2b-thinking:free"
+    },
+    {
+      "id": "meta-llama/llama-3.1-8b-instruct"
+    },
+    {
+      "id": "meta-llama/llama-3.2-3b-instruct:free"
+    },
+    {
+      "id": "meta-llama/llama-3.3-70b-instruct:free"
+    },
+    {
+      "id": "mistralai/mistral-large"
+    },
+    {
+      "id": "mistralai/mistral-small-3.2-24b-instruct"
+    },
+    {
+      "id": "nex-agi/nex-n2-pro:free"
+    },
+    {
+      "id": "nousresearch/hermes-3-llama-3.1-405b:free"
+    },
+    {
+      "id": "nvidia/nemotron-3-nano-30b-a3b:free"
+    },
+    {
+      "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    },
+    {
+      "id": "nvidia/nemotron-3-super-120b-a12b:free"
+    },
+    {
+      "id": "nvidia/nemotron-3-ultra-550b-a55b:free"
+    },
+    {
+      "id": "nvidia/nemotron-nano-9b-v2:free"
+    },
+    {
+      "id": "openai/gpt-4"
+    },
+    {
+      "id": "openai/gpt-4-turbo"
+    },
+    {
+      "id": "openai/gpt-4.1"
+    },
+    {
+      "id": "openai/gpt-4.1-mini"
+    },
+    {
+      "id": "openai/gpt-4.1-nano"
+    },
+    {
+      "id": "openai/gpt-4o"
+    },
+    {
+      "id": "openai/gpt-4o-mini"
+    },
+    {
+      "id": "openai/gpt-oss-120b:free"
+    },
+    {
+      "id": "openai/gpt-oss-20b:free"
+    },
+    {
+      "id": "openai/o1"
+    },
+    {
+      "id": "openai/o1-pro"
+    },
+    {
+      "id": "openai/o3"
+    },
+    {
+      "id": "openai/o3-mini"
+    },
+    {
+      "id": "openai/o4-mini"
+    },
+    {
+      "id": "openrouter/free"
+    },
+    {
+      "id": "openrouter/openrouter/free"
+    },
+    {
+      "id": "poolside/laguna-m.1:free"
+    },
+    {
+      "id": "poolside/laguna-xs.2:free"
+    },
+    {
+      "id": "qwen/qwen3-coder:free"
+    },
+    {
+      "id": "qwen/qwen3-next-80b-a3b-instruct:free"
+    },
+    {
+      "id": "x-ai/grok-3"
+    },
+    {
+      "id": "x-ai/grok-3-mini"
+    },
+    {
+      "id": "x-ai/grok-4"
+    },
+    {
+      "id": "x-ai/grok-4-fast"
+    },
+    {
+      "id": "z-ai/glm-4.5-air:free"
+    }
+  ]
+}

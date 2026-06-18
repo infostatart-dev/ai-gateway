@@ -759,12 +759,14 @@ cloudflare:
 openrouter:
   cooldown:
     provider-error: 30s
-  observed-at: "2026-06-17"
+  observed-at: "2026-06-18"
+  quota-profile: per-model
   scope: api-key
   source: openrouter-docs
   notes:
     - Credit balance is dynamic and must be read per API key.
-    - Negative credit balance can return 402, including for free models.
+    - Negative credit balance can return 402 on paid slugs for free-tier keys.
+    - Per-model `:free` quotas are isolated per slug (50 RPD); not one shared bucket.
     - Cloudflare DDoS protection may block unreasonable traffic spikes.
     - Free catalog includes `openrouter/free` router and `:free` slugs (23 live
       variants verified 2026-06-17). Unlisted slugs return mapping errors.
@@ -787,6 +789,27 @@ openrouter:
   tiers:
     free:
       qualification: is_free_tier=true or less than 10 credits purchased
+      models:
+        free:
+          display-name: OpenRouter Free Router
+          limits:
+            rpm: 20
+            rpd: 50
+        gpt-oss-120b:
+          display-name: GPT OSS 120B Free
+          limits:
+            rpm: 20
+            rpd: 50
+        nemotron-3-nano-30b-a3b:
+          display-name: Nemotron 3 Nano 30B Free
+          limits:
+            rpm: 20
+            rpd: 50
+        qwen3-next-80b-a3b-instruct:
+          display-name: Qwen3 Next 80B Free
+          limits:
+            rpm: 20
+            rpd: 50
       rules:
         free-model-variants:
           model-suffix: ":free"

@@ -106,4 +106,25 @@ mod tests {
             LadderBand::Capacity
         );
     }
+
+    #[tokio::test]
+    async fn openrouter_gpt_oss_ranks_before_deprioritized_nemotron() {
+        use super::super::test_support::openrouter_model_candidate;
+
+        let app_state = AppState::test_default().await;
+        let nemotron = openrouter_model_candidate(
+            &app_state,
+            "openrouter-default",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+        )
+        .await;
+        let gpt_oss = openrouter_model_candidate(
+            &app_state,
+            "openrouter-default",
+            "openai/gpt-oss-120b:free",
+        )
+        .await;
+        let ladders = ModelLadderRegistry::default();
+        assert_eq!(ladder_cmp(&ladders, &gpt_oss, &nemotron), Ordering::Less);
+    }
 }

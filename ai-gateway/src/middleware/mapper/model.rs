@@ -284,3 +284,37 @@ impl ModelMapper {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{str::FromStr, sync::Arc};
+
+    use super::ModelMapper;
+    use crate::{
+        app_state::AppState,
+        config::router::RouterConfig,
+        types::{model_id::ModelId, provider::InferenceProvider},
+    };
+
+    #[tokio::test]
+    async fn budget_aware_model_id_overrides_client_gpt_5_4_nano() {
+        let app_state = AppState::test_default().await;
+        let router_config = Arc::new(RouterConfig::default());
+        let wire = ModelId::from_str_and_provider(
+            InferenceProvider::OpenRouter,
+            "openai/gpt-oss-120b:free",
+        )
+        .expect("wire model");
+        let mapper = ModelMapper::new_with_model_id(
+            app_state,
+            router_config,
+            wire.clone(),
+        );
+        let client = ModelId::from_str("openai/gpt-5.4-nano").expect("client");
+        let mapped = mapper
+            .map_model(&client, &InferenceProvider::OpenRouter)
+            .expect("mapped");
+        assert_eq!(mapped.to_string(), "openai/gpt-oss-120b:free");
+        assert_ne!(mapped.to_string(), client.to_string());
+    }
+}

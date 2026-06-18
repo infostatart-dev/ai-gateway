@@ -62,6 +62,7 @@ fn quota_patterns() -> &'static [regex::Regex] {
             r"(?i)check.*quota",
             r"(?i)individual quota reached",
             r"(?i)enable overages",
+            r"(?i)free-models-per-day",
         ]
         .into_iter()
         .map(|p| regex::Regex::new(p).expect("valid quota regex"))
@@ -105,5 +106,11 @@ mod tests {
         assert!(!looks_like_quota_exhausted(Some(
             b"rate limit, please retry in 60s"
         )));
+    }
+
+    #[test]
+    fn classify_free_models_per_day_as_quota_exhausted() {
+        let body = br#"{"error":{"message":"Rate limit exceeded: free-models-per-day"}}"#;
+        assert_eq!(classify_429(Some(body)), FailureKind::QuotaExhausted);
     }
 }

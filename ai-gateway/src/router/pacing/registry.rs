@@ -121,6 +121,30 @@ mod tests {
     }
 
     #[test]
+    fn openrouter_per_model_registry_isolates_nemotron_from_gpt_oss() {
+        let registry = PacingRegistry::new(ProviderLimitCatalog::default());
+        let provider = InferenceProvider::OpenRouter;
+        let cred = ProviderCredentialId::new("openrouter-default");
+        let nemotron = registry
+            .gate_for(
+                &provider,
+                Some(&cred),
+                Some("free"),
+                Some("nvidia/nemotron-3-nano-30b-a3b:free"),
+            )
+            .expect("nemotron gate");
+        let gpt_oss = registry
+            .gate_for(
+                &provider,
+                Some(&cred),
+                Some("free"),
+                Some("openai/gpt-oss-120b:free"),
+            )
+            .expect("gpt-oss gate");
+        assert!(!Arc::ptr_eq(&nemotron, &gpt_oss));
+    }
+
+    #[test]
     #[serial_test::serial]
     fn registry_isolates_gates_by_credential_scope() {
         let path_a = std::env::temp_dir().join("ai-gw-pacing-a.json");

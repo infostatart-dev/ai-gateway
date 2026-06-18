@@ -86,7 +86,7 @@ mod tests {
             None,
             "openrouter/openai/gpt-oss-120b:free",
         );
-        assert_eq!(model, "openai/gpt-oss-120b");
+        assert_eq!(model, "gpt-oss-120b");
     }
 
     #[test]

@@ -16,7 +16,9 @@ pub use body::extract_retry_after_from_body;
 use bytes::Bytes;
 pub use classify::FailureKind;
 use classify::classify_429;
-pub use header::extract_retry_after_from_headers;
+pub use header::{
+    extract_rate_limit_reset_secs, extract_retry_after_from_headers,
+};
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt;
 use quota_scope::classify_exhaustion_scope;
@@ -82,11 +84,13 @@ pub fn rate_limit_cooldown(
     body: Option<&[u8]>,
     config: &RouterCooldownConfig,
 ) -> Duration {
-    let header_secs = extract_retry_after_from_headers(headers);
+    let retry_after_secs = extract_retry_after_from_headers(headers);
+    let reset_secs = extract_rate_limit_reset_secs(headers);
     let failure_kind = classify_429(body);
     let base_secs = body::resolve_429_base_secs(
         body,
-        header_secs,
+        retry_after_secs,
+        reset_secs,
         failure_kind,
         config.rate_limit.as_secs(),
         config.quota_exhausted.as_secs(),
@@ -150,6 +154,8 @@ pub async fn classify_and_cooldown(
 ) {
     let status = response.status();
     if status == StatusCode::TOO_MANY_REQUESTS {
+        // Retry-After alone is a reliable RPM hint; X-RateLimit-Reset still
+        // requires body classification (e.g. OpenRouter free-models-per-day).
         if extract_retry_after_from_headers(response.headers()).is_some() {
             let cooldown =
                 rate_limit_cooldown(response.headers(), None, config);
@@ -431,5 +437,40 @@ mod tests {
             cooldown,
             config.quota_exhausted + config.retry_after_buffer
         );
+    }
+
+    #[tokio::test]
+    async fn free_models_per_day_with_reset_classifies_quota_exhausted() {
+        use super::header::millis_to_u64;
+
+        let config = RouterCooldownConfig::default();
+        let reset_ms =
+            millis_to_u64(chrono::Utc::now().timestamp_millis()) + 90_000;
+        let body =
+            br#"{"error":{"message":"Rate limit exceeded: free-models-per-day"}}"#;
+        let response = http::Response::builder()
+            .status(StatusCode::TOO_MANY_REQUESTS)
+            .header("X-RateLimit-Reset", reset_ms.to_string())
+            .body(Body::from(body.as_slice()))
+            .unwrap();
+        let (_, cooldown, class, scope, _) = classify_and_cooldown(
+            response,
+            &config,
+            ProviderQuotaProfile::PerModel,
+        )
+        .await;
+        assert_eq!(class, FailoverClass::QuotaExhausted);
+        assert_eq!(scope, ExhaustionScope::Model);
+        assert!((85..=95).contains(&cooldown.as_secs()));
+    }
+
+    #[test]
+    fn retry_after_header_alone_skips_body_for_rpm() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::RETRY_AFTER,
+            http::HeaderValue::from_static("30"),
+        );
+        assert_eq!(extract_retry_after_from_headers(&headers), Some(30));
     }
 }

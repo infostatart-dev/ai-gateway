@@ -91,12 +91,6 @@ impl BudgetAwareRouter {
                         .unwrap_or(self.default_latency);
                     left_latency.cmp(&right_latency)
                 })
-                .then_with(|| {
-                    left.capability
-                        .model
-                        .to_string()
-                        .cmp(&right.capability.model.to_string())
-                })
         });
     }
 }

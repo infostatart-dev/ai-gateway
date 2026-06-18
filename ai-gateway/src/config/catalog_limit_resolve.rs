@@ -230,6 +230,27 @@ mod tests {
             "openrouter/openai/gpt-oss-120b:free",
         )
         .expect("resolved");
-        assert_eq!(resolved.catalog_model, "openai/gpt-oss-120b");
+        assert_eq!(resolved.catalog_model, "gpt-oss-120b");
+    }
+
+    #[test]
+    fn openrouter_nemotron_and_gpt_oss_resolve_distinct_keys() {
+        let catalog = ProviderLimitCatalog::default();
+        let provider = InferenceProvider::OpenRouter;
+        let nemotron = catalog_limit_resolve(
+            &catalog,
+            &provider,
+            "free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+        )
+        .expect("nemotron");
+        let gpt_oss = catalog_limit_resolve(
+            &catalog,
+            &provider,
+            "free",
+            "openai/gpt-oss-120b:free",
+        )
+        .expect("gpt-oss");
+        assert_ne!(nemotron.catalog_model, gpt_oss.catalog_model);
     }
 }

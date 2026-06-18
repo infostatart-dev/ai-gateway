@@ -9,6 +9,19 @@ pub fn extract_retry_after_from_headers(headers: &HeaderMap) -> Option<u64> {
     parse_retry_after_header(value).map(cap_duration_secs)
 }
 
+/// `OpenRouter` per-model daily quota reset (`X-RateLimit-Reset` epoch ms).
+#[must_use]
+pub fn extract_rate_limit_reset_secs(headers: &HeaderMap) -> Option<u64> {
+    let value = headers.get("x-ratelimit-reset")?.to_str().ok()?;
+    let reset_ms = value.parse::<u64>().ok()?;
+    let now_ms = millis_to_u64(chrono::Utc::now().timestamp_millis());
+    if reset_ms <= now_ms {
+        return Some(0);
+    }
+    let delta_secs = (reset_ms - now_ms).div_ceil(1000);
+    Some(cap_duration_secs(delta_secs))
+}
+
 /// `OmniRoute` `parseRetryAfter`: Groq `60s`/`5m`/`2h` before plain integer
 /// parse.
 #[must_use]
@@ -31,6 +44,10 @@ pub fn parse_retry_after_header(value: &str) -> Option<u64> {
         return Some(target.saturating_sub(now));
     }
     None
+}
+
+pub(crate) fn millis_to_u64(value: i64) -> u64 {
+    u64::try_from(value.max(0)).unwrap_or(0)
 }
 
 fn parse_relative_unit(value: &str) -> Option<u64> {
@@ -69,5 +86,35 @@ mod tests {
     fn rejects_unparseable_values() {
         assert_eq!(parse_retry_after_header(""), None);
         assert_eq!(parse_retry_after_header("60xyz"), None);
+    }
+
+    #[test]
+    fn retry_after_takes_precedence_over_reset_for_rpm_path() {
+        let future_ms =
+            millis_to_u64(chrono::Utc::now().timestamp_millis()) + 90_000;
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::RETRY_AFTER,
+            http::HeaderValue::from_static("45"),
+        );
+        headers.insert(
+            "x-ratelimit-reset",
+            http::HeaderValue::from_str(&future_ms.to_string()).unwrap(),
+        );
+        assert_eq!(extract_retry_after_from_headers(&headers), Some(45));
+        assert!(extract_rate_limit_reset_secs(&headers).is_some());
+    }
+
+    #[test]
+    fn parses_rate_limit_reset_epoch_ms() {
+        let future_ms =
+            millis_to_u64(chrono::Utc::now().timestamp_millis()) + 90_000;
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-ratelimit-reset",
+            http::HeaderValue::from_str(&future_ms.to_string()).unwrap(),
+        );
+        let secs = extract_rate_limit_reset_secs(&headers).expect("reset");
+        assert!((85..=95).contains(&secs));
     }
 }

@@ -50,7 +50,7 @@ pub(crate) use rank::default_provider_budget_rank;
 pub(crate) use test_support::{
     balance_ranked, chatgpt_candidate, deep_paid_candidate, empty_router,
     gemini_candidate, gemini_model_candidate, gemini_slots, groq_candidate,
-    intent_autodefault_router, ordered_candidates,
+    intent_autodefault_router, openrouter_model_candidate, ordered_candidates,
     ordered_candidates_for_source, request_parts, router_with_candidates,
     scout_candidate,
 };

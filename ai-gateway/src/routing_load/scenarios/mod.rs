@@ -11,6 +11,8 @@ pub mod gemini_stability_escalation;
 pub mod harness_payload_filter;
 pub mod harness_round_robin;
 pub mod intent_fast_thinking_pool;
+pub mod openrouter_402_paid_does_not_kill_free;
+pub mod openrouter_nemotron_429_then_gpt_oss_200;
 pub mod pacing_burst;
 pub mod payload_filter;
 pub mod round_robin;

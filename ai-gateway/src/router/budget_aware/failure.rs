@@ -28,14 +28,16 @@ pub(super) async fn record_classified_failure(
     let config = limits.cooldown_for(provider);
     let quota_profile = limits.quota_profile(provider);
     let status = response.status();
-    if status == http::StatusCode::PAYMENT_REQUIRED {
+    let (response, cooldown, class, scope, slot_cooldown) =
+        classify_and_cooldown(response, &config, quota_profile).await;
+    if status == http::StatusCode::PAYMENT_REQUIRED
+        && scope == ExhaustionScope::Project
+    {
         router
             .app_state
             .budget_probe()
             .record_payment_required(provider, credential_id);
     }
-    let (response, cooldown, class, scope, slot_cooldown) =
-        classify_and_cooldown(response, &config, quota_profile).await;
     let entered_cooldown = router.update_failure_state_scoped(
         credential_id,
         model,
@@ -89,18 +91,27 @@ pub(super) fn record_failover_metric(
 mod tests {
     use http::StatusCode;
 
-    use super::record_failover_metric;
+    use super::record_classified_failure;
     use crate::{
         app_state::AppState,
         router::{
-            budget_aware::{gemini_model_candidate, router_with_candidates},
-            retry_after::FailoverClass,
+            budget_aware::{
+                openrouter_model_candidate, router_with_candidates,
+            },
+            retry_after::ExhaustionScope,
         },
+        routing_load::responses::openrouter_never_purchased_402,
         types::provider::InferenceProvider,
     };
 
     #[tokio::test]
     async fn record_failover_metric_accepts_transient_class() {
+        use super::record_failover_metric;
+        use crate::router::{
+            budget_aware::{gemini_model_candidate, router_with_candidates},
+            retry_after::FailoverClass,
+        };
+
         let app_state = AppState::test_default().await;
         let candidate = gemini_model_candidate(
             &app_state,
@@ -118,6 +129,42 @@ mod tests {
             "rpm_exhausted",
             StatusCode::TOO_MANY_REQUESTS,
             FailoverClass::Transient,
+        );
+    }
+
+    #[tokio::test]
+    async fn unpaid_402_model_scope_does_not_poison_free_budget_probe() {
+        let app_state = AppState::test_default().await;
+        let candidate = openrouter_model_candidate(
+            &app_state,
+            "openrouter-default",
+            "openai/gpt-4o-mini",
+        )
+        .await;
+        let router =
+            router_with_candidates(&app_state, vec![candidate.clone()]);
+        let (_, _, scope) = record_classified_failure(
+            &router,
+            &candidate.credential_id,
+            &candidate.capability.provider,
+            &candidate.capability.model.to_string(),
+            openrouter_never_purchased_402(),
+            std::time::Duration::from_millis(5),
+        )
+        .await;
+        assert_eq!(scope, ExhaustionScope::Model);
+        let credentials = app_state.config().credentials.clone();
+        assert!(
+            !router
+                .app_state
+                .budget_probe()
+                .should_skip_candidate(
+                    &credentials,
+                    &InferenceProvider::OpenRouter,
+                    &candidate.credential_id,
+                    "openai/gpt-oss-120b:free",
+                )
+                .await
         );
     }
 }

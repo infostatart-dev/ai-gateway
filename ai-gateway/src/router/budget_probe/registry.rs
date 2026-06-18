@@ -58,6 +58,12 @@ impl BudgetProbeRegistry {
         credential_id: &ProviderCredentialId,
         model: &str,
     ) -> bool {
+        let cache_key = (provider.to_string(), credential_id.to_string());
+        if let Some(snapshot) = self.cached(&cache_key)
+            && snapshot.blocks_paid_route(model)
+        {
+            return true;
+        }
         let Some(source) = self.key_info_source(provider) else {
             return false;
         };
@@ -67,12 +73,6 @@ impl BudgetProbeRegistry {
         let Some(api_key) = secret_key(&credential.key) else {
             return false;
         };
-        let cache_key = (provider.to_string(), credential_id.to_string());
-        if let Some(snapshot) = self.cached(&cache_key)
-            && snapshot.blocks_paid_route(model)
-        {
-            return true;
-        }
         let Some(snapshot) =
             fetch_key_info(&self.client, source, api_key.expose()).await
         else {
@@ -127,6 +127,49 @@ impl BudgetProbeRegistry {
         if let Ok(mut cache) = self.cache.lock() {
             cache.insert(key, snapshot);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::{
+            credentials::ProviderCredentialId,
+            provider_limits::ProviderLimitCatalog,
+        },
+        types::provider::InferenceProvider,
+    };
+
+    #[tokio::test]
+    async fn record_payment_required_blocks_paid_but_not_free_routes() {
+        let app_state = crate::app_state::AppState::test_default().await;
+        let registry =
+            BudgetProbeRegistry::new(ProviderLimitCatalog::default());
+        let provider = InferenceProvider::OpenRouter;
+        let credential = ProviderCredentialId::new("openrouter-default");
+        registry.record_payment_required(&provider, &credential);
+        let credentials = app_state.config().credentials.clone();
+        assert!(
+            !registry
+                .should_skip_candidate(
+                    &credentials,
+                    &provider,
+                    &credential,
+                    "openai/gpt-oss-120b:free",
+                )
+                .await
+        );
+        assert!(
+            registry
+                .should_skip_candidate(
+                    &credentials,
+                    &provider,
+                    &credential,
+                    "openai/gpt-4o-mini",
+                )
+                .await
+        );
     }
 }
 

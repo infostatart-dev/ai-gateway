@@ -136,6 +136,25 @@ mod tests {
     }
 
     #[test]
+    fn openrouter_per_model_scope_isolates_slugs_on_same_credential() {
+        let provider = InferenceProvider::OpenRouter;
+        let id = ProviderCredentialId::new("openrouter-default");
+        let nemotron = resolve_pacing_scope(
+            &provider,
+            Some(&id),
+            Some("nvidia/nemotron-3-nano-30b-a3b:free"),
+            ProviderQuotaProfile::PerModel,
+        );
+        let gpt_oss = resolve_pacing_scope(
+            &provider,
+            Some(&id),
+            Some("openai/gpt-oss-120b:free"),
+            ProviderQuotaProfile::PerModel,
+        );
+        assert_ne!(pacing_scope_key(&nemotron), pacing_scope_key(&gpt_oss));
+    }
+
+    #[test]
     #[serial_test::serial]
     fn deepseek_scope_uses_session_path() {
         let path = std::env::temp_dir().join("ai-gw-ds-scope.json");

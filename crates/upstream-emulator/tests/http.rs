@@ -151,3 +151,62 @@ async fn rate_limit_returns_json_body() {
     assert!(json.get("error").is_some());
     handle.abort();
 }
+
+#[tokio::test]
+async fn forced_never_purchased_profile_returns_402() {
+    let (addr, handle) = bind_ephemeral().await.expect("bind");
+    let base = format!("http://{addr}");
+    let client = reqwest::Client::new();
+    let scope = "openrouter:emu-openrouter-default";
+    client
+        .post(format!("{base}/_admin/profile"))
+        .json(&serde_json::json!({
+            "scope": scope,
+            "action": "402-never-purchased"
+        }))
+        .send()
+        .await
+        .expect("set profile");
+    let response = client
+        .post(format!("{base}/openrouter/openai/v1/chat/completions"))
+        .header("Authorization", "Bearer emu-openrouter-default")
+        .json(&serde_json::json!({
+            "model": "openai/gpt-4o-mini",
+            "messages": [{"role": "user", "content": "hi"}]
+        }))
+        .send()
+        .await
+        .expect("post");
+    assert_eq!(response.status(), 402);
+    handle.abort();
+}
+
+#[tokio::test]
+async fn forced_free_models_per_day_profile_returns_429_with_reset() {
+    let (addr, handle) = bind_ephemeral().await.expect("bind");
+    let base = format!("http://{addr}");
+    let client = reqwest::Client::new();
+    let scope = "openrouter:emu-openrouter-default";
+    client
+        .post(format!("{base}/_admin/profile"))
+        .json(&serde_json::json!({
+            "scope": scope,
+            "action": "429-free-models-per-day"
+        }))
+        .send()
+        .await
+        .expect("set profile");
+    let response = client
+        .post(format!("{base}/openrouter/openai/v1/chat/completions"))
+        .header("Authorization", "Bearer emu-openrouter-default")
+        .json(&serde_json::json!({
+            "model": "nvidia/nemotron-3-nano-30b-a3b:free",
+            "messages": [{"role": "user", "content": "hi"}]
+        }))
+        .send()
+        .await
+        .expect("post");
+    assert_eq!(response.status(), 429);
+    assert!(response.headers().contains_key("x-ratelimit-reset"));
+    handle.abort();
+}

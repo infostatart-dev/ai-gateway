@@ -49,6 +49,14 @@ routing_load_test!(
     scenarios::failover_daily_quota::run
 );
 routing_load_test!(chatgpt_last_resort, scenarios::chatgpt_last_resort::run);
+routing_load_test!(
+    openrouter_nemotron_429_then_gpt_oss_200,
+    scenarios::openrouter_nemotron_429_then_gpt_oss_200::run
+);
+routing_load_test!(
+    openrouter_402_paid_does_not_kill_free,
+    scenarios::openrouter_402_paid_does_not_kill_free::run
+);
 routing_load_test!(pacing_burst, scenarios::pacing_burst::run);
 routing_load_test!(shaper_backpressure, scenarios::shaper_backpressure::run);
 routing_load_test!(harness_round_robin, scenarios::harness_round_robin::run);

@@ -18,9 +18,9 @@ keys) — not the product deliverable.
 | 3 | ChatGPT Web 45k upload parts (parity with DeepSeek) | `autodefault-hardening` |
 | 4 | GitHub Models response normalize before deserialize | `autodefault-hardening` |
 | 5 | Gemini 503 → sibling rotation; daily quota → skip siblings | `autodefault-hardening` + `autodefault-routing-priority` |
-| 6 | Proactive RPM/TPM/RPD/TPD pacing per credential scope | `catalog-quota-pacing` |
+| 6 | Proactive RPM/TPM/RPD/TPD pacing per credential scope | `catalog-quota-pacing` → **[per-model-quota-domain](../per-model-quota-domain/)** |
 | 7 | Cooldown per provider override + per slot state | `provider-cooldown-policy` |
-| 8 | OpenRouter dual gate (credits + catalog quotas) | `credential-budget-availability` |
+| 8 | OpenRouter dual gate (credits + catalog quotas) | `credential-budget-availability` → **[per-model-quota-domain](../per-model-quota-domain/)** |
 | 9 | ChatGPT chunking metrics in provider-stats | `routing-observability` |
 | 10 | Provider priority order aligned with living spec | `autodefault-routing-priority` |
 
@@ -45,6 +45,10 @@ keys) — not the product deliverable.
 - `routing-observability` — ChatGPT chunk fields (item 9).
 - `upstream-provider-emulator` — read same catalog as gateway; **verification only**.
 - `routing-load-verification` — delta: stage-gap scenarios prove items 1–5.
+
+**Deferred to [per-model-quota-domain](../per-model-quota-domain/):** items 6–8 (per-model pacing,
+OpenRouter 402/429 domain, budget probe integration). Implement there first; return here only for
+stage soak (T17) after beta.4 lands.
 
 ## Non-Goals
 

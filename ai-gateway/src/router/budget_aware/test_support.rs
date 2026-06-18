@@ -216,6 +216,23 @@ pub(crate) async fn gemini_model_candidate(
     .await
 }
 
+pub(crate) async fn openrouter_model_candidate(
+    app_state: &AppState,
+    credential_id: &str,
+    model: &str,
+) -> BudgetCandidate {
+    build_candidate(
+        app_state,
+        InferenceProvider::OpenRouter,
+        credential_id,
+        0,
+        "openrouter-key",
+        model,
+        131_072,
+    )
+    .await
+}
+
 pub(crate) async fn gemini_candidate(
     app_state: &AppState,
     credential_id: &str,

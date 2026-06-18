@@ -7,6 +7,8 @@ pub enum ForcedProfile {
     Overload,
     NotFound,
     HighDemand,
+    NeverPurchased,
+    FreeModelsPerDay,
 }
 
 #[derive(Debug, Default, Clone)]
