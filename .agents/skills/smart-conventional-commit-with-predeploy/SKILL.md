@@ -84,6 +84,25 @@ Matches `.github/workflows/rust-ci.yml` logic — **incremental** compile in exi
 
 Add `mise run -- cargo test --tests --all-features` only if `ai-gateway/tests/` or integration test code changed.
 
+Add `mise run -- cargo test --tests --all-features` only if `ai-gateway/tests/` or integration test code changed.
+
+### Coverage (optional — not part of predeploy)
+
+| Task | Command | When |
+|------|---------|------|
+| Summary | `mise run coverage:lib` | Optional when touching `router/`, `config/`, `crates/*-web/` |
+| LCOV | `mise run coverage:report` | IDE review / before baseline bump |
+| Floor gate | `mise run coverage:gate` | Before raising baseline in `docs/coverage-baseline.md` |
+
+**Policy:**
+
+- `predeploy:rust` stays **fmt → clippy → test-lib** — do **not** add coverage (too slow).
+- New logic in `router/`, `config/`, `crates/*-web/` → add or extend `#[test]` in the same PR.
+- **Any failing lib test is a defect** — fix production code or harness; never use `--ignore-run-fail` in mise/CI tasks.
+- CI `coverage` job is informational (`continue-on-error: true`) until a future hard gate.
+
+**Baseline bump workflow:** `mise run coverage:lib` → update `docs/coverage-baseline.md` → optionally raise `coverage:gate` `--fail-under-lines`.
+
 ### Tooling gate
 
 - `openspec/` changed → `mise run openspec:validate-changes`
@@ -171,6 +190,7 @@ Use `softprops/action-gh-release@v3` (Node 24). Do not pin `@v2` — it triggers
 | `cargo clean` by default | Incremental builds |
 | Parallel `cargo` commands | Sequential |
 | Hide output in `tail` | Full output or `tee` |
+| Mask failing lib tests with `--ignore-run-fail` | Fix test + code under test; coverage must exit non-zero on failure |
 | Exclude user's workflow files as "unrelated" | Include if user says they're part of the change |
 | Russian commit subjects | English only |
 
@@ -185,4 +205,5 @@ Use `softprops/action-gh-release@v3` (Node 24). Do not pin `@v2` — it triggers
 | Versioned release | `.github/workflows/release.yml` |
 | Rolling latest release | `.github/workflows/release-latest.yml` |
 | mise tasks | `mise.toml` |
+| Coverage baseline | `docs/coverage-baseline.md` |
 | OpenSpec | `openspec/`, `docs/planning.md` |

@@ -96,6 +96,61 @@ fn first_execute_once_responses(conv: FetchResponse) -> Vec<FetchResponse> {
     responses
 }
 
+/// Session + sentinel + warmup + prepare + cr, then one SSE response per
+/// planned turn.
+fn multi_turn_execute_responses(
+    messages: &[serde_json::Value],
+    body: &serde_json::Value,
+    final_content: &str,
+) -> Vec<FetchResponse> {
+    use crate::{
+        conversation::{parse_openai_messages, plan_conversation_turns},
+        schema::{
+            base_system_without_schema, build_schema_instruction,
+            parse_json_schema_spec,
+        },
+    };
+
+    let parsed = parse_openai_messages(messages);
+    let schema_spec = parse_json_schema_spec(body);
+    let schema_instruction = schema_spec.as_ref().map(build_schema_instruction);
+    let base_system = base_system_without_schema(
+        &parsed.system_msg,
+        schema_instruction.as_deref(),
+    );
+    let reserved_output = body
+        .get("max_tokens")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(4_096) as u32;
+    let plan = plan_conversation_turns(
+        &parsed,
+        &base_system,
+        schema_instruction.as_deref(),
+        reserved_output,
+    );
+    let turn_count = plan.turns.len();
+    assert!(
+        turn_count > 1,
+        "test dossier must require multiple upload turns"
+    );
+
+    let mut responses = vec![session_resp(), dpl_resp()];
+    responses.extend(warmup_responses());
+    responses.push(prepare_resp());
+    responses.push(cr_resp());
+    for i in 0..turn_count {
+        let is_final = i + 1 == turn_count;
+        let content = if is_final { final_content } else { "OK" };
+        let msg_id = if is_final {
+            "final-msg".to_string()
+        } else {
+            format!("upload-msg-{i}")
+        };
+        responses.push(conv_sse_meta(content, "conv-1", &msg_id));
+    }
+    responses
+}
+
 fn strict_schema_body() -> serde_json::Value {
     json!({
         "model": "gpt-5-mini",
@@ -361,15 +416,16 @@ async fn uploads_oversized_context_in_multiple_turns_before_final_json() {
     let dossier = "word ".repeat(76_000);
     let mut body = strict_schema_body();
     body["messages"] = json!([{ "role": "user", "content": dossier }]);
-    let fetch = MockFetch::new({
-        let mut responses = first_execute_once_responses(conv_sse_meta(
-            "OK",
-            "conv-1",
-            "upload-msg",
-        ));
-        responses.push(conv_sse(r#"{"status":"ok"}"#));
-        responses
-    });
+    let messages = body
+        .get("messages")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .expect("messages");
+    let fetch = MockFetch::new(multi_turn_execute_responses(
+        &messages,
+        &body,
+        r#"{"status":"ok"}"#,
+    ));
     let fetch_for_count = Arc::clone(&fetch);
     let exec = Executor::new(fetch);
     let result = exec

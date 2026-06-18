@@ -84,3 +84,40 @@ pub(super) fn record_failover_metric(
             quota_metric: quota_metric_label(status, class),
         });
 }
+
+#[cfg(all(test, feature = "testing"))]
+mod tests {
+    use http::StatusCode;
+
+    use super::record_failover_metric;
+    use crate::{
+        app_state::AppState,
+        router::{
+            budget_aware::{gemini_model_candidate, router_with_candidates},
+            retry_after::FailoverClass,
+        },
+        types::provider::InferenceProvider,
+    };
+
+    #[tokio::test]
+    async fn record_failover_metric_accepts_transient_class() {
+        let app_state = AppState::test_default().await;
+        let candidate = gemini_model_candidate(
+            &app_state,
+            "gemini-free",
+            "gemini-2.0-flash",
+        )
+        .await;
+        let router =
+            router_with_candidates(&app_state, vec![candidate.clone()]);
+
+        record_failover_metric(
+            &router,
+            &candidate,
+            Some(&InferenceProvider::GoogleGemini),
+            "rpm_exhausted",
+            StatusCode::TOO_MANY_REQUESTS,
+            FailoverClass::Transient,
+        );
+    }
+}

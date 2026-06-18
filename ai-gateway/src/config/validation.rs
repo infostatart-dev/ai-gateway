@@ -195,4 +195,96 @@ mod tests {
             Err(ModelMappingValidationError::NoValidMapping { .. })
         ));
     }
+
+    #[test]
+    fn provider_not_configured_in_router_balance() {
+        use std::collections::HashMap;
+
+        use nonempty_collections::nes;
+        use rust_decimal::Decimal;
+
+        use crate::{
+            config::balance::{
+                BalanceConfig, BalanceConfigInner, WeightedProvider,
+            },
+            endpoints::EndpointType,
+        };
+
+        let mut config = Config::default();
+        let router_id = RouterId::Named(CompactString::new("orphan-router"));
+        config.routers.as_mut().insert(
+            router_id.clone(),
+            RouterConfig {
+                load_balance: BalanceConfig(HashMap::from([(
+                    EndpointType::Chat,
+                    BalanceConfigInner::ProviderWeighted {
+                        providers: nes![WeightedProvider {
+                            provider: InferenceProvider::Named(
+                                "orphan-provider".into(),
+                            ),
+                            weight: Decimal::ONE,
+                        }],
+                    },
+                )])),
+                ..Default::default()
+            },
+        );
+
+        let result = config.validate_model_mappings();
+
+        assert!(matches!(
+            result,
+            Err(ModelMappingValidationError::ProviderNotConfigured { .. })
+        ));
+    }
+
+    #[test]
+    fn direct_model_support_passes_validation() {
+        let config = Config::default();
+        let router_config = RouterConfig::default();
+        let target_models =
+            indexmap::IndexSet::from([ModelId::from_str_and_provider(
+                InferenceProvider::OpenAI,
+                "gpt-4",
+            )
+            .unwrap()]);
+        let source_model = ModelName::owned("gpt-4".to_string());
+
+        let result = config.can_map_model(
+            &source_model,
+            InferenceProvider::OpenAI,
+            &target_models,
+            &RouterId::Named(CompactString::new("my-router")),
+            &router_config,
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn model_id_parse_error_for_invalid_source() {
+        let config = Config::default();
+        let router_config = RouterConfig::default();
+        let target_models =
+            indexmap::IndexSet::from([ModelId::from_str_and_provider(
+                InferenceProvider::OpenAI,
+                "gpt-4",
+            )
+            .unwrap()]);
+        // Invalid model name for OpenAI provider id parsing
+        let source_model = ModelName::owned("".to_string());
+
+        let result = config.can_map_model(
+            &source_model,
+            InferenceProvider::OpenAI,
+            &target_models,
+            &RouterId::Named(CompactString::new("my-router")),
+            &router_config,
+        );
+
+        assert!(matches!(
+            result,
+            Err(ModelMappingValidationError::ModelIdParseError { .. })
+        ));
+    }
 }

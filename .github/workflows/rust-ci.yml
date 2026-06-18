@@ -62,3 +62,30 @@ jobs:
         run: cargo --version
       - name: Test
         run: cargo +stable test --tests --all-features
+  coverage:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: "false"
+          shared-key: "deps-rustls-v1"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install llvm-tools and cargo-llvm-cov
+        run: rustup component add llvm-tools-preview
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Lib coverage summary
+        run: cargo llvm-cov --workspace --all-features --lib --summary-only
+      - name: LCOV report
+        run: cargo llvm-cov --workspace --all-features --lib --lcov --output-path lcov.info
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: lcov.info
+          if-no-files-found: error

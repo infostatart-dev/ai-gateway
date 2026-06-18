@@ -12,6 +12,7 @@ dev/secrets.debug.*.yaml
 .DS_Store
 bindings/
 cloud.yaml
+lcov.info
 
 # Terraform files
 .terraform/

@@ -220,3 +220,56 @@ impl crate::tests::TestDefault for GcraConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gcra_config_defaults_roundtrip() {
+        let config = GcraConfig::default();
+        let json = serde_json::to_value(&config).unwrap();
+        let parsed: GcraConfig = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.capacity, config.capacity);
+    }
+
+    #[test]
+    fn deserialize_redis_store() {
+        let json = serde_json::json!({
+            "type": "redis",
+            "host-url": "redis://127.0.0.1:6379",
+            "connection-timeout": "3s"
+        });
+        let config: RateLimitStore = serde_json::from_value(json).unwrap();
+        assert!(matches!(config, RateLimitStore::Redis(_)));
+    }
+
+    #[test]
+    fn limiter_config_rejects_zero_burst() {
+        let limits = LimitsConfig {
+            per_api_key: GcraConfig {
+                refill_frequency: Duration::from_secs(1),
+                capacity: NonZeroU32::new(1).unwrap(),
+            },
+        };
+        assert!(limiter_config(&limits).is_ok());
+
+        let bad = LimitsConfig {
+            per_api_key: GcraConfig {
+                refill_frequency: Duration::ZERO,
+                capacity: NonZeroU32::new(1).unwrap(),
+            },
+        };
+        assert!(limiter_config(&bad).is_err());
+    }
+
+    #[test]
+    fn rate_limit_error_handler_too_many_requests() {
+        let err = tower_governor::GovernorError::TooManyRequests {
+            wait_time: 1,
+            headers: None,
+        };
+        let response = rate_limit_error_handler(err);
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+}

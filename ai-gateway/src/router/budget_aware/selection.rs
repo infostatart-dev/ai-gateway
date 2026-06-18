@@ -121,3 +121,26 @@ impl BudgetAwareRouter {
             })
     }
 }
+
+#[cfg(all(test, feature = "testing"))]
+mod tests {
+    use crate::{
+        app_state::AppState,
+        error::internal::InternalError,
+        router::{
+            budget_aware::router_with_candidates,
+            capability::RequestRequirements,
+        },
+    };
+
+    #[tokio::test]
+    async fn ordered_candidates_empty_returns_provider_not_found() {
+        let app_state = AppState::test_default().await;
+        let router = router_with_candidates(&app_state, vec![]);
+        let requirements = RequestRequirements::default();
+
+        let result = router.ordered_candidates(&requirements, None);
+
+        assert!(matches!(result, Err(InternalError::ProviderNotFound)));
+    }
+}
