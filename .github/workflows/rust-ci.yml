@@ -3,6 +3,10 @@ name: Rust CI
 on:
   push:
     branches: ["main"]
+    # Skip when the push only updates OpenSpec planning artifacts (no Rust/build inputs).
+    paths-ignore:
+      - "openspec/**/*.md"
+      - "openspec/**/.openspec.yaml"
   pull_request:
     branches: ["main"]
     paths:
