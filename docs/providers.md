@@ -151,6 +151,27 @@ per-model` in `provider-limits.yaml`, (2) add tier model RPM/RPD rows, (3) add
 `provider-ladders.yaml` entry, (4) add routing_load scenario — no router code
 changes required.
 
+### Gemini catalog verify (0.4.2-beta.3+)
+
+Embedded Gemini `upstream_slug` values in `providers.yaml` and free-tier ladder
+slugs in `provider-ladders.yaml` must exist in the frozen ListModels fixture
+[`gemini-listmodels.json`](../ai-gateway/tests/fixtures/gemini-listmodels.json).
+Structured entries may split wire vs limits keys, for example:
+
+```yaml
+- upstream: gemini-3-flash-preview
+  catalog: gemini-3-flash
+```
+
+Refresh the fixture after Google catalog changes, then run:
+
+```bash
+mise run catalog:verify-gemini
+```
+
+OpenAI-compat providers can follow the same pattern (fixture + verify test) when
+their catalogs are curated in embedded YAML.
+
 For **payload-aware routing** (autodefault fat json_schema requests), the
 budget-aware router also reads per-model **TPM** caps from this catalog at
 filter time: `effective_window = margin(min(context_window, tpm))`. Candidates

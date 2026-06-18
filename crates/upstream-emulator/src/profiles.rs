@@ -5,6 +5,8 @@ pub enum ForcedProfile {
     AuthError,
     QuotaExhausted,
     Overload,
+    NotFound,
+    HighDemand,
 }
 
 #[derive(Debug, Default, Clone)]

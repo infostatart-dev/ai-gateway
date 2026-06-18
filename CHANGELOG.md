@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.4.2-beta.3] - 2026-06-18
+
+### Discovered (stage live probe)
+
+- **Gemini free slots ~50% 404 / ~50% 429, 0% success** after beta.1: phantom catalog
+  slugs (`gemini-3.5-flash-preview`) and retired `gemini-1.5-*` upstream ids
+- **ListModels:** `gemini-3.5-flash` exists; `gemini-3.5-flash-preview` and `gemini-1.5-*` do not
+- **`gemini-2.5-pro` on free** hits billing/429 — stability band moved to `gemini-2.5-flash-lite`
+
+### Features
+
+- **Provider model catalog:** `upstream_slug` vs `catalog_key` in `providers.yaml`;
+  CI verify against frozen Gemini ListModels fixture (`catalog:verify-gemini`)
+- **Quota-profile scopes:** per-model 404/unsupported retires `(credential, model)`;
+  Gemini 503 high-demand cools slot briefly while continuing intra-slot ladder
+- **Ladder-only walk:** Gemini free credentials try only `provider-ladders.yaml`
+  models (no cartesian `providers × credentials` dead slugs)
+
+### Changed
+
+- **Gemini slugs:** `gemini-3.5-flash` (GA), `gemini-2.5-flash-lite` on free ladder;
+  removed phantom `gemini-3.5-flash-preview` and retired `gemini-1.5-*` upstream ids
+- **Free stability band:** `gemini-2.5-flash-lite` instead of billing-gated `gemini-2.5-pro`
+
+### Fixed
+
+- **Stage Gemini 404 storm:** 404 no longer retires whole free slot on per-model profile
+
 ## [0.4.2-beta.1] - 2026-06-18
 
 ### Features

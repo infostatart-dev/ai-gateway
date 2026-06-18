@@ -334,18 +334,19 @@ anthropic:
   version: "2023-06-01"
 
 gemini:
+  last-verified-at: "2026-06-18"
+  verify-source: official_api
   models:
     - "gemini-3.1-pro-preview"
-    - "gemini-3-flash-preview"
-    - "gemini-3.5-flash-preview"
+    - upstream: gemini-3-flash-preview
+      catalog: gemini-3-flash
+    - "gemini-3.5-flash"
     - "gemini-3.1-flash-lite"
     - "gemini-2.5-flash"
+    - "gemini-2.5-flash-lite"
     - "gemini-2.5-pro"
     - "gemini-2.0-flash"
     - "gemini-2.0-flash-lite"
-    - "gemini-1.5-flash"
-    - "gemini-1.5-flash-8b"
-    - "gemini-1.5-pro"
   base-url: https://generativelanguage.googleapis.com/
   model-capabilities:
     gemini-3-flash-preview:
@@ -353,12 +354,17 @@ gemini:
       supports-json-schema: true
       context-window: 1000000
       intent-tier: fast-thinking
-    gemini-3.5-flash-preview:
+    gemini-3.5-flash:
       supports-tools: true
       supports-json-schema: true
       context-window: 1000000
       intent-tier: fast-thinking
     gemini-3.1-flash-lite:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+      intent-tier: fast-thinking
+    gemini-2.5-flash-lite:
       supports-tools: true
       supports-json-schema: true
       context-window: 1000000

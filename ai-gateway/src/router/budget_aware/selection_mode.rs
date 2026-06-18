@@ -18,6 +18,7 @@ pub(super) fn budget_then_capability_candidates(
 ) -> Result<Vec<BudgetCandidate>, InternalError> {
     let intent = intent_selection::routing_intent_for_request(source_model);
     let limits = &router.app_state.config().provider_limits;
+    let ladders = crate::config::model_ladder::ModelLadderRegistry::default();
     let budget = PayloadBudgetConfig::default();
 
     if router.source_model_selection == SourceModelSelection::Intent {
@@ -31,6 +32,11 @@ pub(super) fn budget_then_capability_candidates(
                 intent,
             )
         });
+        super::ladder_filter::retain_ladder_eligible(
+            &mut candidates,
+            limits,
+            &ladders,
+        );
         candidates = intent_selection::order_intent_bands(
             router,
             candidates,
@@ -43,6 +49,12 @@ pub(super) fn budget_then_capability_candidates(
             limits,
             budget,
             |_| true,
+        );
+        let mut candidates = candidates;
+        super::ladder_filter::retain_ladder_eligible(
+            &mut candidates,
+            limits,
+            &ladders,
         );
         return finish_candidates(
             router,
@@ -69,6 +81,12 @@ pub(super) fn budget_then_capability_candidates(
                 intent,
             )
         },
+    );
+    let mut candidates = candidates;
+    super::ladder_filter::retain_ladder_eligible(
+        &mut candidates,
+        limits,
+        &ladders,
     );
 
     finish_candidates(router, candidates, requirements, source_model)

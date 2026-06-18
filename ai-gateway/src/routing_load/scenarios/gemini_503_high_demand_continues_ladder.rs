@@ -11,18 +11,16 @@ use crate::{
     routing_load::{
         assert_identity::routed_identity,
         payload::default_fat_body,
-        responses::{daily_quota_exhausted, ok_chat_completion},
+        responses::{high_demand_503, ok_chat_completion},
     },
 };
 
 pub async fn run() {
     clear_test_call_responses();
-    for _ in 0..4 {
-        push_test_call_response_for_credential(
-            "gemini-free-8",
-            Ok(daily_quota_exhausted()),
-        );
-    }
+    push_test_call_response_for_credential(
+        "gemini-free-8",
+        Ok(high_demand_503()),
+    );
     push_test_call_response_for_credential(
         "gemini-free-8",
         Ok(ok_chat_completion()),
@@ -31,26 +29,12 @@ pub async fn run() {
     let app_state = AppState::test_default().await;
     let router = empty_router(&app_state);
     let ranked = vec![
-        gemini_model_candidate(
-            &app_state,
-            "gemini-free-8",
-            "gemini-3-flash-preview",
-        )
-        .await,
         gemini_model_candidate(&app_state, "gemini-free-8", "gemini-3.5-flash")
             .await,
         gemini_model_candidate(
             &app_state,
             "gemini-free-8",
             "gemini-3.1-flash-lite",
-        )
-        .await,
-        gemini_model_candidate(&app_state, "gemini-free-8", "gemini-2.5-flash")
-            .await,
-        gemini_model_candidate(
-            &app_state,
-            "gemini-free-8",
-            "gemini-2.5-flash-lite",
         )
         .await,
     ];
@@ -63,10 +47,10 @@ pub async fn run() {
         None,
     )
     .await
-    .expect("stability band success");
+    .expect("503 high demand continues ladder on same slot");
 
     assert_eq!(
         routed_identity(&response),
-        "gemini-free-8/gemini-2.5-flash-lite"
+        "gemini-free-8/gemini-3.1-flash-lite"
     );
 }

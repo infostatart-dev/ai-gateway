@@ -390,6 +390,30 @@ async fn fail_over_candidate(
         elapsed,
     )
     .await;
+    let quota_profile = this
+        .app_state
+        .config()
+        .provider_limits
+        .quota_profile(&candidate.capability.provider);
+    tracing::info!(
+        credential = candidate.credential_id.as_str(),
+        model = %model,
+        status = status.as_u16(),
+        failover_class = ?class,
+        exhaustion_scope = ?scope,
+        quota_profile = match quota_profile {
+            crate::config::provider_limits::ProviderQuotaProfile::PerModel => {
+                "model"
+            }
+            crate::config::provider_limits::ProviderQuotaProfile::PerSlot => {
+                "slot"
+            }
+            crate::config::provider_limits::ProviderQuotaProfile::PerSession => {
+                "session"
+            }
+        },
+        "classified upstream failure"
+    );
     crate::metrics::provider::record_upstream_attempt(
         &crate::metrics::provider::DispatchMetricsInput {
             app_state: &this.app_state,

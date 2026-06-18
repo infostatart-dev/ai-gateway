@@ -13,8 +13,9 @@ use crate::{
     state::SharedState,
     tokens::estimate_usage,
     wire::{
-        auth_error_response, overload_response, quota_exhausted_response,
-        rate_limit_response, render_api_family,
+        auth_error_response, high_demand_response, not_found_response,
+        overload_response, quota_exhausted_response, rate_limit_response,
+        render_api_family,
     },
 };
 
@@ -70,6 +71,8 @@ fn forced_response(profile: ForcedProfile) -> Response {
         ForcedProfile::AuthError => auth_error_response(),
         ForcedProfile::QuotaExhausted => quota_exhausted_response(),
         ForcedProfile::Overload => overload_response(),
+        ForcedProfile::NotFound => not_found_response(),
+        ForcedProfile::HighDemand => high_demand_response(),
     }
 }
 

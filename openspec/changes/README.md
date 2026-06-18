@@ -18,6 +18,7 @@ mise exec -- openspec validate --changes --strict
 |--------|-------|-------|--------|
 | [routing-load-verification](routing-load-verification/) | Concurrent routing_load + provider-stats assertions | 20/22 | in progress |
 | [gateway-load-acceptance](gateway-load-acceptance/) | Stage hardening: payload gate, pacing, failover scope | 13/20 | in progress |
+| [provider-model-reality](provider-model-reality/) | Catalog verify, per-model 404/503 scopes, ladder slug fix | 0/33 | proposed |
 | [autodefault-credential-pools](autodefault-credential-pools/) | Mini/nano binding audit, Gemini×16, DeepSeek×2 | 0/20 | proposed |
 
 ## Upstream / decision backlog

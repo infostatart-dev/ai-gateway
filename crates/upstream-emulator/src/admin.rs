@@ -64,6 +64,10 @@ async fn set_profile(
         "force-auth-error" => ForcedProfile::AuthError,
         "quota-exhausted" => ForcedProfile::QuotaExhausted,
         "overload" => ForcedProfile::Overload,
+        "not-found" | "not_found" | "404" => ForcedProfile::NotFound,
+        "high-demand" | "high_demand" | "503-high-demand" => {
+            ForcedProfile::HighDemand
+        }
         _ => {
             return (
                 StatusCode::BAD_REQUEST,

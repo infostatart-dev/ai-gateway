@@ -12,7 +12,9 @@ as a separate candidate for failover and cooldown tracking.
 **Per-model exhaustion (Gemini free):** when only one model slug on a slot hits
 RPM/RPD, the router retires `(credential, model)` — not the whole slot. Project
 billing / spending-cap 429 still retires the slot and skips free-tier siblings.
-See `provider-ladders.yaml` for same-slot model escalation order.
+See `provider-ladders.yaml` for same-slot model escalation order. Embedded
+upstream slugs are verified against a frozen ListModels fixture — see
+[providers.md](providers.md#gemini-catalog-verify-042-beta3).
 
 > **Breaking change (0.3.0-beta.18):** `AI_GATEWAY_CREDENTIAL_*`,
 > `{PROVIDER}_API_KEY`, `GEMINI_FREE_TIER_*`, `CHATGPT_BROWSER_CLI`,

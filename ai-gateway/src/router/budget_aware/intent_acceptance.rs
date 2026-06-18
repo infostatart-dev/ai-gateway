@@ -355,4 +355,82 @@ mod acceptance {
             "strict mode still routes via model-mapping bindings"
         );
     }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn acceptance_gemini_capacity_before_groq_on_fast_thinking() {
+        use super::super::{
+            call::clear_test_call_responses,
+            failover_loop::run_failover_candidates,
+            push_test_call_response_for_credential,
+            test_support::{
+                balance_ranked, gemini_model_candidate, request_parts,
+                scout_candidate,
+            },
+        };
+        use crate::{
+            router::intent::extract_routing_intent,
+            routing_load::{
+                assert_identity::routed_identity,
+                payload::nano_json_strict_body,
+                responses::{ok_nano_json_schema_completion, rate_limited_rpm},
+            },
+        };
+
+        clear_test_call_responses();
+        push_test_call_response_for_credential(
+            "gemini-free-8",
+            Ok(rate_limited_rpm()),
+        );
+        push_test_call_response_for_credential(
+            "gemini-free-8",
+            Ok(ok_nano_json_schema_completion()),
+        );
+
+        let app_state = AppState::test_default().await;
+        let router = intent_router(
+            &app_state,
+            vec![
+                gemini_model_candidate(
+                    &app_state,
+                    "gemini-free-8",
+                    "gemini-3-flash-preview",
+                )
+                .await,
+                gemini_model_candidate(
+                    &app_state,
+                    "gemini-free-8",
+                    "gemini-3.1-flash-lite",
+                )
+                .await,
+                scout_candidate(&app_state, "groq-test").await,
+            ],
+        )
+        .await;
+        let body = nano_json_strict_body();
+        let parsed: serde_json::Value =
+            serde_json::from_slice(&body).expect("body");
+        let requirements =
+            crate::router::capability::extract_requirements_from_value(&parsed);
+        let source = source("openai/gpt-5-nano");
+        let routing_intent = extract_routing_intent(&source);
+        let ordered = router
+            .ordered_candidates(&requirements, Some(&source))
+            .expect("ordered");
+        let ranked = balance_ranked(&router, ordered);
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            body,
+            ranked,
+            requirements,
+            Some(routing_intent),
+        )
+        .await
+        .expect("lite succeeds before groq");
+        assert_eq!(
+            routed_identity(&response),
+            "gemini-free-8/gemini-3.1-flash-lite"
+        );
+    }
 }

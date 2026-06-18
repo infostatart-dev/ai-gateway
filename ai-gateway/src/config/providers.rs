@@ -8,6 +8,7 @@ use serde::{
 };
 use url::Url;
 
+use super::provider_model_spec::{RawModelSpec, build_model_catalog_keys};
 use crate::{
     config::model_capability::ModelCapabilityConfig,
     types::{model_id::ModelId, provider::InferenceProvider},
@@ -38,6 +39,14 @@ pub struct GlobalProviderConfig {
     /// Static headers merged into every upstream request for this provider.
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub request_headers: IndexMap<String, String>,
+    /// Limits-catalog key per routable model when it differs from upstream
+    /// slug.
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub model_catalog_keys: IndexMap<ModelId, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_verified_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify_source: Option<String>,
 }
 
 /// Map of *ALL* supported providers.
@@ -56,7 +65,7 @@ impl<'de> Deserialize<'de> for ProvidersConfig {
         #[derive(Deserialize)]
         #[serde(rename_all = "kebab-case")]
         struct RawGlobalProviderConfig {
-            models: IndexSet<String>,
+            models: Vec<RawModelSpec>,
             base_url: Url,
             #[serde(default)]
             version: Option<String>,
@@ -66,6 +75,10 @@ impl<'de> Deserialize<'de> for ProvidersConfig {
             model_capabilities: IndexMap<String, ModelCapabilityConfig>,
             #[serde(default)]
             request_headers: IndexMap<String, String>,
+            #[serde(default)]
+            last_verified_at: Option<String>,
+            #[serde(default)]
+            verify_source: Option<String>,
         }
 
         impl<'de> Visitor<'de> for ProvidersConfigVisitor {
@@ -92,20 +105,23 @@ impl<'de> Deserialize<'de> for ProvidersConfig {
                     let raw_config: RawGlobalProviderConfig =
                         map.next_value()?;
 
-                    // Convert model strings to ModelId using the provider
-                    // context
+                    let (_entries, catalog_keys) =
+                        build_model_catalog_keys(&provider, &raw_config.models)
+                            .map_err(de::Error::custom)?;
+
                     let models = raw_config
                         .models
-                        .into_iter()
-                        .map(|model_str| {
+                        .iter()
+                        .map(|spec| {
                             ModelId::from_str_and_provider(
                                 provider.clone(),
-                                &model_str,
+                                spec.upstream_slug(),
                             )
                             .map_err(|e| {
                                 de::Error::custom(format!(
-                                    "Invalid model '{model_str}' for provider \
-                                     {provider}: {e}"
+                                    "Invalid model '{}' for provider \
+                                     {provider}: {e}",
+                                    spec.upstream_slug()
                                 ))
                             })
                         })
@@ -123,6 +139,9 @@ impl<'de> Deserialize<'de> for ProvidersConfig {
                         )
                         .map_err(de::Error::custom)?,
                         request_headers: raw_config.request_headers,
+                        model_catalog_keys: catalog_keys,
+                        last_verified_at: raw_config.last_verified_at,
+                        verify_source: raw_config.verify_source,
                     };
 
                     providers.insert(provider, config);
@@ -422,5 +441,38 @@ anthropic:
                 },
             }
         );
+    }
+
+    #[test]
+    fn gemini_preview_entry_maps_catalog_key() {
+        let config = ProvidersConfig::default();
+        let provider = InferenceProvider::GoogleGemini;
+        let cfg = config.get(&provider).expect("gemini");
+        let preview = ModelId::from_str_and_provider(
+            provider.clone(),
+            "gemini-3-flash-preview",
+        )
+        .expect("preview id");
+        assert_eq!(
+            cfg.model_catalog_keys.get(&preview).map(String::as_str),
+            Some("gemini-3-flash")
+        );
+        assert!(cfg.models.contains(&preview));
+        assert!(
+            !cfg.models
+                .iter()
+                .any(|m| { m.to_string() == "gemini-3.5-flash-preview" })
+        );
+        let catalog =
+            crate::config::provider_limits::ProviderLimitCatalog::default();
+        let resolved = crate::config::catalog_limit_resolve::catalog_limit_resolve_with_key(
+            &catalog,
+            &provider,
+            "free",
+            "gemini-3-flash-preview",
+            cfg.model_catalog_keys.get(&preview).map(String::as_str),
+        )
+        .expect("preview limits via catalog key");
+        assert_eq!(resolved.catalog_model, "gemini-3-flash");
     }
 }

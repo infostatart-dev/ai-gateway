@@ -62,3 +62,22 @@ pub fn overload_503() -> crate::types::response::Response {
         .body(Body::from("model is overloaded"))
         .unwrap()
 }
+
+pub fn high_demand_503() -> crate::types::response::Response {
+    http::Response::builder()
+        .status(StatusCode::SERVICE_UNAVAILABLE)
+        .body(Body::from(
+            "This model is currently experiencing high demand. Please try \
+             again later.",
+        ))
+        .unwrap()
+}
+
+pub fn not_found_404() -> crate::types::response::Response {
+    http::Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .body(Body::from(
+            r#"{"error":{"message":"models/gemini-3.5-flash-preview is not found"}}"#,
+        ))
+        .unwrap()
+}

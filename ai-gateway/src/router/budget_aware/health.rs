@@ -65,8 +65,13 @@ impl BudgetAwareRouter {
             .config()
             .provider_limits
             .cooldown_for(provider);
+        let profile = self
+            .app_state
+            .config()
+            .provider_limits
+            .quota_profile(provider);
         let (response, cooldown, scope) =
-            cooldown_for_response(response, &config).await;
+            cooldown_for_response(response, &config, profile).await;
         let _ = self.update_failure_state_scoped(
             credential_id,
             model,

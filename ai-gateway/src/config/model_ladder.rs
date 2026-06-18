@@ -128,14 +128,14 @@ mod tests {
         let lite = registry
             .position(&provider, "free", "gemini-3.1-flash-lite")
             .expect("lite");
-        let pro = registry
-            .position(&provider, "free", "gemini-2.5-pro")
-            .expect("pro");
+        let stability = registry
+            .position(&provider, "free", "gemini-2.5-flash-lite")
+            .expect("stability");
         assert_eq!(flash.band, LadderBand::Fast);
         assert_eq!(lite.band, LadderBand::Capacity);
-        assert_eq!(pro.band, LadderBand::Stability);
+        assert_eq!(stability.band, LadderBand::Capacity);
         assert!(flash.band_index < lite.band_index);
-        assert!(lite.band_index < pro.band_index);
+        assert!(lite.position < stability.position);
     }
 
     #[test]

@@ -55,15 +55,15 @@ mod tests {
             "gemini-3-flash-preview",
         )
         .await;
-        let pro = gemini_model_candidate(
+        let lite = gemini_model_candidate(
             &app_state,
             "gemini-free-8",
-            "gemini-2.5-pro",
+            "gemini-2.5-flash-lite",
         )
         .await;
         let ladders = ModelLadderRegistry::default();
-        assert_eq!(ladder_cmp(&ladders, &flash, &pro), Ordering::Less);
-        assert_eq!(ladder_cmp(&ladders, &pro, &flash), Ordering::Greater);
+        assert_eq!(ladder_cmp(&ladders, &flash, &lite), Ordering::Less);
+        assert_eq!(ladder_cmp(&ladders, &lite, &flash), Ordering::Greater);
     }
 
     #[tokio::test]
@@ -81,14 +81,14 @@ mod tests {
             "gemini-3.1-flash-lite",
         )
         .await;
-        let pro = gemini_model_candidate(
+        let stability = gemini_model_candidate(
             &app_state,
             "gemini-free-8",
-            "gemini-2.5-pro",
+            "gemini-2.5-flash-lite",
         )
         .await;
         let ladders = ModelLadderRegistry::default();
-        let mut ranked = vec![pro.clone(), lite.clone(), flash.clone()];
+        let mut ranked = vec![stability.clone(), lite.clone(), flash.clone()];
         ranked.sort_by(|left, right| ladder_cmp(&ladders, left, right));
         assert_eq!(
             ranked[0].capability.model.to_string(),
@@ -99,11 +99,11 @@ mod tests {
                 .position(
                     &flash.capability.provider,
                     &flash.credential_tier,
-                    "gemini-2.5-pro",
+                    "gemini-2.5-flash-lite",
                 )
-                .expect("pro")
+                .expect("stability")
                 .band,
-            LadderBand::Stability
+            LadderBand::Capacity
         );
     }
 }

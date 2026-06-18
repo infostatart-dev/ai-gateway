@@ -160,7 +160,13 @@ impl ProviderFailoverRouter {
             .config()
             .provider_limits
             .cooldown_for(provider);
-        let (_, cooldown, _) = cooldown_for_response(response, &config).await;
+        let profile = self
+            .app_state
+            .config()
+            .provider_limits
+            .quota_profile(provider);
+        let (_, cooldown, _) =
+            cooldown_for_response(response, &config, profile).await;
         let mut states = lock_provider_states(&self.states);
         let state = states.entry(provider.clone()).or_default();
         state.latency = Some(smoothed_latency(state.latency, elapsed));

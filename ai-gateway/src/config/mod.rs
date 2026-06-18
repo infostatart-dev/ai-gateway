@@ -20,6 +20,7 @@ pub mod monitor;
 pub mod observability;
 pub mod perplexity_web;
 pub mod provider_limits;
+pub mod provider_model_spec;
 pub mod providers;
 pub mod rate_limit;
 pub mod redis;

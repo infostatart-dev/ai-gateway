@@ -36,9 +36,13 @@ description = "LCOV report for IDE / Codecov (lcov.info at repo root)"
 env = { CARGO_INCREMENTAL = "0" }
 run = "cargo llvm-cov --workspace --all-features --lib --lcov --output-path lcov.info"
 
+[tasks."catalog:verify-gemini"]
+description = "Assert embedded Gemini catalog slugs exist in ListModels fixture"
+run = "cargo test -p ai-gateway --test verify_gemini_catalog"
+
 [tasks."predeploy:rust"]
-description = "Rust diff gate: fmt + clippy + lib tests (local sanity only)"
-depends = ["predeploy:fmt", "predeploy:clippy", "predeploy:test-lib"]
+description = "Rust diff gate: fmt + clippy + lib tests + Gemini catalog verify"
+depends = ["predeploy:fmt", "predeploy:clippy", "predeploy:test-lib", "catalog:verify-gemini"]
 
 [tasks."openspec:validate-changes"]
 description = "Validate active OpenSpec changes"

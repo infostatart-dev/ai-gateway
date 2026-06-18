@@ -40,6 +40,9 @@ mod tests {
             gzip_decompress_responses: None,
             model_capabilities: IndexMap::default(),
             request_headers: IndexMap::default(),
+            model_catalog_keys: IndexMap::default(),
+            last_verified_at: None,
+            verify_source: None,
         }
     }
 

@@ -29,6 +29,18 @@ routing_load_test!(
     gemini_stability_escalation,
     scenarios::gemini_stability_escalation::run
 );
+routing_load_test!(
+    gemini_404_retires_model_not_slot,
+    scenarios::gemini_404_retires_model_not_slot::run
+);
+routing_load_test!(
+    gemini_503_high_demand_continues_ladder,
+    scenarios::gemini_503_high_demand_continues_ladder::run
+);
+routing_load_test!(
+    gemini_stability_escalates_up,
+    scenarios::gemini_stability_escalates_up::run
+);
 routing_load_test!(payload_filter_under_load, scenarios::payload_filter::run);
 routing_load_test!(failover_rpm_sibling, scenarios::failover_rpm::run);
 routing_load_test!(failover_daily_quota, scenarios::failover_quota::run);

@@ -39,6 +39,8 @@ impl BudgetAwareRouter {
     ) -> Result<Vec<BudgetCandidate>, InternalError> {
         let intent = intent_selection::routing_intent_for_request(source_model);
         let limits = &self.app_state.config().provider_limits;
+        let ladders =
+            crate::config::model_ladder::ModelLadderRegistry::default();
         let budget =
             crate::router::token_estimate::PayloadBudgetConfig::default();
         let mut candidates = super::payload::filter_payload_capable(
@@ -55,6 +57,11 @@ impl BudgetAwareRouter {
                     intent,
                 )
             },
+        );
+        super::ladder_filter::retain_ladder_eligible(
+            &mut candidates,
+            limits,
+            &ladders,
         );
 
         if candidates.is_empty() {

@@ -7,6 +7,13 @@ pub fn looks_like_unsupported_model(body: Option<&[u8]>) -> bool {
 }
 
 #[must_use]
+pub fn looks_like_high_demand(body: Option<&[u8]>) -> bool {
+    let text = body_to_lower_text(body);
+    text.contains("high demand")
+        || (text.contains("try again later") && text.contains("model"))
+}
+
+#[must_use]
 pub fn looks_like_abuse_block(body: Option<&[u8]>) -> bool {
     let text = body_to_lower_text(body);
     if text.is_empty() {
@@ -73,5 +80,11 @@ mod tests {
         assert!(!looks_like_abuse_block(Some(
             b"Service unavailable. Please try again later."
         )));
+    }
+
+    #[test]
+    fn high_demand_body_is_detected() {
+        let body = b"This model is currently experiencing high demand.";
+        assert!(looks_like_high_demand(Some(body)));
     }
 }

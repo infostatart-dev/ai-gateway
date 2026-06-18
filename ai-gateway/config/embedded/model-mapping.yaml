@@ -32,7 +32,7 @@ gpt-4o:
 gpt-4o-mini:
   - "openrouter/google/gemini-2.0-flash-lite-001"
   - "anthropic/claude-3-5-haiku"
-  - "gemini/gemini-2.0-flash"
+  - "gemini/gemini-2.5-flash"
   - "ollama/llama3.2"
   - "mistral/mistral-small"
   - "xai/grok-3-mini"

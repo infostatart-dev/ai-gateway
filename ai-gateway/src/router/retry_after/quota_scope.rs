@@ -1,6 +1,7 @@
 use http::StatusCode;
 
 use super::FailoverClass;
+use crate::config::provider_limits::ProviderQuotaProfile;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExhaustionScope {
@@ -23,6 +24,7 @@ pub fn classify_exhaustion_scope(
     status: StatusCode,
     body: Option<&[u8]>,
     class: FailoverClass,
+    profile: ProviderQuotaProfile,
 ) -> ExhaustionScope {
     if matches!(status, StatusCode::PAYMENT_REQUIRED) {
         return ExhaustionScope::Project;
@@ -32,6 +34,23 @@ pub fn classify_exhaustion_scope(
     {
         return ExhaustionScope::Project;
     }
+
+    if profile == ProviderQuotaProfile::PerModel {
+        if matches!(status, StatusCode::NOT_FOUND) {
+            return ExhaustionScope::Model;
+        }
+        if matches!(status, StatusCode::BAD_REQUEST)
+            && super::abuse::looks_like_unsupported_model(body)
+        {
+            return ExhaustionScope::Model;
+        }
+        if matches!(status, StatusCode::SERVICE_UNAVAILABLE)
+            && super::abuse::looks_like_high_demand(body)
+        {
+            return ExhaustionScope::Model;
+        }
+    }
+
     match class {
         FailoverClass::Transient if status == StatusCode::TOO_MANY_REQUESTS => {
             ExhaustionScope::Model
@@ -41,6 +60,31 @@ pub fn classify_exhaustion_scope(
             ExhaustionScope::Slot
         }
     }
+}
+
+#[must_use]
+pub fn phantom_model_cooldown_applies(
+    status: StatusCode,
+    body: Option<&[u8]>,
+    scope: ExhaustionScope,
+    profile: ProviderQuotaProfile,
+) -> bool {
+    profile == ProviderQuotaProfile::PerModel
+        && scope == ExhaustionScope::Model
+        && (status == StatusCode::NOT_FOUND
+            || (status == StatusCode::BAD_REQUEST
+                && super::abuse::looks_like_unsupported_model(body)))
+}
+
+#[must_use]
+pub fn slot_cooldown_also_applies(
+    status: StatusCode,
+    body: Option<&[u8]>,
+    profile: ProviderQuotaProfile,
+) -> bool {
+    profile == ProviderQuotaProfile::PerModel
+        && status == StatusCode::SERVICE_UNAVAILABLE
+        && super::abuse::looks_like_high_demand(body)
 }
 
 fn body_to_text(body: Option<&[u8]>) -> String {
@@ -76,6 +120,7 @@ fn project_patterns() -> &'static [regex::Regex] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::provider_limits::ProviderQuotaProfile;
 
     #[test]
     fn model_rpd_is_not_project_scope() {
@@ -84,6 +129,7 @@ mod tests {
             StatusCode::TOO_MANY_REQUESTS,
             Some(body.as_ref()),
             FailoverClass::QuotaExhausted,
+            ProviderQuotaProfile::PerModel,
         );
         assert_eq!(scope, ExhaustionScope::Model);
         assert!(!looks_like_project_billing_cap(Some(body.as_ref())));
@@ -97,6 +143,7 @@ mod tests {
             StatusCode::TOO_MANY_REQUESTS,
             Some(body.as_ref()),
             FailoverClass::QuotaExhausted,
+            ProviderQuotaProfile::PerModel,
         );
         assert_eq!(scope, ExhaustionScope::Project);
     }
@@ -107,7 +154,59 @@ mod tests {
             StatusCode::TOO_MANY_REQUESTS,
             Some(b"rate limit"),
             FailoverClass::Transient,
+            ProviderQuotaProfile::PerModel,
         );
         assert_eq!(scope, ExhaustionScope::Model);
+    }
+
+    #[test]
+    fn per_model_404_is_model_scope() {
+        let scope = classify_exhaustion_scope(
+            StatusCode::NOT_FOUND,
+            None,
+            FailoverClass::Transient,
+            ProviderQuotaProfile::PerModel,
+        );
+        assert_eq!(scope, ExhaustionScope::Model);
+    }
+
+    #[test]
+    fn per_slot_404_is_slot_scope() {
+        let scope = classify_exhaustion_scope(
+            StatusCode::NOT_FOUND,
+            None,
+            FailoverClass::Transient,
+            ProviderQuotaProfile::PerSlot,
+        );
+        assert_eq!(scope, ExhaustionScope::Slot);
+    }
+
+    #[test]
+    fn per_model_503_high_demand_classifies_as_slot_for_metrics() {
+        let body = b"This model is currently experiencing high demand.";
+        let scope = classify_exhaustion_scope(
+            StatusCode::SERVICE_UNAVAILABLE,
+            Some(body.as_ref()),
+            FailoverClass::Overload,
+            ProviderQuotaProfile::PerModel,
+        );
+        // Walk continues via Model scope (design D4); slot cooldown is
+        // separate.
+        assert_eq!(scope, ExhaustionScope::Model);
+        assert!(slot_cooldown_also_applies(
+            StatusCode::SERVICE_UNAVAILABLE,
+            Some(body.as_ref()),
+            ProviderQuotaProfile::PerModel,
+        ));
+    }
+
+    #[test]
+    fn phantom_slug_triggers_long_model_cooldown() {
+        assert!(phantom_model_cooldown_applies(
+            StatusCode::NOT_FOUND,
+            None,
+            ExhaustionScope::Model,
+            ProviderQuotaProfile::PerModel,
+        ));
     }
 }

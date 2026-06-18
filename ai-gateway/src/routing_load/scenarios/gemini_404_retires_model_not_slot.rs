@@ -11,18 +11,16 @@ use crate::{
     routing_load::{
         assert_identity::routed_identity,
         payload::default_fat_body,
-        responses::{daily_quota_exhausted, ok_chat_completion},
+        responses::{not_found_404, ok_chat_completion},
     },
 };
 
 pub async fn run() {
     clear_test_call_responses();
-    for _ in 0..4 {
-        push_test_call_response_for_credential(
-            "gemini-free-8",
-            Ok(daily_quota_exhausted()),
-        );
-    }
+    push_test_call_response_for_credential(
+        "gemini-free-8",
+        Ok(not_found_404()),
+    );
     push_test_call_response_for_credential(
         "gemini-free-8",
         Ok(ok_chat_completion()),
@@ -34,23 +32,13 @@ pub async fn run() {
         gemini_model_candidate(
             &app_state,
             "gemini-free-8",
-            "gemini-3-flash-preview",
+            "gemini-3.5-flash-preview",
         )
         .await,
-        gemini_model_candidate(&app_state, "gemini-free-8", "gemini-3.5-flash")
-            .await,
         gemini_model_candidate(
             &app_state,
             "gemini-free-8",
             "gemini-3.1-flash-lite",
-        )
-        .await,
-        gemini_model_candidate(&app_state, "gemini-free-8", "gemini-2.5-flash")
-            .await,
-        gemini_model_candidate(
-            &app_state,
-            "gemini-free-8",
-            "gemini-2.5-flash-lite",
         )
         .await,
     ];
@@ -63,10 +51,10 @@ pub async fn run() {
         None,
     )
     .await
-    .expect("stability band success");
+    .expect("404 retires model and continues ladder");
 
     assert_eq!(
         routed_identity(&response),
-        "gemini-free-8/gemini-2.5-flash-lite"
+        "gemini-free-8/gemini-3.1-flash-lite"
     );
 }

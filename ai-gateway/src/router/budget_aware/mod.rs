@@ -11,6 +11,7 @@ mod failure;
 mod health;
 mod intent_acceptance;
 mod intent_selection;
+mod ladder_filter;
 mod ladder_rank;
 mod new_router;
 mod payload;

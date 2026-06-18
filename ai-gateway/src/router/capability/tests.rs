@@ -346,7 +346,7 @@ mod async_tests {
                 (InferenceProvider::Anthropic, "claude-3-5-haiku".to_string(),),
                 (
                     InferenceProvider::GoogleGemini,
-                    "gemini-2.0-flash".to_string(),
+                    "gemini-2.5-flash".to_string(),
                 ),
                 (
                     InferenceProvider::Named("groq".into()),

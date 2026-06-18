@@ -91,6 +91,30 @@ pub fn overload_response() -> Response {
         .into_response()
 }
 
+pub fn not_found_response() -> Response {
+    (
+        StatusCode::NOT_FOUND,
+        axum::Json(json!({
+            "error": {
+                "message": "models/gemini-3.5-flash-preview is not found for API version v1beta"
+            }
+        })),
+    )
+        .into_response()
+}
+
+pub fn high_demand_response() -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        axum::Json(json!({
+            "error": {
+                "message": "This model is currently experiencing high demand. Please try again later."
+            }
+        })),
+    )
+        .into_response()
+}
+
 fn rate_limit_json(family: ProtocolFamily) -> Value {
     let message = match family {
         ProtocolFamily::GeminiOpenAiCompat => {
@@ -146,6 +170,14 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn high_demand_and_not_found_templates_match_google_shapes() {
+        let not_found = not_found_response();
+        assert_eq!(not_found.status(), StatusCode::NOT_FOUND);
+        let high_demand = high_demand_response();
+        assert_eq!(high_demand.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
 
     #[test]
     fn capable_model_returns_200_with_valid_schema() {

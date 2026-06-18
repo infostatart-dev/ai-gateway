@@ -19,11 +19,17 @@ use classify::classify_429;
 pub use header::extract_retry_after_from_headers;
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt;
-pub use quota_scope::ExhaustionScope;
 use quota_scope::classify_exhaustion_scope;
+pub use quota_scope::{
+    ExhaustionScope, phantom_model_cooldown_applies, slot_cooldown_also_applies,
+};
 
 use crate::{
-    config::router_cooldown::RouterCooldownConfig, types::response::Response,
+    config::{
+        provider_limits::ProviderQuotaProfile,
+        router_cooldown::RouterCooldownConfig,
+    },
+    types::response::Response,
 };
 
 /// How a failed candidate should influence same-provider sibling failover.
@@ -103,12 +109,28 @@ fn abuse_block_cooldown(config: &RouterCooldownConfig) -> Duration {
     config.abuse_block + config.retry_after_buffer
 }
 
+fn apply_model_cooldown_override(
+    status: StatusCode,
+    body: Option<&[u8]>,
+    scope: ExhaustionScope,
+    profile: ProviderQuotaProfile,
+    config: &RouterCooldownConfig,
+    cooldown: Duration,
+) -> Duration {
+    if phantom_model_cooldown_applies(status, body, scope, profile) {
+        config.quota_exhausted + config.retry_after_buffer
+    } else {
+        cooldown
+    }
+}
+
 pub async fn cooldown_for_response(
     response: Response,
     config: &RouterCooldownConfig,
+    profile: ProviderQuotaProfile,
 ) -> (Response, Duration, ExhaustionScope) {
-    let (response, cooldown, _class, scope) =
-        classify_and_cooldown(response, config).await;
+    let (response, cooldown, _class, scope, _) =
+        classify_and_cooldown(response, config, profile).await;
     (response, cooldown, scope)
 }
 
@@ -118,15 +140,22 @@ pub async fn cooldown_for_response(
 pub async fn classify_and_cooldown(
     response: Response,
     config: &RouterCooldownConfig,
-) -> (Response, Duration, FailoverClass, ExhaustionScope) {
+    profile: ProviderQuotaProfile,
+) -> (
+    Response,
+    Duration,
+    FailoverClass,
+    ExhaustionScope,
+    Option<Duration>,
+) {
     let status = response.status();
     if status == StatusCode::TOO_MANY_REQUESTS {
         if extract_retry_after_from_headers(response.headers()).is_some() {
             let cooldown =
                 rate_limit_cooldown(response.headers(), None, config);
             let class = FailoverClass::Transient;
-            let scope = classify_exhaustion_scope(status, None, class);
-            return (response, cooldown, class, scope);
+            let scope = classify_exhaustion_scope(status, None, class, profile);
+            return (response, cooldown, class, scope, None);
         }
         let (parts, body_bytes) = collect_response_body(response).await;
         let cooldown = rate_limit_cooldown(
@@ -138,13 +167,17 @@ pub async fn classify_and_cooldown(
             FailureKind::QuotaExhausted => FailoverClass::QuotaExhausted,
             FailureKind::RateLimit => FailoverClass::Transient,
         };
-        let scope =
-            classify_exhaustion_scope(status, Some(body_bytes.as_ref()), class);
+        let scope = classify_exhaustion_scope(
+            status,
+            Some(body_bytes.as_ref()),
+            class,
+            profile,
+        );
         let response = Response::from_parts(
             parts,
             axum_core::body::Body::from(body_bytes),
         );
-        return (response, cooldown, class, scope);
+        return (response, cooldown, class, scope, None);
     }
 
     if matches!(status, StatusCode::BAD_REQUEST) {
@@ -160,13 +193,25 @@ pub async fn classify_and_cooldown(
                 config.provider_error + config.retry_after_buffer
             };
         let class = FailoverClass::Transient;
-        let scope =
-            classify_exhaustion_scope(status, Some(body_bytes.as_ref()), class);
+        let scope = classify_exhaustion_scope(
+            status,
+            Some(body_bytes.as_ref()),
+            class,
+            profile,
+        );
+        let cooldown = apply_model_cooldown_override(
+            status,
+            Some(body_bytes.as_ref()),
+            scope,
+            profile,
+            config,
+            cooldown,
+        );
         let response = Response::from_parts(
             parts,
             axum_core::body::Body::from(body_bytes),
         );
-        return (response, cooldown, class, scope);
+        return (response, cooldown, class, scope, None);
     }
 
     if matches!(
@@ -186,13 +231,17 @@ pub async fn classify_and_cooldown(
             config.auth_error
         };
         let class = FailoverClass::Transient;
-        let scope =
-            classify_exhaustion_scope(status, Some(body_bytes.as_ref()), class);
+        let scope = classify_exhaustion_scope(
+            status,
+            Some(body_bytes.as_ref()),
+            class,
+            profile,
+        );
         let response = Response::from_parts(
             parts,
             axum_core::body::Body::from(body_bytes),
         );
-        return (response, cooldown, class, scope);
+        return (response, cooldown, class, scope, None);
     }
 
     if matches!(
@@ -210,18 +259,42 @@ pub async fn classify_and_cooldown(
             config.provider_error + config.retry_after_buffer
         };
         let class = FailoverClass::Overload;
-        let scope =
-            classify_exhaustion_scope(status, Some(body_bytes.as_ref()), class);
+        let scope = classify_exhaustion_scope(
+            status,
+            Some(body_bytes.as_ref()),
+            class,
+            profile,
+        );
+        let slot_cooldown = slot_cooldown_also_applies(
+            status,
+            Some(body_bytes.as_ref()),
+            profile,
+        )
+        .then(|| config.provider_error + config.retry_after_buffer);
         let response = Response::from_parts(
             parts,
             axum_core::body::Body::from(body_bytes),
         );
-        return (response, cooldown, class, scope);
+        return (response, cooldown, class, scope, slot_cooldown);
+    }
+
+    if status == StatusCode::NOT_FOUND {
+        let class = FailoverClass::Transient;
+        let scope = classify_exhaustion_scope(status, None, class, profile);
+        let cooldown = apply_model_cooldown_override(
+            status,
+            None,
+            scope,
+            profile,
+            config,
+            config.provider_error + config.retry_after_buffer,
+        );
+        return (response, cooldown, class, scope, None);
     }
 
     let class = FailoverClass::Transient;
-    let scope = classify_exhaustion_scope(status, None, class);
-    (response, config.provider_error, class, scope)
+    let scope = classify_exhaustion_scope(status, None, class, profile);
+    (response, config.provider_error, class, scope, None)
 }
 
 #[cfg(test)]
@@ -247,8 +320,12 @@ mod tests {
             .unwrap();
         let config = RouterCooldownConfig::default();
         let (_, cooldown) = {
-            let (response, cooldown, _) =
-                cooldown_for_response(response, &config).await;
+            let (response, cooldown, _) = cooldown_for_response(
+                response,
+                &config,
+                ProviderQuotaProfile::PerModel,
+            )
+            .await;
             (response, cooldown)
         };
         assert_eq!(
@@ -301,8 +378,12 @@ mod tests {
             .body(Body::from(body.as_slice()))
             .unwrap();
         let (_, cooldown) = {
-            let (response, cooldown, _) =
-                cooldown_for_response(response, &config).await;
+            let (response, cooldown, _) = cooldown_for_response(
+                response,
+                &config,
+                ProviderQuotaProfile::PerSlot,
+            )
+            .await;
             (response, cooldown)
         };
         assert_eq!(cooldown, config.abuse_block + config.retry_after_buffer);
@@ -320,11 +401,35 @@ mod tests {
             .body(Body::from(body.as_slice()))
             .unwrap();
         let (_, cooldown) = {
-            let (response, cooldown, _) =
-                cooldown_for_response(response, &config).await;
+            let (response, cooldown, _) = cooldown_for_response(
+                response,
+                &config,
+                ProviderQuotaProfile::PerSlot,
+            )
+            .await;
             (response, cooldown)
         };
         assert_eq!(cooldown, config.provider_error + config.retry_after_buffer);
         assert_eq!(cooldown, Duration::from_secs(60 + 1));
+    }
+
+    #[tokio::test]
+    async fn per_model_404_uses_long_model_cooldown() {
+        let config = RouterCooldownConfig::default();
+        let response = http::Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::from("model not found"))
+            .unwrap();
+        let (_, cooldown, scope) = cooldown_for_response(
+            response,
+            &config,
+            ProviderQuotaProfile::PerModel,
+        )
+        .await;
+        assert_eq!(scope, ExhaustionScope::Model);
+        assert_eq!(
+            cooldown,
+            config.quota_exhausted + config.retry_after_buffer
+        );
     }
 }

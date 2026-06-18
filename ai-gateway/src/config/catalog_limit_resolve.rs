@@ -56,6 +56,38 @@ pub fn catalog_limit_resolve(
     tier: &str,
     request_model: &str,
 ) -> Option<ResolvedModelLimits> {
+    catalog_limit_resolve_with_key(catalog, provider, tier, request_model, None)
+}
+
+#[must_use]
+pub fn catalog_limit_resolve_with_key(
+    catalog: &ProviderLimitCatalog,
+    provider: &InferenceProvider,
+    tier: &str,
+    request_model: &str,
+    catalog_key: Option<&str>,
+) -> Option<ResolvedModelLimits> {
+    if let Some(key) = catalog_key {
+        let config = catalog.provider(provider)?;
+        if let Some(tier_cfg) = config.tier(tier)
+            && let Some(model_entry) = tier_cfg.model(key)
+        {
+            return Some(ResolvedModelLimits {
+                tier: tier.to_string(),
+                catalog_model: key.to_string(),
+                limits: model_entry.limits.clone(),
+            });
+        }
+        for (tier_name, tier_cfg) in &config.tiers {
+            if let Some(model_entry) = tier_cfg.model(key) {
+                return Some(ResolvedModelLimits {
+                    tier: tier_name.clone(),
+                    catalog_model: key.to_string(),
+                    limits: model_entry.limits.clone(),
+                });
+            }
+        }
+    }
     let config = catalog.provider(provider)?;
     if let Some(tier_cfg) = config.tiers.get(tier)
         && let Some(resolved) = resolve_in_tier(tier_cfg, tier, request_model)
@@ -133,6 +165,33 @@ mod tests {
         config::provider_limits::ProviderLimitCatalog,
         types::provider::InferenceProvider,
     };
+
+    #[test]
+    fn explicit_catalog_key_overrides_preview_strip() {
+        let catalog = ProviderLimitCatalog::default();
+        let provider = InferenceProvider::GoogleGemini;
+        let resolved = catalog_limit_resolve_with_key(
+            &catalog,
+            &provider,
+            "free",
+            "gemini-3-flash-preview",
+            Some("gemini-3-flash"),
+        )
+        .expect("explicit key");
+        assert_eq!(resolved.catalog_model, "gemini-3-flash");
+        assert_eq!(
+            resolved.limits.rpd,
+            catalog_limit_resolve(
+                &catalog,
+                &provider,
+                "free",
+                "gemini-3-flash-preview",
+            )
+            .expect("implicit")
+            .limits
+            .rpd
+        );
+    }
 
     #[test]
     fn preview_slug_maps_to_catalog_key() {

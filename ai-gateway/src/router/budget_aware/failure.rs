@@ -24,11 +24,9 @@ pub(super) async fn record_classified_failure(
     response: Response,
     elapsed: Duration,
 ) -> (Response, FailoverClass, ExhaustionScope) {
-    let config = router
-        .app_state
-        .config()
-        .provider_limits
-        .cooldown_for(provider);
+    let limits = &router.app_state.config().provider_limits;
+    let config = limits.cooldown_for(provider);
+    let quota_profile = limits.quota_profile(provider);
     let status = response.status();
     if status == http::StatusCode::PAYMENT_REQUIRED {
         router
@@ -36,8 +34,8 @@ pub(super) async fn record_classified_failure(
             .budget_probe()
             .record_payment_required(provider, credential_id);
     }
-    let (response, cooldown, class, scope) =
-        classify_and_cooldown(response, &config).await;
+    let (response, cooldown, class, scope, slot_cooldown) =
+        classify_and_cooldown(response, &config, quota_profile).await;
     let entered_cooldown = router.update_failure_state_scoped(
         credential_id,
         model,
@@ -45,6 +43,9 @@ pub(super) async fn record_classified_failure(
         elapsed,
         cooldown,
     );
+    if let Some(slot_cooldown) = slot_cooldown {
+        router.update_failure_state(credential_id, elapsed, slot_cooldown);
+    }
     if entered_cooldown {
         router.app_state.runtime_metrics().record_cooldown_enter(
             &CooldownEvent {
