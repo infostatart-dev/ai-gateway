@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.4.2-beta.1] - 2026-06-18
+
+### Features
+
+- **Gemini per-model pacing:** separate RPM/TPM/RPD gates per
+  `(credential, model)` using refreshed AI Studio free-tier limits
+- **Intra-slot model ladder:** fast → capacity → stability bands on the same
+  Gemini credential before inter-slot failover (`provider-ladders.yaml`)
+- **Scoped exhaustion:** per-model 429 retires `(credential, model)`; project
+  billing cap still retires the whole slot and skips free siblings
+- **Shared limit resolution:** `catalog_limit_resolve` shared by gateway pacing
+  and upstream-emulator
+- **Route trace:** terminal route summary includes `quota_scope`,
+  `model_ladder_band`, and `model_ladder_position`
+
+### Changed
+
+- **DeepSeek Web pacing:** pass credential tier into upstream pacing acquire hook
+- **mise:** add `coverage:lib` / `coverage:report` tasks (`cargo-llvm-cov`)
+
 ## [0.4.1-beta.2] - 2026-06-18
 
 ### Features

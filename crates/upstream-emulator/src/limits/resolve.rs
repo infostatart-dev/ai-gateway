@@ -1,5 +1,8 @@
 use ai_gateway::{
-    config::provider_limits::ProviderLimitCatalog,
+    config::{
+        catalog_limit_resolve::catalog_limit_resolve,
+        provider_limits::ProviderLimitCatalog,
+    },
     types::provider::InferenceProvider,
 };
 
@@ -12,121 +15,47 @@ pub fn resolve_limits(
     credential_tier: Option<&str>,
     request_model: &str,
 ) -> (String, String, ApiLimits) {
+    if let Some(tier) = credential_tier
+        && let Some(resolved) =
+            catalog_limit_resolve(catalog, provider, tier, request_model)
+    {
+        let tier_limits = catalog
+            .provider(provider)
+            .and_then(|cfg| cfg.tier(tier))
+            .map(|t| &t.limits);
+        return (
+            tier.to_string(),
+            resolved.catalog_model,
+            ApiLimits::from_quota(Some(&resolved.limits), tier_limits),
+        );
+    }
     if let Some(config) = catalog.provider(provider) {
-        if let Some(tier_name) = credential_tier
-            && let Some(tier) = config.tiers.get(tier_name)
-            && let Some(resolved) =
-                resolve_in_tier(tier, tier_name, request_model)
-        {
-            return resolved;
-        }
         for (tier_name, tier) in &config.tiers {
-            if let Some(resolved) =
-                resolve_in_tier(tier, tier_name, request_model)
-            {
-                return resolved;
+            if let Some(resolved) = catalog_limit_resolve(
+                catalog,
+                provider,
+                tier_name,
+                request_model,
+            ) {
+                return (
+                    tier_name.clone(),
+                    resolved.catalog_model,
+                    ApiLimits::from_quota(
+                        Some(&resolved.limits),
+                        Some(&tier.limits),
+                    ),
+                );
             }
         }
     }
-    let slug = normalize_model_slug(request_model);
+    let slug = ai_gateway::config::catalog_limit_resolve::normalize_model_slug(
+        request_model,
+    );
     (
         String::from("default"),
         slug,
         ApiLimits::from_quota(None, None),
     )
-}
-
-fn resolve_in_tier(
-    tier: &ai_gateway::config::provider_limits::ProviderLimitTier,
-    tier_name: &str,
-    request_model: &str,
-) -> Option<(String, String, ApiLimits)> {
-    let slug = normalize_model_slug(request_model);
-    for candidate in candidate_slugs(request_model) {
-        if let Some(model_entry) = tier.model(&candidate) {
-            return Some((
-                tier_name.to_string(),
-                candidate,
-                ApiLimits::from_quota(
-                    Some(&model_entry.limits),
-                    Some(&tier.limits),
-                ),
-            ));
-        }
-    }
-    if slug != request_model
-        && let Some(model_entry) = tier.model(&slug)
-    {
-        return Some((
-            tier_name.to_string(),
-            slug.clone(),
-            ApiLimits::from_quota(
-                Some(&model_entry.limits),
-                Some(&tier.limits),
-            ),
-        ));
-    }
-    if let Some((matched_model, limits)) =
-        limits_from_rules(tier, request_model)
-    {
-        return Some((
-            tier_name.to_string(),
-            matched_model,
-            ApiLimits::from_quota(Some(&limits), Some(&tier.limits)),
-        ));
-    }
-    None
-}
-
-fn candidate_slugs(model: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    if let Some((_, rest)) = model.split_once('/') {
-        let trimmed = rest.split(':').next().unwrap_or(rest);
-        out.push(trimmed.to_string());
-    }
-    let tail = model
-        .rsplit('/')
-        .next()
-        .unwrap_or(model)
-        .split(':')
-        .next()
-        .unwrap_or(model);
-    out.push(tail.to_string());
-    out.sort_by_key(|slug| std::cmp::Reverse(slug.len()));
-    out.dedup();
-    out
-}
-
-fn limits_from_rules(
-    tier: &ai_gateway::config::provider_limits::ProviderLimitTier,
-    request_model: &str,
-) -> Option<(String, ai_gateway::config::provider_limits::QuotaLimits)> {
-    for rule in tier.rules.values() {
-        let Some(suffix) = rule.model_suffix.as_deref() else {
-            continue;
-        };
-        if request_model.ends_with(suffix) {
-            let matched = request_model
-                .split_once('/')
-                .map_or(request_model, |(_, rest)| rest)
-                .strip_suffix(suffix)
-                .unwrap_or(request_model)
-                .to_string();
-            return Some((matched, rule.limits.clone()));
-        }
-    }
-    None
-}
-
-fn normalize_model_slug(model: &str) -> String {
-    model
-        .rsplit('/')
-        .next()
-        .unwrap_or(model)
-        .split(':')
-        .next()
-        .unwrap_or(model)
-        .to_string()
 }
 
 #[cfg(test)]
@@ -177,5 +106,37 @@ mod tests {
             "gemini-2.5-flash",
         );
         assert_ne!(free.rpm, paid.rpm);
+    }
+
+    #[test]
+    fn gateway_emulator_fixture_parity() {
+        use ai_gateway::config::provider_limits::QuotaValue;
+
+        let catalog = ProviderLimitCatalog::default();
+        let provider = InferenceProvider::GoogleGemini;
+        for (model, expected_rpm, expected_rpd) in [
+            ("gemini-3-flash-preview", 5_u32, 20_u32),
+            ("gemini-3.5-flash-preview", 5, 20),
+            ("gemini-3.1-flash-lite", 15, 500),
+            ("gemini-2.5-flash", 5, 20),
+            ("gemini-2.5-pro", 5, 50),
+        ] {
+            let gateway =
+                catalog_limit_resolve(&catalog, &provider, "free", model)
+                    .unwrap_or_else(|| panic!("gateway resolve {model}"));
+            let (_, emu_model, emu_limits) =
+                resolve_limits(&catalog, &provider, Some("free"), model);
+            assert_eq!(gateway.catalog_model, emu_model);
+            assert_eq!(
+                gateway.limits.rpm,
+                QuotaValue::Limited(u64::from(expected_rpm))
+            );
+            assert_eq!(
+                gateway.limits.rpd,
+                QuotaValue::Limited(u64::from(expected_rpd))
+            );
+            assert_eq!(emu_limits.rpm, expected_rpm);
+            assert_eq!(emu_limits.rpd, Some(expected_rpd));
+        }
     }
 }

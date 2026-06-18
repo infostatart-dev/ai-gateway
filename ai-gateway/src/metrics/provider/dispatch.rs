@@ -137,6 +137,9 @@ pub fn emit_pending_route_trace(
         routing_selection_phase = pending
             .selection_phase
             .map_or("none", crate::router::intent::SelectionPhase::as_str),
+        quota_scope = pending.quota_scope.as_deref().unwrap_or("none"),
+        model_ladder_band = pending.model_ladder_band.as_deref().unwrap_or("none"),
+        model_ladder_position = pending.model_ladder_position.map_or(0, u32::from),
         "budget-aware route summary"
     );
 }

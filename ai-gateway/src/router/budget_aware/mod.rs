@@ -11,6 +11,7 @@ mod failure;
 mod health;
 mod intent_acceptance;
 mod intent_selection;
+mod ladder_rank;
 mod new_router;
 mod payload;
 mod rank;
@@ -23,6 +24,7 @@ mod structured_output;
 mod test_support;
 mod tower;
 mod trace;
+mod trace_context;
 mod types;
 
 pub use trace::{ChatGptWebTrace, DeepSeekWebTrace};
@@ -46,8 +48,9 @@ pub(crate) use rank::default_provider_budget_rank;
 #[cfg(feature = "testing")]
 pub(crate) use test_support::{
     balance_ranked, chatgpt_candidate, deep_paid_candidate, empty_router,
-    gemini_candidate, gemini_slots, groq_candidate, intent_autodefault_router,
-    ordered_candidates, ordered_candidates_for_source, request_parts,
-    router_with_candidates, scout_candidate,
+    gemini_candidate, gemini_model_candidate, gemini_slots, groq_candidate,
+    intent_autodefault_router, ordered_candidates,
+    ordered_candidates_for_source, request_parts, router_with_candidates,
+    scout_candidate,
 };
 pub use types::BudgetAwareRouter;

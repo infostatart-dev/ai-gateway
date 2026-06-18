@@ -1,5 +1,6 @@
 pub mod balance;
 pub mod cache;
+pub mod catalog_limit_resolve;
 pub mod chatgpt_web;
 pub mod cloudflare;
 pub mod control_plane;
@@ -13,6 +14,7 @@ pub mod dispatcher;
 pub mod helicone;
 pub mod minio;
 pub mod model_capability;
+pub mod model_ladder;
 pub mod model_mapping;
 pub mod monitor;
 pub mod observability;

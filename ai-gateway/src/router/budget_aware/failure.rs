@@ -9,7 +9,8 @@ use crate::{
     config::credentials::ProviderCredentialId,
     metrics::router::{CooldownEvent, FailoverEvent},
     router::retry_after::{
-        FailoverClass, classify_and_cooldown, quota_metric_label,
+        ExhaustionScope, FailoverClass, classify_and_cooldown,
+        quota_metric_label,
     },
     types::{provider::InferenceProvider, response::Response},
 };
@@ -19,9 +20,10 @@ pub(super) async fn record_classified_failure(
     router: &BudgetAwareRouter,
     credential_id: &ProviderCredentialId,
     provider: &InferenceProvider,
+    model: &str,
     response: Response,
     elapsed: Duration,
-) -> (Response, FailoverClass) {
+) -> (Response, FailoverClass, ExhaustionScope) {
     let config = router
         .app_state
         .config()
@@ -34,10 +36,15 @@ pub(super) async fn record_classified_failure(
             .budget_probe()
             .record_payment_required(provider, credential_id);
     }
-    let (response, cooldown, class) =
+    let (response, cooldown, class, scope) =
         classify_and_cooldown(response, &config).await;
-    let entered_cooldown =
-        router.update_failure_state(credential_id, elapsed, cooldown);
+    let entered_cooldown = router.update_failure_state_scoped(
+        credential_id,
+        model,
+        scope,
+        elapsed,
+        cooldown,
+    );
     if entered_cooldown {
         router.app_state.runtime_metrics().record_cooldown_enter(
             &CooldownEvent {
@@ -51,7 +58,7 @@ pub(super) async fn record_classified_failure(
             quota_metric_label(status, class),
         );
     }
-    (response, class)
+    (response, class, scope)
 }
 
 pub(super) fn record_failover_metric(

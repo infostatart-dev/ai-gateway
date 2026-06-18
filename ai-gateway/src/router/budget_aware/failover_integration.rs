@@ -100,6 +100,7 @@ mod structured_output_failover {
                 router_config,
             ),
             states: Arc::new(Mutex::new(HashMap::new())),
+            model_states: Arc::new(Mutex::new(HashMap::new())),
             provider_priorities: Arc::new(IndexMap::new()),
             default_latency: Duration::from_millis(10),
             max_cooldown_wait: Duration::from_secs(0),

@@ -12,43 +12,92 @@ use crate::{
             is_perplexity_web,
             session_path_for_credential as perplexity_session_path,
         },
+        provider_limits::ProviderQuotaProfile,
     },
     types::provider::InferenceProvider,
 };
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PacingScope {
+    Session(String),
+    Credential(String),
+    CredentialModel { credential: String, model: String },
+}
+
 #[must_use]
-pub fn gate_scope_key(
+pub fn resolve_pacing_scope(
     provider: &InferenceProvider,
     credential_id: Option<&ProviderCredentialId>,
-) -> String {
+    model: Option<&str>,
+    quota_profile: ProviderQuotaProfile,
+) -> PacingScope {
     if is_chatgpt_web(provider) {
-        return credential_id
+        let path = credential_id
             .map(ProviderCredentialId::as_str)
             .and_then(chatgpt_session_path)
             .map_or_else(
                 || "missing-session".into(),
-                |path| path.display().to_string(),
+                |p| p.display().to_string(),
             );
+        return PacingScope::Session(path);
     }
     if is_deepseek_web(provider) {
-        return credential_id
+        let path = credential_id
             .map(ProviderCredentialId::as_str)
             .and_then(deepseek_session_path)
             .map_or_else(
                 || "missing-session".into(),
-                |path| path.display().to_string(),
+                |p| p.display().to_string(),
             );
+        return PacingScope::Session(path);
     }
     if is_perplexity_web(provider) {
-        return credential_id
+        let path = credential_id
             .map(ProviderCredentialId::as_str)
             .and_then(perplexity_session_path)
             .map_or_else(
                 || "missing-session".into(),
-                |path| path.display().to_string(),
+                |p| p.display().to_string(),
             );
+        return PacingScope::Session(path);
     }
-    credential_id.map_or_else(|| "default".into(), ToString::to_string)
+    let credential = credential_id
+        .map_or_else(|| "default".into(), |id| id.as_str().to_string());
+    if quota_profile == ProviderQuotaProfile::PerModel
+        && let Some(model) = model
+    {
+        return PacingScope::CredentialModel {
+            credential,
+            model: model.to_string(),
+        };
+    }
+    PacingScope::Credential(credential)
+}
+
+#[must_use]
+pub fn pacing_scope_key(scope: &PacingScope) -> String {
+    match scope {
+        PacingScope::Session(path) | PacingScope::Credential(path) => {
+            path.clone()
+        }
+        PacingScope::CredentialModel { credential, model } => {
+            format!("{credential}::{model}")
+        }
+    }
+}
+
+#[must_use]
+#[allow(dead_code)]
+pub fn gate_scope_key(
+    provider: &InferenceProvider,
+    credential_id: Option<&ProviderCredentialId>,
+) -> String {
+    pacing_scope_key(&resolve_pacing_scope(
+        provider,
+        credential_id,
+        None,
+        ProviderQuotaProfile::PerSlot,
+    ))
 }
 
 #[cfg(test)]
@@ -60,8 +109,30 @@ mod tests {
     fn api_provider_uses_credential_scope() {
         let provider = InferenceProvider::GoogleGemini;
         let id = ProviderCredentialId::new("gemini-free");
+        let scope = resolve_pacing_scope(
+            &provider,
+            Some(&id),
+            None,
+            ProviderQuotaProfile::PerSlot,
+        );
+        assert_eq!(pacing_scope_key(&scope), "gemini-free");
         assert_eq!(gate_scope_key(&provider, Some(&id)), "gemini-free");
-        assert_eq!(gate_scope_key(&provider, None), "default");
+    }
+
+    #[test]
+    fn per_model_scope_includes_model_slug() {
+        let provider = InferenceProvider::GoogleGemini;
+        let id = ProviderCredentialId::new("gemini-free-8");
+        let scope = resolve_pacing_scope(
+            &provider,
+            Some(&id),
+            Some("gemini-3-flash-preview"),
+            ProviderQuotaProfile::PerModel,
+        );
+        assert_eq!(
+            pacing_scope_key(&scope),
+            "gemini-free-8::gemini-3-flash-preview"
+        );
     }
 
     #[test]
@@ -76,10 +147,13 @@ mod tests {
 
         let provider = InferenceProvider::Named("deepseek-web".into());
         let id = ProviderCredentialId::new("deepseek-web-default");
-        assert_eq!(
-            gate_scope_key(&provider, Some(&id)),
-            path.display().to_string()
+        let scope = resolve_pacing_scope(
+            &provider,
+            Some(&id),
+            Some("deepseek-chat"),
+            ProviderQuotaProfile::PerSession,
         );
+        assert_eq!(pacing_scope_key(&scope), path.display().to_string());
         let _ = std::fs::remove_file(path);
     }
 }

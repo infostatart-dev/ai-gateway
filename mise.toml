@@ -1,11 +1,12 @@
 [tools]
 rust = [
-  { version = "1.91.1", profile = "default", components = "clippy, rustfmt" },
+  { version = "1.91.1", profile = "default", components = "clippy, rustfmt, llvm-tools-preview" },
   { version = "nightly", components = "rustfmt" },
 ]
 node = "24"
 "npm:@fission-ai/openspec" = "1.4.1"
 "cargo:cargo-outdated" = "latest"
+"cargo:cargo-llvm-cov" = "latest"
 
 [env]
 # Stable default when nightly is also installed (mise discussion #6254)
@@ -24,6 +25,16 @@ run = "cargo ci-clippy"
 [tasks."predeploy:test-lib"]
 description = "Lib unit tests — incremental compile OK"
 run = "cargo test --all-features --lib"
+
+[tasks."coverage:lib"]
+description = "Line coverage for lib unit tests (slow — not part of predeploy)"
+env = { CARGO_INCREMENTAL = "0" }
+run = "cargo llvm-cov --workspace --all-features --lib --summary-only"
+
+[tasks."coverage:report"]
+description = "LCOV report for IDE / Codecov (lcov.info at repo root)"
+env = { CARGO_INCREMENTAL = "0" }
+run = "cargo llvm-cov --workspace --all-features --lib --lcov --output-path lcov.info"
 
 [tasks."predeploy:rust"]
 description = "Rust diff gate: fmt + clippy + lib tests (local sanity only)"

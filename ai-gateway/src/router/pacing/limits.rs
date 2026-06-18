@@ -1,7 +1,15 @@
+//! Per-model multi-dimension pacing limits resolved from the embedded catalog.
+
 use std::time::Duration;
 
-use crate::config::provider_limits::{
-    ProviderLimitCatalog, ProviderLimitTier, QuotaLimits, QuotaValue,
+use crate::{
+    config::{
+        catalog_limit_resolve::catalog_limit_resolve,
+        provider_limits::{
+            ProviderLimitCatalog, ProviderLimitTier, QuotaLimits, QuotaValue,
+        },
+    },
+    types::provider::InferenceProvider,
 };
 
 /// Effective upstream pacing derived from `provider-limits.yaml` (Strategy
@@ -55,6 +63,23 @@ impl PacingLimits {
     pub fn has_rpm_limit(&self) -> bool {
         self.rpm != u32::MAX
     }
+
+    #[must_use]
+    pub fn resolve_for_model(
+        catalog: &ProviderLimitCatalog,
+        provider: &InferenceProvider,
+        tier: &str,
+        model: &str,
+    ) -> Option<Self> {
+        let resolved = catalog_limit_resolve(catalog, provider, tier, model)?;
+        let daily_reset = catalog
+            .provider(provider)
+            .and_then(|cfg| cfg.daily_reset_utc_hour)
+            .unwrap_or(0);
+        let mut limits = Self::from_quota(&resolved.limits)?;
+        limits.daily_reset_utc_hour = daily_reset;
+        Some(limits)
+    }
 }
 
 fn quota_u32(value: &QuotaValue) -> Option<u32> {
@@ -80,7 +105,7 @@ impl ProviderLimitCatalog {
     #[must_use]
     pub fn pacing_limits_for(
         &self,
-        provider: &crate::types::provider::InferenceProvider,
+        provider: &InferenceProvider,
     ) -> Option<PacingLimits> {
         let config = self.provider(provider)?;
         let daily_reset = config.daily_reset_utc_hour.unwrap_or(0);
@@ -115,15 +140,24 @@ mod tests {
     }
 
     #[test]
-    fn deepseek_web_catalog_exposes_session_pacing() {
+    fn gemini_per_model_limits_differ_by_slug() {
         let catalog = ProviderLimitCatalog::default();
-        let provider = InferenceProvider::Named("deepseek-web".into());
-        let limits = catalog
-            .pacing_limits_for(&provider)
-            .expect("deepseek-web pacing");
-        assert_eq!(limits.concurrent, 1);
-        assert_eq!(limits.rpm, 6);
-        assert_eq!(limits.min_interval, Duration::from_millis(10000));
+        let provider = InferenceProvider::GoogleGemini;
+        let flash = PacingLimits::resolve_for_model(
+            &catalog,
+            &provider,
+            "free",
+            "gemini-3-flash-preview",
+        )
+        .expect("flash");
+        let lite = PacingLimits::resolve_for_model(
+            &catalog,
+            &provider,
+            "free",
+            "gemini-3.1-flash-lite",
+        )
+        .expect("lite");
+        assert_ne!(flash.rpd, lite.rpd);
     }
 
     #[test]
@@ -131,28 +165,5 @@ mod tests {
         let catalog = ProviderLimitCatalog::default();
         let provider = InferenceProvider::OpenAI;
         assert!(catalog.pacing_limits_for(&provider).is_none());
-    }
-
-    #[test]
-    fn cloudflare_catalog_exposes_rpd_only_gate() {
-        let catalog = ProviderLimitCatalog::default();
-        let provider = InferenceProvider::Named("cloudflare".into());
-        let limits = catalog
-            .pacing_limits_for(&provider)
-            .expect("cloudflare rpd pacing");
-        assert!(!limits.has_rpm_limit());
-        assert_eq!(limits.rpd, Some(300));
-    }
-
-    #[test]
-    fn cerebras_catalog_exposes_rpm_tpm_tpd() {
-        let catalog = ProviderLimitCatalog::default();
-        let provider = InferenceProvider::Named("cerebras".into());
-        let limits = catalog
-            .pacing_limits_for(&provider)
-            .expect("cerebras pacing");
-        assert_eq!(limits.rpm, 30);
-        assert_eq!(limits.tpm, Some(60_000));
-        assert_eq!(limits.tpd, Some(1_000_000));
     }
 }

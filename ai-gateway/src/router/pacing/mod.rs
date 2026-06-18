@@ -26,12 +26,16 @@ pub async fn acquire_upstream_pacing(
     app_state: &AppState,
     provider: &InferenceProvider,
     credential_id: Option<&ProviderCredentialId>,
+    tier: Option<&str>,
+    model: Option<&str>,
     estimated_tokens: u32,
 ) -> Result<Option<PacingPermit>, ApiError> {
-    let Some(gate) = app_state
-        .upstream_pacing()
-        .gate_for(provider, credential_id)
-    else {
+    let Some(gate) = app_state.upstream_pacing().gate_for(
+        provider,
+        credential_id,
+        tier,
+        model,
+    ) else {
         return Ok(None);
     };
     let limits = gate.limits();

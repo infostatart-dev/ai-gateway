@@ -86,6 +86,17 @@ impl Dispatcher {
             .extensions()
             .get::<crate::types::extensions::GatewayPayloadEstimate>()
             .map_or(0, |e| e.0);
+        let pacing_tier = credential_id.as_ref().and_then(|id| {
+            self.app_state
+                .config()
+                .credentials
+                .get(id)
+                .map(|cred| cred.tier.as_str())
+        });
+        let pacing_model = mapper_ctx
+            .model
+            .as_ref()
+            .map(std::string::ToString::to_string);
         let _pacing_permit = if skip_outer_pacing {
             None
         } else {
@@ -93,6 +104,8 @@ impl Dispatcher {
                 &self.app_state,
                 target_provider,
                 credential_id.as_ref(),
+                pacing_tier,
+                pacing_model.as_deref(),
                 estimated_tokens,
             )
             .await?

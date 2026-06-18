@@ -6,6 +6,7 @@ use serde::{
     de::{self, Visitor},
 };
 
+use super::catalog_limit_resolve::catalog_limit_resolve;
 use crate::{
     config::router_cooldown::{
         ProviderCooldownOverrides, RouterCooldownConfig,
@@ -15,6 +16,17 @@ use crate::{
 
 const PROVIDER_LIMITS_YAML: &str =
     include_str!("../../config/embedded/provider-limits.yaml");
+
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize,
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProviderQuotaProfile {
+    #[default]
+    PerSlot,
+    PerModel,
+    PerSession,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderLimitCatalog {
@@ -87,10 +99,31 @@ impl ProviderLimitCatalog {
         tier: &str,
         model: &str,
     ) -> Option<u32> {
-        match self.model(provider, tier, model)?.limits.tpm {
+        let resolved = catalog_limit_resolve(self, provider, tier, model)?;
+        match resolved.limits.tpm {
             QuotaValue::Limited(value) => u32::try_from(value).ok(),
             QuotaValue::Unlimited | QuotaValue::Unknown => None,
         }
+    }
+
+    #[must_use]
+    pub fn resolve_model_limits(
+        &self,
+        provider: &InferenceProvider,
+        tier: &str,
+        model: &str,
+    ) -> Option<super::catalog_limit_resolve::ResolvedModelLimits> {
+        catalog_limit_resolve(self, provider, tier, model)
+    }
+
+    #[must_use]
+    pub fn quota_profile(
+        &self,
+        provider: &InferenceProvider,
+    ) -> ProviderQuotaProfile {
+        self.provider(provider)
+            .and_then(|config| config.quota_profile)
+            .unwrap_or_default()
     }
 }
 
@@ -101,6 +134,8 @@ pub struct ProviderLimitConfig {
     pub observed_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quota_profile: Option<ProviderQuotaProfile>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -124,6 +159,7 @@ impl Default for ProviderLimitConfig {
         Self {
             observed_at: None,
             scope: None,
+            quota_profile: None,
             source: None,
             daily_reset_utc_hour: None,
             expected_ttfb_ms: None,

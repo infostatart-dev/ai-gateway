@@ -9,7 +9,7 @@ pub async fn run() {
     let registry = PacingRegistry::new(ProviderLimitCatalog::default());
     let provider = InferenceProvider::Named("chatgpt-web".into());
     let gate = registry
-        .gate_for(&provider, None)
+        .gate_for(&provider, None, Some("plus-single-session"), None)
         .expect("chatgpt-web pacing gate");
     let first = gate.acquire(0).await.expect("first permit");
     let second =

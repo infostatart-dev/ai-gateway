@@ -17,12 +17,17 @@ impl BudgetAwareRouter {
         let now = Instant::now();
         let states = lock_credential_states(&self.states);
 
+        let ladders =
+            crate::config::model_ladder::ModelLadderRegistry::default();
         candidates.sort_by(|left, right| {
             let left_state = states.get(&left.credential_id);
             let right_state = states.get(&right.credential_id);
 
             self.effective_budget_rank(left, left_state, now)
                 .cmp(&self.effective_budget_rank(right, right_state, now))
+                .then_with(|| {
+                    super::ladder_rank::ladder_cmp(&ladders, left, right)
+                })
                 .then_with(|| {
                     if let Some(intent) = intent {
                         intent_proximity_score(

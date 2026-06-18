@@ -13,13 +13,28 @@ use crate::{
     error::{api::ApiError, internal::InternalError},
     router::{
         capability::RequestRequirements,
-        provider_attempt::is_failoverable_status, retry_after::FailoverClass,
+        provider_attempt::{ModelCooldownKey, is_failoverable_status},
+        retry_after::ExhaustionScope,
         routed_identity::attach_routed_identity,
     },
     types::{
         provider::InferenceProvider, request::Request, response::Response,
     },
 };
+
+fn candidate_available(
+    candidate: &BudgetCandidate,
+    failed_credentials: &HashSet<ProviderCredentialId>,
+    failed_models: &HashSet<ModelCooldownKey>,
+) -> bool {
+    if failed_credentials.contains(&candidate.credential_id) {
+        return false;
+    }
+    !failed_models.contains(&ModelCooldownKey {
+        credential_id: candidate.credential_id.clone(),
+        model: candidate.capability.model.to_string(),
+    })
+}
 
 #[allow(clippy::too_many_lines)]
 pub async fn run_failover_candidates(
@@ -31,17 +46,19 @@ pub async fn run_failover_candidates(
     routing_intent: Option<crate::router::intent::RoutingIntent>,
 ) -> Result<Response, ApiError> {
     let mut failed_credentials = HashSet::<ProviderCredentialId>::new();
+    let mut failed_models = HashSet::<ModelCooldownKey>::new();
     let mut route_trace = trace::RouteTrace::new(candidates.len());
 
     for (index, candidate) in candidates.iter().enumerate() {
-        if failed_credentials.contains(&candidate.credential_id) {
+        if !candidate_available(candidate, &failed_credentials, &failed_models)
+        {
             route_trace.record_skipped(1);
             continue;
         }
 
-        let has_next_candidate = candidates[index + 1..]
-            .iter()
-            .any(|next| !failed_credentials.contains(&next.credential_id));
+        let has_next_candidate = candidates[index + 1..].iter().any(|next| {
+            candidate_available(next, &failed_credentials, &failed_models)
+        });
         if !this.wait_for_candidate(candidate, has_next_candidate).await {
             route_trace.record_skipped(1);
             continue;
@@ -81,6 +98,7 @@ pub async fn run_failover_candidates(
                 elapsed,
                 crate::metrics::router::status_class(status),
                 &mut failed_credentials,
+                &mut failed_models,
                 &attempt_ctx,
             )
             .await;
@@ -100,6 +118,7 @@ pub async fn run_failover_candidates(
                     response,
                     elapsed,
                     failed_credentials: &mut failed_credentials,
+                    failed_models: &mut failed_models,
                     route_trace: &mut route_trace,
                     attempt_ctx: &attempt_ctx,
                 })
@@ -155,6 +174,8 @@ fn finish_success(
         &candidate.credential_id,
         &candidate.capability.model,
     );
+    route_trace
+        .record_terminal(&this.app_state.config().provider_limits, candidate);
     if let Some(intent) = routing_intent {
         let intent_context = crate::types::extensions::RoutingIntentContext {
             intent_tier: intent.preferred_tier,
@@ -215,6 +236,7 @@ async fn finish_terminal(
             .record_failure(
                 &candidate.credential_id,
                 &candidate.capability.provider,
+                &candidate.capability.model.to_string(),
                 response,
                 elapsed,
             )
@@ -249,6 +271,7 @@ struct SuccessCandidateContext<'a> {
     response: Response,
     elapsed: std::time::Duration,
     failed_credentials: &'a mut HashSet<ProviderCredentialId>,
+    failed_models: &'a mut HashSet<ModelCooldownKey>,
     route_trace: &'a mut trace::RouteTrace,
     attempt_ctx: &'a crate::types::extensions::UpstreamAttemptContext,
 }
@@ -265,9 +288,9 @@ async fn handle_successful_candidate(
         body_bytes,
         response,
         elapsed,
-        failed_credentials,
         route_trace,
         attempt_ctx,
+        ..
     } = ctx;
     let has_next = index + 1 < candidates.len();
     if requirements.json_schema_required
@@ -299,7 +322,8 @@ async fn handle_successful_candidate(
                     response,
                     elapsed,
                     "structured_output",
-                    failed_credentials,
+                    ctx.failed_credentials,
+                    ctx.failed_models,
                     attempt_ctx,
                 )
                 .await;
@@ -309,11 +333,13 @@ async fn handle_successful_candidate(
                     .record_failure(
                         &candidate.credential_id,
                         &candidate.capability.provider,
+                        &candidate.capability.model.to_string(),
                         response,
                         elapsed,
                     )
                     .await;
-                failed_credentials.insert(candidate.credential_id.clone());
+                ctx.failed_credentials
+                    .insert(candidate.credential_id.clone());
                 tracing::warn!(
                     credential = %candidate.credential_id,
                     provider = %candidate.capability.provider,
@@ -329,6 +355,7 @@ async fn handle_successful_candidate(
     this.record_success(
         &candidate.credential_id,
         &candidate.capability.provider,
+        &candidate.capability.model.to_string(),
         elapsed,
     );
     if let Some(ds) = response.extensions().get::<trace::DeepSeekWebTrace>() {
@@ -349,13 +376,16 @@ async fn fail_over_candidate(
     elapsed: std::time::Duration,
     reason: impl AsRef<str>,
     failed_credentials: &mut HashSet<ProviderCredentialId>,
+    failed_models: &mut HashSet<ModelCooldownKey>,
     attempt: &crate::types::extensions::UpstreamAttemptContext,
 ) -> usize {
     let status = response.status();
-    let (response, class) = failure::record_classified_failure(
+    let model = candidate.capability.model.to_string();
+    let (response, class, scope) = failure::record_classified_failure(
         this,
         &candidate.credential_id,
         &candidate.capability.provider,
+        &model,
         response,
         elapsed,
     )
@@ -379,8 +409,11 @@ async fn fail_over_candidate(
         },
     );
     let _ = response;
-    let next_provider =
-        next_distinct_provider(remaining_candidates, failed_credentials);
+    let next_provider = next_distinct_provider(
+        remaining_candidates,
+        failed_credentials,
+        failed_models,
+    );
     failure::record_failover_metric(
         this,
         candidate,
@@ -389,24 +422,34 @@ async fn fail_over_candidate(
         status,
         class,
     );
-    failed_credentials.insert(candidate.credential_id.clone());
-    skip_free_siblings_on_exhaustion(
-        candidate,
-        remaining_candidates,
-        class,
-        failed_credentials,
-    )
+    match scope {
+        ExhaustionScope::Model => {
+            failed_models.insert(ModelCooldownKey {
+                credential_id: candidate.credential_id.clone(),
+                model,
+            });
+            0
+        }
+        ExhaustionScope::Slot => {
+            failed_credentials.insert(candidate.credential_id.clone());
+            0
+        }
+        ExhaustionScope::Project => {
+            failed_credentials.insert(candidate.credential_id.clone());
+            skip_free_siblings_on_exhaustion(
+                candidate,
+                remaining_candidates,
+                failed_credentials,
+            )
+        }
+    }
 }
 
 fn skip_free_siblings_on_exhaustion(
     candidate: &BudgetCandidate,
     remaining_candidates: &[BudgetCandidate],
-    class: FailoverClass,
     failed_credentials: &mut HashSet<ProviderCredentialId>,
 ) -> usize {
-    if !matches!(class, FailoverClass::QuotaExhausted) {
-        return 0;
-    }
     let mut skipped = 0;
     for sibling in remaining_candidates {
         if sibling.capability.provider == candidate.capability.provider
@@ -423,10 +466,13 @@ fn skip_free_siblings_on_exhaustion(
 fn next_distinct_provider<'a>(
     candidates: &'a [BudgetCandidate],
     failed_credentials: &HashSet<ProviderCredentialId>,
+    failed_models: &HashSet<ModelCooldownKey>,
 ) -> Option<&'a InferenceProvider> {
     candidates
         .iter()
-        .find(|next| !failed_credentials.contains(&next.credential_id))
+        .find(|next| {
+            candidate_available(next, failed_credentials, failed_models)
+        })
         .map(|c| &c.capability.provider)
 }
 

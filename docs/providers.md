@@ -138,6 +138,19 @@ Operational limits and cooldown hints per provider/tier are in
 [`provider-limits.yaml`](../ai-gateway/config/embedded/provider-limits.yaml).
 Used for pacing gates and 429 cooldown resolution — see [routing.md](routing.md).
 
+**Quota scope (tier → slot → model):** `provider-limits.yaml` declares
+`quota-profile` per provider (`per-model` for Gemini, `per-session` for browser
+providers). Pacing gates and cooldown keys resolve at
+`(credential, upstream_model)` when `per-model`. Gemini free uses
+[`provider-ladders.yaml`](../ai-gateway/config/embedded/provider-ladders.yaml)
+for intra-slot failover order (fast → capacity → stability) before inter-slot
+round-robin.
+
+**Adding per-model ladder for another provider:** (1) set `quota-profile:
+per-model` in `provider-limits.yaml`, (2) add tier model RPM/RPD rows, (3) add
+`provider-ladders.yaml` entry, (4) add routing_load scenario — no router code
+changes required.
+
 For **payload-aware routing** (autodefault fat json_schema requests), the
 budget-aware router also reads per-model **TPM** caps from this catalog at
 filter time: `effective_window = margin(min(context_window, tpm))`. Candidates

@@ -634,7 +634,7 @@ impl CapabilityAwareRouter {
         elapsed: Duration,
     ) {
         let config = self.provider_limits.cooldown_for(provider);
-        let (_, cooldown) = cooldown_for_response(response, &config).await;
+        let (_, cooldown, _) = cooldown_for_response(response, &config).await;
         let mut states = lock_provider_states(&self.states);
         let state = states.entry(provider.clone()).or_default();
         state.latency = Some(smoothed_latency(state.latency, elapsed));

@@ -8,6 +8,11 @@ pub enum FailureKind {
 
 #[must_use]
 pub fn classify_429(body: Option<&[u8]>) -> FailureKind {
+    if crate::router::retry_after::quota_scope::looks_like_project_billing_cap(
+        body,
+    ) {
+        return FailureKind::QuotaExhausted;
+    }
     if looks_like_quota_exhausted(body) {
         return FailureKind::QuotaExhausted;
     }

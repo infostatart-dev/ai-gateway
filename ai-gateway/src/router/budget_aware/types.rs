@@ -13,7 +13,10 @@ use crate::{
     dispatcher::DispatcherService,
     endpoints::EndpointType,
     middleware::mapper::model::ModelMapper,
-    router::{capability::ModelCapability, provider_attempt::ProviderState},
+    router::{
+        capability::ModelCapability,
+        provider_attempt::{ModelCooldownKey, ProviderState},
+    },
     types::{provider::InferenceProvider, router::RouterId},
 };
 
@@ -42,6 +45,8 @@ pub struct BudgetAwareRouter {
     pub(super) candidates: Arc<Vec<BudgetCandidate>>,
     pub(super) model_mapper: ModelMapper,
     pub(super) states: Arc<Mutex<HashMap<ProviderCredentialId, ProviderState>>>,
+    pub(super) model_states:
+        Arc<Mutex<HashMap<ModelCooldownKey, ProviderState>>>,
     pub(super) provider_priorities: Arc<IndexMap<InferenceProvider, u16>>,
     pub(super) default_latency: Duration,
     pub(super) max_cooldown_wait: Duration,

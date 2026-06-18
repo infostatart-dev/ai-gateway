@@ -142,6 +142,7 @@ pub(super) async fn build(
         candidates: Arc::new(candidates),
         model_mapper,
         states: Arc::new(Mutex::new(HashMap::new())),
+        model_states: Arc::new(Mutex::new(HashMap::new())),
         provider_priorities: Arc::new(provider_priorities.clone()),
         default_latency,
         max_cooldown_wait,

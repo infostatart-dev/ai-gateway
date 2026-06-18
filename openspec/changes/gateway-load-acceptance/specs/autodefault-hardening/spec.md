@@ -1,177 +1,102 @@
 ## ADDED Requirements
 
-**Approach:** Stage hardening — eliminate **knowable-before-HTTP** failures. Each requirement
-maps to a routing-load scenario that proves the guardrail under concurrent dispatch (see
-`routing-load-verification` capability). Production verification uses
-`GET /v1/observability/provider-stats` per `(provider, credential)` — not response content.
-
-**Priority:** P0 stops dead hops immediately; P1 fixes failover/parsing; P2 adds observability
-parity for web-session chunking.
+Production autodefault guardrails. Each requirement maps to a **gateway code change**;
+proof is via `routing_load` scenarios (see `routing-load-verification` delta).
 
 ---
 
-### Requirement: longcat excluded from autodefault until access restored (P0 #1)
+### Requirement: access-denied provider governance
 
-The gateway MUST exclude providers without working API access from autodefault candidate lists
-when upstream returns `Unsupported model` or sustained auth/model errors.
+The gateway MUST omit credential slots from autodefault when upstream returns sustained
+`Unsupported model` or auth failures. The slot MUST enter a cooldown of at least 24 hours
+before re-eligibility. Stale autodefault model aliases MUST be removed until a working
+model id is confirmed in the catalog.
 
-When such a credential enters access-denied state, the gateway MUST:
+#### Scenario: zero-attempts-while-access-denied
 
-1. Omit the slot from autodefault candidates.
-2. Apply a credential-slot cooldown of at least **24 hours** before re-eligibility.
-3. Remove stale autodefault model aliases until the operator confirms a working model id.
-
-#### Scenario: unsupported-model-zero-attempts
-
-**Given** a provider is configured but upstream returns `Unsupported model`
+**Given** a provider slot is in access-denied cooldown
 **When** autodefault ranks candidates
-**Then** no candidate for that provider MUST appear in the dispatch chain
-**And** zero upstream attempts MUST be made for the session
-
-#### Scenario: twenty-four-hour-cooldown-prevents-repeated-probes
-
-**Given** a slot entered a 24-hour access-denied cooldown
-**When** the next autodefault request arrives within the cooldown window
-**Then** that provider MUST NOT be attempted
-**And** failover MUST proceed to the next ranked provider
+**Then** that slot MUST NOT receive upstream attempts
 
 ---
 
-### Requirement: hard payload pre-flight without best-effort tail (P0 #2)
+### Requirement: hard payload pre-flight
 
-The router MUST exclude candidates whose effective routing window is smaller than the
-estimated payload requirement **before** any upstream HTTP call.
+When no API-key provider's effective window fits the estimated payload, the router MUST NOT
+relax requirements or pick a best-effort largest-window candidate. Web-session providers
+MAY remain when their chunk plan fits.
 
-When no API-key provider fits the payload, the router MUST NOT relax the minimum context
-requirement and MUST NOT select a largest-window best-effort candidate.
+#### Scenario: context-overflow-never-dispatched
 
-Web-session providers MAY remain eligible when their chunk plan can deliver the payload.
-
-**Routing-load signal:** concurrent fat `json_schema` scenario — TPM/context-limited
-API providers show zero attempts; eligible providers receive traffic.
-
-#### Scenario: context-overflow-provider-never-called
-
-**Given** a request requires more tokens than a provider's effective routing window
-**When** autodefault filters candidates
-**Then** that provider MUST NOT receive an upstream call
-**And** MUST NOT return HTTP 400 for maximum context length exceeded from that provider
-
-#### Scenario: oversized-api-providers-skipped-web-session-eligible
-
-**Given** all ranked API-key providers have an effective window below the required minimum
-**And** a web-session provider has a valid multi-turn chunk plan
-**When** payload filtering completes
-**Then** the filtered API-key candidate list MUST be empty
-**And** the web-session provider MUST remain eligible
+**Given** estimated tokens exceed a provider's effective window
+**When** payload filtering runs
+**Then** that API-key provider MUST NOT be dispatched
+**And** MUST NOT return HTTP 400 for context length exceeded from that provider
 
 ---
 
-### Requirement: chatgpt-web conservative upload chunks (P0 #3)
+### Requirement: chatgpt-web upload chunk parity
 
-ChatGPT Web MUST use a per-part upload token cap of **45000 tokens**, matching DeepSeek Web.
+ChatGPT Web MUST use a 45000-token per-part upload cap (same as DeepSeek Web). Large
+prompts MUST produce multiple upload parts.
 
-Prompts above single-turn budget MUST produce `upload_parts > 1`.
+#### Scenario: no-413-on-fat-last-resort
 
-**Routing-load signal:** last-resort scenario with fat dossier — zero HTTP 413.
-
-#### Scenario: large-prompt-multi-turn-upload
-
-**Given** a request with approximately 80000 estimated input tokens
-**When** ChatGPT Web plans conversation turns
-**Then** upload part count MUST be greater than one
-
-#### Scenario: chatgpt-last-resort-no-message-length-error
-
-**Given** autodefault reaches ChatGPT Web as last resort with a large payload
-**When** the chunk plan is executed
+**Given** autodefault reaches ChatGPT Web with a large payload
+**When** the chunk plan executes
 **Then** upstream MUST NOT return HTTP 413 message length exceeded
 
 ---
 
-### Requirement: github-models response content normalization (P1 #4)
+### Requirement: github-models response normalization
 
-The gateway MUST normalize upstream chat completion JSON so message `content` is a string
-before deserializing into OpenAI response types. Streaming chunks MUST receive the same
-normalization via the shared `openai_chat_response` normalizer.
+GitHub Models upstream JSON MUST be normalized (`content` array → string) before
+OpenAI-compatible deserialization, for both streaming and non-streaming paths.
 
-#### Scenario: content-array-deserializes
+#### Scenario: array-content-deserializes
 
-**Given** an upstream returns HTTP 200 with message content as a JSON array
-**When** the gateway maps the response
-**Then** deserialization MUST succeed without internal error
+**Given** GitHub Models returns HTTP 200 with array-shaped message content
+**When** the mapper processes the response
+**Then** deserialization MUST succeed without internal mapper error
 
 ---
 
-### Requirement: gemini multi-slot overload and rate-limit rotation (P1 #7)
+### Requirement: gemini failover class split
 
-The gateway MUST apply the following sibling policy for multi-slot providers at the same
-budget rank:
+The gateway MUST classify Gemini upstream failures into distinct failover classes:
 
-| Upstream signal | Sibling behaviour |
-|-----------------|-------------------|
-| HTTP 429 RPM | Try next sibling; failed slot gets Retry-After cooldown only |
-| HTTP 503 overload | Try next sibling (Transient class, not Overload skip-all) |
-| Daily quota exhausted | Skip remaining same-rank siblings |
+| Signal | Behaviour |
+|--------|-----------|
+| HTTP 429 RPM | Transient — try next sibling at same budget rank |
+| HTTP 503 overload | Transient — try next sibling (not skip-all-free) |
+| Daily quota exhausted | QuotaExhausted — skip same-provider same-rank siblings |
 
-**Routing-load signal:** concurrent RPM failover and 503 rotation scenarios with per-credential
-mocks — terminal success on sibling, zero browser-session attempts.
+#### Scenario: overload-rotates-to-sibling
 
-#### Scenario: overload-tries-next-free-slot
+**Given** the first of multiple free-tier sibling slots returns HTTP 503 overload
+**When** failover runs
+**Then** the next sibling at the same rank MUST be attempted
 
-**Given** multiple free credential slots at the same budget rank
-**And** the first slot returns HTTP 503 overload
-**When** failover processes the failure
-**Then** the next sibling slot MUST be attempted
+#### Scenario: daily-quota-skips-siblings-only
 
-#### Scenario: daily-quota-skips-same-rank-siblings
-
-**Given** a free slot returns daily quota exhaustion
-**When** failover processes the failure
+**Given** a free-tier slot returns daily quota exhaustion
+**When** failover runs
 **Then** remaining same-rank siblings MUST be skipped
 **And** a paid-tier slot at a different budget rank MUST remain eligible
 
 ---
 
-### Requirement: daily quota proactive gate and long cooldown (P1 #8)
+### Requirement: openrouter paid-path guard
 
-Providers with daily allocation MUST be blocked by proactive RPD/TPD gates (see
-`catalog-quota-pacing`) when exhausted. Reactive daily quota MUST use provider
-`quota-exhausted` cooldown until daily reset.
+When budget probe reports zero remaining credits, paid-model routes MUST be skipped
+pre-dispatch. HTTP 402 MUST trigger probe refresh, slot cooldown, and failover to
+`:free` variant or next provider — not repeated 402 on the same paid route.
 
-**Routing-load signal:** daily-quota failover scenario — zero re-hops to exhausted provider
-within the same UTC day.
+Free-tier `:free` routes MUST remain dispatchable under catalog RPM/RPD when pacing permits.
 
-#### Scenario: daily-cap-zero-upstream-hops
+#### Scenario: zero-credits-paid-skipped-free-allowed
 
-**Given** daily allocation is exhausted in pacing state for a provider scope
-**When** autodefault evaluates that scope
-**Then** no upstream HTTP call MUST be made
-**And** failover MUST advance immediately
-
----
-
-### Requirement: chatgpt-web chunking observability (P2 #9)
-
-The gateway MUST expose ChatGPT Web chunking metrics equivalent to DeepSeek Web via the
-`routing-observability` capability (`chatgpt_web_turns`, `chatgpt_web_upload_parts`).
-
-#### Scenario: observability-delegated-to-routing-observability-spec
-
-**Given** a multi-turn ChatGPT Web dispatch completes
-**When** provider-stats is queried
-**Then** chunking fields MUST be present per the routing-observability requirement
-
----
-
-### Requirement: openrouter insufficient-credits guard (P2 #10)
-
-The gateway MUST apply the dual-gate rules from `credential-budget-availability` on the
-autodefault free-first path and MUST NOT burn hops on repeated HTTP 402 for the same
-paid route.
-
-#### Scenario: openrouter-guard-delegated-to-budget-availability
-
-**Given** OpenRouter reports zero remaining credits for a paid model route
-**When** autodefault evaluates the slot
-**Then** behaviour MUST match the credential-budget-availability paid-path block scenario
+**Given** zero remaining credits and a `:free` model within catalog limits
+**When** autodefault selects a candidate
+**Then** the paid route MUST be skipped
+**And** the free route MAY be selected when pacing permits

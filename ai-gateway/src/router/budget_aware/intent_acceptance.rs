@@ -46,6 +46,9 @@ mod acceptance {
             states: Arc::new(std::sync::Mutex::new(
                 std::collections::HashMap::new(),
             )),
+            model_states: Arc::new(std::sync::Mutex::new(
+                std::collections::HashMap::new(),
+            )),
             provider_priorities: Arc::new(indexmap::IndexMap::new()),
             default_latency: Duration::from_millis(10),
             max_cooldown_wait: Duration::from_secs(0),
@@ -321,6 +324,9 @@ mod acceptance {
                 }),
             ),
             states: Arc::new(std::sync::Mutex::new(
+                std::collections::HashMap::new(),
+            )),
+            model_states: Arc::new(std::sync::Mutex::new(
                 std::collections::HashMap::new(),
             )),
             provider_priorities: Arc::new(indexmap::IndexMap::new()),

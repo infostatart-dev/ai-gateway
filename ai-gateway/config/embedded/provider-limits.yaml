@@ -8,10 +8,11 @@ cooldown-defaults:
   abuse-block: 2h
 
 gemini:
-  observed-at: "2026-06-14"
+  observed-at: "2026-06-18"
+  quota-profile: per-model
   notes:
     - Free tier — Flash/Flash-Lite only; Pro/TTS/multimodal require billing (Tier 1+).
-    - Free Flash ~10-15 RPM / 250k TPM / 1.5k RPD; verify live values in AI Studio.
+    - Preview flash models use low per-model RPD (20); 3.1 Flash Lite RPD 500 (AI Studio 2026-06).
     - Tier 3 figures below from AI Studio rate-limits dashboard (2026-06-14).
     - 429 with spending cap is billing, not RPM — failover out; raising cap is manual.
     - Enabling billing on a project removes free-tier quotas for that project.
@@ -25,23 +26,23 @@ gemini:
           display-name: Gemini 3 Flash
           category: text-out
           limits:
-            rpm: 10
+            rpm: 5
             tpm: 250000
-            rpd: 1500
+            rpd: 20
         gemini-3.5-flash:
           display-name: Gemini 3.5 Flash
           category: text-out
           limits:
-            rpm: 10
+            rpm: 5
             tpm: 250000
-            rpd: 1500
+            rpd: 20
         gemini-2.5-flash:
           display-name: Gemini 2.5 Flash
           category: text-out
           limits:
-            rpm: 10
+            rpm: 5
             tpm: 250000
-            rpd: 1500
+            rpd: 20
         gemini-2.5-pro:
           display-name: Gemini 2.5 Pro
           category: text-out
@@ -69,7 +70,7 @@ gemini:
           limits:
             rpm: 15
             tpm: 250000
-            rpd: 1500
+            rpd: 500
         gemini-2.5-flash-lite:
           display-name: Gemini 2.5 Flash Lite
           category: text-out
@@ -849,6 +850,7 @@ openai:
 
 chatgpt-web:
   observed-at: "2026-06-14"
+  quota-profile: per-session
   scope: browser-session
   notes:
     - Plus/Pro web session — not platform API; limits are heuristic.
@@ -867,6 +869,7 @@ chatgpt-web:
 
 deepseek-web:
   observed-at: "2026-06-16"
+  quota-profile: per-session
   scope: browser-session
   notes:
     - Free chat.deepseek.com web session — heuristic limits from day one.

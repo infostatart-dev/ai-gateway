@@ -146,6 +146,14 @@ fn turn_pacing_hook(
                 &app_state,
                 &provider,
                 credential_id.as_ref(),
+                credential_id.as_ref().and_then(|id| {
+                    app_state
+                        .config()
+                        .credentials
+                        .get(id)
+                        .map(|c| c.tier.as_str())
+                }),
+                None,
                 0,
             )
             .await

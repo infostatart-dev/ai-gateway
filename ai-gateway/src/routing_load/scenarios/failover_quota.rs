@@ -11,13 +11,13 @@ use crate::{
     routing_load::{
         assert_identity::routed_identity,
         payload::default_fat_body,
-        responses::{daily_quota_exhausted, ok_chat_completion},
+        responses::{ok_chat_completion, project_billing_exhausted},
     },
 };
 
 pub async fn run() {
     clear_test_call_responses();
-    push_test_call_response(Ok(daily_quota_exhausted()));
+    push_test_call_response(Ok(project_billing_exhausted()));
     push_test_call_response(Ok(ok_chat_completion()));
 
     let app_state = AppState::test_default().await;

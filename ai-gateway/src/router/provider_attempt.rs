@@ -18,6 +18,12 @@ pub struct ProviderState {
     pub failures: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ModelCooldownKey {
+    pub credential_id: ProviderCredentialId,
+    pub model: String,
+}
+
 pub fn lock_provider_states(
     states: &Mutex<HashMap<InferenceProvider, ProviderState>>,
 ) -> MutexGuard<'_, HashMap<InferenceProvider, ProviderState>> {
@@ -29,6 +35,14 @@ pub fn lock_provider_states(
 pub fn lock_credential_states(
     states: &Mutex<HashMap<ProviderCredentialId, ProviderState>>,
 ) -> MutexGuard<'_, HashMap<ProviderCredentialId, ProviderState>> {
+    states
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+pub fn lock_model_states(
+    states: &Mutex<HashMap<ModelCooldownKey, ProviderState>>,
+) -> MutexGuard<'_, HashMap<ModelCooldownKey, ProviderState>> {
     states
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)

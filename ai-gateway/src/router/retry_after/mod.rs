@@ -7,6 +7,8 @@ mod text;
 
 mod abuse;
 
+mod quota_scope;
+
 use std::time::Duration;
 
 use abuse::{looks_like_abuse_block, looks_like_unsupported_model};
@@ -17,6 +19,8 @@ use classify::classify_429;
 pub use header::extract_retry_after_from_headers;
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt;
+pub use quota_scope::ExhaustionScope;
+use quota_scope::classify_exhaustion_scope;
 
 use crate::{
     config::router_cooldown::RouterCooldownConfig, types::response::Response,
@@ -102,24 +106,27 @@ fn abuse_block_cooldown(config: &RouterCooldownConfig) -> Duration {
 pub async fn cooldown_for_response(
     response: Response,
     config: &RouterCooldownConfig,
-) -> (Response, Duration) {
-    let (response, cooldown, _class) =
+) -> (Response, Duration, ExhaustionScope) {
+    let (response, cooldown, _class, scope) =
         classify_and_cooldown(response, config).await;
-    (response, cooldown)
+    (response, cooldown, scope)
 }
 
 /// Like [`cooldown_for_response`] but also returns the [`FailoverClass`] so the
 /// router can decide whether to skip remaining same-provider free siblings.
+#[allow(clippy::too_many_lines)]
 pub async fn classify_and_cooldown(
     response: Response,
     config: &RouterCooldownConfig,
-) -> (Response, Duration, FailoverClass) {
+) -> (Response, Duration, FailoverClass, ExhaustionScope) {
     let status = response.status();
     if status == StatusCode::TOO_MANY_REQUESTS {
         if extract_retry_after_from_headers(response.headers()).is_some() {
             let cooldown =
                 rate_limit_cooldown(response.headers(), None, config);
-            return (response, cooldown, FailoverClass::Transient);
+            let class = FailoverClass::Transient;
+            let scope = classify_exhaustion_scope(status, None, class);
+            return (response, cooldown, class, scope);
         }
         let (parts, body_bytes) = collect_response_body(response).await;
         let cooldown = rate_limit_cooldown(
@@ -131,11 +138,13 @@ pub async fn classify_and_cooldown(
             FailureKind::QuotaExhausted => FailoverClass::QuotaExhausted,
             FailureKind::RateLimit => FailoverClass::Transient,
         };
+        let scope =
+            classify_exhaustion_scope(status, Some(body_bytes.as_ref()), class);
         let response = Response::from_parts(
             parts,
             axum_core::body::Body::from(body_bytes),
         );
-        return (response, cooldown, class);
+        return (response, cooldown, class, scope);
     }
 
     if matches!(status, StatusCode::BAD_REQUEST) {
@@ -150,11 +159,14 @@ pub async fn classify_and_cooldown(
             } else {
                 config.provider_error + config.retry_after_buffer
             };
+        let class = FailoverClass::Transient;
+        let scope =
+            classify_exhaustion_scope(status, Some(body_bytes.as_ref()), class);
         let response = Response::from_parts(
             parts,
             axum_core::body::Body::from(body_bytes),
         );
-        return (response, cooldown, FailoverClass::Transient);
+        return (response, cooldown, class, scope);
     }
 
     if matches!(
@@ -173,11 +185,14 @@ pub async fn classify_and_cooldown(
         } else {
             config.auth_error
         };
+        let class = FailoverClass::Transient;
+        let scope =
+            classify_exhaustion_scope(status, Some(body_bytes.as_ref()), class);
         let response = Response::from_parts(
             parts,
             axum_core::body::Body::from(body_bytes),
         );
-        return (response, cooldown, FailoverClass::Transient);
+        return (response, cooldown, class, scope);
     }
 
     if matches!(
@@ -194,14 +209,19 @@ pub async fn classify_and_cooldown(
         } else {
             config.provider_error + config.retry_after_buffer
         };
+        let class = FailoverClass::Overload;
+        let scope =
+            classify_exhaustion_scope(status, Some(body_bytes.as_ref()), class);
         let response = Response::from_parts(
             parts,
             axum_core::body::Body::from(body_bytes),
         );
-        return (response, cooldown, FailoverClass::Transient);
+        return (response, cooldown, class, scope);
     }
 
-    (response, config.provider_error, FailoverClass::Transient)
+    let class = FailoverClass::Transient;
+    let scope = classify_exhaustion_scope(status, None, class);
+    (response, config.provider_error, class, scope)
 }
 
 #[cfg(test)]
@@ -226,7 +246,11 @@ mod tests {
             .body(Body::from(body.as_slice()))
             .unwrap();
         let config = RouterCooldownConfig::default();
-        let (_, cooldown) = cooldown_for_response(response, &config).await;
+        let (_, cooldown) = {
+            let (response, cooldown, _) =
+                cooldown_for_response(response, &config).await;
+            (response, cooldown)
+        };
         assert_eq!(
             cooldown,
             Duration::from_secs(16) + config.retry_after_buffer
@@ -276,7 +300,11 @@ mod tests {
             .status(StatusCode::BAD_GATEWAY)
             .body(Body::from(body.as_slice()))
             .unwrap();
-        let (_, cooldown) = cooldown_for_response(response, &config).await;
+        let (_, cooldown) = {
+            let (response, cooldown, _) =
+                cooldown_for_response(response, &config).await;
+            (response, cooldown)
+        };
         assert_eq!(cooldown, config.abuse_block + config.retry_after_buffer);
         assert_eq!(cooldown, Duration::from_secs(4 * 3600 + 1));
     }
@@ -291,7 +319,11 @@ mod tests {
             .status(StatusCode::BAD_GATEWAY)
             .body(Body::from(body.as_slice()))
             .unwrap();
-        let (_, cooldown) = cooldown_for_response(response, &config).await;
+        let (_, cooldown) = {
+            let (response, cooldown, _) =
+                cooldown_for_response(response, &config).await;
+            (response, cooldown)
+        };
         assert_eq!(cooldown, config.provider_error + config.retry_after_buffer);
         assert_eq!(cooldown, Duration::from_secs(60 + 1));
     }

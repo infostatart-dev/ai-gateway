@@ -3,8 +3,13 @@
 
 use std::time::Instant;
 
+use super::trace_context::{TerminalRouteContext, terminal_route_context};
 use crate::{
-    config::credentials::ProviderCredentialId,
+    config::{
+        credentials::ProviderCredentialId,
+        provider_limits::ProviderLimitCatalog,
+    },
+    router::budget_aware::types::BudgetCandidate,
     types::{
         extensions::PendingRouteTrace, provider::InferenceProvider,
         router::RouterId,
@@ -41,6 +46,7 @@ pub(super) struct RouteTrace {
     skipped: usize,
     deepseek_web: Option<DeepSeekWebTrace>,
     chatgpt_web: Option<ChatGptWebTrace>,
+    terminal: TerminalRouteContext,
 }
 
 impl RouteTrace {
@@ -52,7 +58,16 @@ impl RouteTrace {
             skipped: 0,
             deepseek_web: None,
             chatgpt_web: None,
+            terminal: TerminalRouteContext::default(),
         }
+    }
+
+    pub(super) fn record_terminal(
+        &mut self,
+        limits: &ProviderLimitCatalog,
+        candidate: &BudgetCandidate,
+    ) {
+        self.terminal = terminal_route_context(limits, candidate);
     }
 
     pub(super) fn record_deepseek_web(&mut self, trace: DeepSeekWebTrace) {
@@ -98,6 +113,9 @@ impl RouteTrace {
             chatgpt_web: self.chatgpt_web,
             intent_tier: intent_context.map(|c| c.intent_tier),
             selection_phase: intent_context.map(|c| c.selection_phase),
+            quota_scope: self.terminal.quota_scope.clone(),
+            model_ladder_band: self.terminal.model_ladder_band.clone(),
+            model_ladder_position: self.terminal.model_ladder_position,
         }
     }
 

@@ -51,6 +51,7 @@ pub(crate) fn intent_autodefault_router(
             router_config.clone(),
         ),
         states: Arc::new(Mutex::new(HashMap::new())),
+        model_states: Arc::new(Mutex::new(HashMap::new())),
         provider_priorities: Arc::new(IndexMap::new()),
         default_latency: Duration::from_millis(10),
         max_cooldown_wait: Duration::from_secs(0),
@@ -156,6 +157,7 @@ pub(crate) fn empty_router(app_state: &AppState) -> BudgetAwareRouter {
             Arc::new(RouterConfig::default()),
         ),
         states: Arc::new(Mutex::new(HashMap::new())),
+        model_states: Arc::new(Mutex::new(HashMap::new())),
         provider_priorities: Arc::new(IndexMap::new()),
         default_latency: Duration::from_millis(10),
         max_cooldown_wait: Duration::from_secs(0),
@@ -195,6 +197,23 @@ pub(crate) fn ordered_candidates_for_source(
     source_model: &ModelId,
 ) -> Result<Vec<BudgetCandidate>, crate::error::internal::InternalError> {
     router.ordered_candidates(requirements, Some(source_model))
+}
+
+pub(crate) async fn gemini_model_candidate(
+    app_state: &AppState,
+    credential_id: &str,
+    model: &str,
+) -> BudgetCandidate {
+    build_candidate(
+        app_state,
+        InferenceProvider::GoogleGemini,
+        credential_id,
+        0,
+        "free-ladder-key",
+        model,
+        1_000_000,
+    )
+    .await
 }
 
 pub(crate) async fn gemini_candidate(

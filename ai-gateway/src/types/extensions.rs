@@ -104,4 +104,7 @@ pub struct PendingRouteTrace {
     pub chatgpt_web: Option<crate::router::budget_aware::ChatGptWebTrace>,
     pub intent_tier: Option<crate::router::intent::IntentTier>,
     pub selection_phase: Option<crate::router::intent::SelectionPhase>,
+    pub quota_scope: Option<String>,
+    pub model_ladder_band: Option<String>,
+    pub model_ladder_position: Option<u16>,
 }

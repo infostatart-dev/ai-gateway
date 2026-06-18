@@ -5,8 +5,11 @@ use crate::{
     config::credentials::ProviderCredentialId,
     metrics::router::CooldownEvent,
     router::{
-        provider_attempt::{lock_credential_states, smoothed_latency},
-        retry_after::cooldown_for_response,
+        provider_attempt::{
+            ModelCooldownKey, lock_credential_states, lock_model_states,
+            smoothed_latency,
+        },
+        retry_after::{ExhaustionScope, cooldown_for_response},
     },
     types::{provider::InferenceProvider, response::Response},
 };
@@ -16,6 +19,7 @@ impl BudgetAwareRouter {
         &self,
         credential_id: &ProviderCredentialId,
         provider: &InferenceProvider,
+        model: &str,
         elapsed: Duration,
     ) {
         let mut states = lock_credential_states(&self.states);
@@ -35,6 +39,16 @@ impl BudgetAwareRouter {
                 },
             );
         }
+        drop(states);
+
+        let mut model_states = lock_model_states(&self.model_states);
+        if let Some(state) = model_states.get_mut(&ModelCooldownKey {
+            credential_id: credential_id.clone(),
+            model: model.to_string(),
+        }) {
+            state.cooldown_until = None;
+            state.failures = 0;
+        }
     }
 
     /// Terminal failure on the last candidate (no further failover).
@@ -42,6 +56,7 @@ impl BudgetAwareRouter {
         &self,
         credential_id: &ProviderCredentialId,
         provider: &InferenceProvider,
+        model: &str,
         response: Response,
         elapsed: Duration,
     ) -> Response {
@@ -50,14 +65,61 @@ impl BudgetAwareRouter {
             .config()
             .provider_limits
             .cooldown_for(provider);
-        let (response, cooldown) =
+        let (response, cooldown, scope) =
             cooldown_for_response(response, &config).await;
-        let _ = self.update_failure_state(credential_id, elapsed, cooldown);
+        let _ = self.update_failure_state_scoped(
+            credential_id,
+            model,
+            scope,
+            elapsed,
+            cooldown,
+        );
         response
     }
 
     /// Apply cooldown state after a classified failure. Returns `true` when the
-    /// credential newly entered cooldown.
+    /// target newly entered cooldown.
+    pub(super) fn update_failure_state_scoped(
+        &self,
+        credential_id: &ProviderCredentialId,
+        model: &str,
+        scope: ExhaustionScope,
+        elapsed: Duration,
+        cooldown: Duration,
+    ) -> bool {
+        match scope {
+            ExhaustionScope::Model => self.update_model_failure_state(
+                credential_id,
+                model,
+                elapsed,
+                cooldown,
+            ),
+            ExhaustionScope::Slot | ExhaustionScope::Project => {
+                self.update_failure_state(credential_id, elapsed, cooldown)
+            }
+        }
+    }
+
+    fn update_model_failure_state(
+        &self,
+        credential_id: &ProviderCredentialId,
+        model: &str,
+        elapsed: Duration,
+        cooldown: Duration,
+    ) -> bool {
+        let mut model_states = lock_model_states(&self.model_states);
+        let key = ModelCooldownKey {
+            credential_id: credential_id.clone(),
+            model: model.to_string(),
+        };
+        let state = model_states.entry(key).or_default();
+        state.latency = Some(smoothed_latency(state.latency, elapsed));
+        state.failures = state.failures.saturating_add(1);
+        let prev_cooldown = state.cooldown_until;
+        state.cooldown_until = Some(std::time::Instant::now() + cooldown);
+        prev_cooldown.is_none()
+    }
+
     pub(super) fn update_failure_state(
         &self,
         credential_id: &ProviderCredentialId,

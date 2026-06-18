@@ -38,6 +38,15 @@ pub fn rate_limited_rpm() -> crate::types::response::Response {
         .unwrap()
 }
 
+pub fn project_billing_exhausted() -> crate::types::response::Response {
+    http::Response::builder()
+        .status(StatusCode::TOO_MANY_REQUESTS)
+        .body(Body::from(
+            r#"{"error":{"message":"Set up billing to continue using this project."}}"#,
+        ))
+        .unwrap()
+}
+
 pub fn daily_quota_exhausted() -> crate::types::response::Response {
     http::Response::builder()
         .status(StatusCode::TOO_MANY_REQUESTS)

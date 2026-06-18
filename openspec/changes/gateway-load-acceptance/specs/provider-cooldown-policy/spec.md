@@ -1,71 +1,45 @@
 ## ADDED Requirements
 
-**Approach:** Cooldown is **per credential account** (slot), not per provider brand.
-`ProviderLimitCatalog::cooldown_for(provider)` supplies provider defaults; each slot
-maintains its own `cooldown_until` in router state.
+**Serves:** autodefault-hardening item 7 — cooldown is per **credential slot**, duration from
+**provider catalog** per failure class, not a global constant.
 
-**Not midnight-by-default:** cooldown duration comes from upstream hints and catalog
-overrides per failure class — different providers already declare different values
-(e.g. browser-session rate-limit 180s vs 120s). Daily quota exhaustion uses the provider's
-`quota-exhausted` override (e.g. 24h), not a short `provider-error` cooldown.
-
-**Pairs with:** `catalog-quota-pacing` (proactive reject) + `autodefault-hardening` (access-denied
-24h for providers without API access).
+Stack: upstream hint → provider `cooldown` override → `cooldown-defaults` fallback.
+`ProviderLimitCatalog::cooldown_for(provider)` already merges these; fix is using provider
+`quota-exhausted` override in `resolve_429_base_secs`, not only global 1h.
 
 ---
 
-### Requirement: per-provider cooldown from catalog
+### Requirement: cooldown resolution stack
 
-Cooldown duration for a failure class MUST be resolved from the provider limit catalog:
+Cooldown duration MUST be resolved in this order:
 
-1. Upstream `Retry-After` header or JSON reset hint (`retryDelay`, `try again in …`) —
-   highest priority.
-2. Provider-level `cooldown` override for the failure class:
-   `rate-limit`, `quota-exhausted`, `provider-error`, `auth-error`, `abuse-block`.
-3. Global `cooldown-defaults` — fallback only when no provider override exists.
+1. Upstream `Retry-After` or JSON reset hint.
+2. Provider-level override for the failure class in the catalog.
+3. Global `cooldown-defaults`.
 
-#### Scenario: browser-session-rate-limit-uses-provider-override
+#### Scenario: provider-rate-limit-override
 
-**Given** a browser-session provider declares a rate-limit cooldown longer than the global default
-**And** upstream returns HTTP 429 classified as transient rate limit with no reset hint
+**Given** a provider declares a longer rate-limit cooldown than the global default
+**And** no upstream hint is present
+**When** transient rate-limit cooldown is computed
+**Then** the provider override MUST be used
+
+#### Scenario: quota-exhausted-provider-override
+
+**Given** a provider declares `quota-exhausted: 24h`
+**And** daily quota exhaustion with no upstream hint
 **When** cooldown is computed
-**Then** the cooldown MUST use that provider's rate-limit override
-**And** MUST NOT use the global rate-limit default
-
-#### Scenario: upstream-retry-after-takes-precedence
-
-**Given** upstream returns HTTP 429 with `Retry-After: 45` or a JSON retry delay
-**When** cooldown is computed for any provider
-**Then** the upstream hint MUST be used regardless of catalog defaults
-
-#### Scenario: quota-exhausted-uses-provider-override-not-global-only
-
-**Given** a provider declares `quota-exhausted: 24h` in its cooldown block
-**And** upstream returns daily quota exhaustion with no reset hint
-**When** cooldown is computed
-**Then** the cooldown MUST use the 24h provider override (plus buffer)
-**And** MUST NOT apply only the global 1h `quota-exhausted` default
+**Then** the 24h provider override MUST be used
 
 ---
 
-### Requirement: per-credential-slot cooldown state
+### Requirement: independent cooldown per credential slot
 
-Cooldown state MUST be tracked per credential slot, not per provider globally.
-Two slots for the same provider MUST have independent cooldown timelines.
+Each credential slot MUST maintain its own `cooldown_until`. Sibling slots MUST NOT
+inherit another slot's cooldown.
 
-`effective_budget_rank` MAY deprioritize slots with short remaining cooldown without
-removing them from the candidate list entirely.
+#### Scenario: sibling-not-inherits-cooldown
 
-#### Scenario: independent-cooldown-per-sibling-slot
-
-**Given** one multi-slot free-tier credential returns daily quota exhaustion and enters cooldown
-**When** a sibling slot for the same provider is evaluated for the next request
-**Then** the sibling slot MUST be eligible unless it has its own active cooldown
-**And** MUST NOT inherit the failed slot's cooldown state
-
-#### Scenario: access-denied-long-cooldown-per-slot
-
-**Given** a credential slot enters an access-denied cooldown (unsupported model / auth failure)
-**When** autodefault evaluates candidates within the cooldown window
-**Then** only that slot MUST be omitted
-**And** other providers MUST remain eligible without waiting for the denied slot's cooldown
+**Given** slot A entered cooldown after a failure
+**When** slot B for the same provider is evaluated
+**Then** slot B MUST be eligible unless B has its own active cooldown

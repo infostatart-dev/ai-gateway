@@ -1,0 +1,10 @@
+gemini:
+  free:
+    fast:
+      - gemini-3-flash-preview
+      - gemini-3.5-flash-preview
+    capacity:
+      - gemini-3.1-flash-lite
+      - gemini-2.5-flash
+    stability:
+      - gemini-2.5-pro
