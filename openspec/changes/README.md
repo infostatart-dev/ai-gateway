@@ -1,6 +1,6 @@
 # Active changes
 
-Planning home: [docs/planning.md](../../docs/planning.md) · Living specs: [openspec/specs/](../specs/) (14 capabilities)
+Planning home: [docs/planning.md](../../docs/planning.md) · Living specs: [openspec/specs/](../specs/) (16 capabilities)
 
 Refresh this index after propose/apply/archive:
 
@@ -18,7 +18,6 @@ mise exec -- openspec validate --changes --strict
 |--------|-------|-------|--------|
 | [routing-load-verification](routing-load-verification/) | Concurrent routing_load + provider-stats assertions | 20/22 | in progress |
 | [gateway-load-acceptance](gateway-load-acceptance/) | Stage hardening: payload gate, pacing, failover scope | 13/20 | in progress |
-| [provider-model-reality](provider-model-reality/) | Catalog verify, per-model 404/503 scopes, ladder slug fix | 0/33 | proposed |
 | [autodefault-credential-pools](autodefault-credential-pools/) | Mini/nano binding audit, Gemini×16, DeepSeek×2 | 0/20 | proposed |
 
 ## Upstream / decision backlog
@@ -31,7 +30,7 @@ mise exec -- openspec validate --changes --strict
 | [azure-openai-provider](azure-openai-provider/) | Decision | [#289](https://github.com/Helicone/ai-gateway/issues/289) | 0/9 | pending |
 | [openai-responses-agents-sdk](openai-responses-agents-sdk/) | Decision | [#173](https://github.com/Helicone/ai-gateway/issues/173) | 0/11 | pending |
 
-**Active total:** 8 changes · **113 tasks** (33 done) — run `openspec list` for live counts.
+**Active total:** 7 changes — run `openspec list` for live counts.
 
 ## Archive
 
@@ -50,3 +49,4 @@ Shipped changes live under [archive/](archive/). After `/opsx:archive`, sync del
 | [2026-06-16-provider-observability-metrics](archive/2026-06-16-provider-observability-metrics/) | provider-stats observability |
 | [2026-06-17-curated-free-providers-expansion](archive/2026-06-17-curated-free-providers-expansion/) | Tier-1 free API providers |
 | [2026-06-17-upstream-provider-emulator](archive/2026-06-17-upstream-provider-emulator/) | Upstream emulator (49/51 tasks) |
+| [2026-06-18-provider-model-reality](archive/2026-06-18-provider-model-reality/) | Gemini catalog verify, per-model scopes, ladder-only walk (`0.4.2-beta.3`) |
