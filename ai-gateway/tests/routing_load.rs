@@ -58,6 +58,22 @@ routing_load_test!(
     scenarios::openrouter_402_paid_does_not_kill_free::run
 );
 routing_load_test!(pacing_burst, scenarios::pacing_burst::run);
+routing_load_test!(
+    deepseek_credential_restricted_failover,
+    scenarios::deepseek_credential_restricted_failover::run
+);
+routing_load_test!(
+    deepseek_three_of_four_restricted,
+    scenarios::deepseek_four_slot_partial_restriction::run_three_of_four_muted
+);
+routing_load_test!(
+    deepseek_all_four_restricted,
+    scenarios::deepseek_four_slot_partial_restriction::run_all_four_muted
+);
+routing_load_test!(
+    deepseek_restricted_then_gemini_stability,
+    scenarios::deepseek_restricted_then_gemini_stability::run
+);
 routing_load_test!(shaper_backpressure, scenarios::shaper_backpressure::run);
 routing_load_test!(harness_round_robin, scenarios::harness_round_robin::run);
 routing_load_test!(

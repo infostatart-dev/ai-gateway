@@ -17,6 +17,11 @@ pub struct RouterCooldownConfig {
     pub retry_after_buffer: Duration,
     #[serde(with = "humantime_serde", default = "default_abuse_block")]
     pub abuse_block: Duration,
+    #[serde(
+        with = "humantime_serde",
+        default = "default_credential_restriction"
+    )]
+    pub credential_restriction: Duration,
 }
 
 impl Default for RouterCooldownConfig {
@@ -28,6 +33,7 @@ impl Default for RouterCooldownConfig {
             auth_error: default_auth_error(),
             retry_after_buffer: default_retry_after_buffer(),
             abuse_block: default_abuse_block(),
+            credential_restriction: default_credential_restriction(),
         }
     }
 }
@@ -73,6 +79,12 @@ pub struct ProviderCooldownOverrides {
         skip_serializing_if = "Option::is_none"
     )]
     pub abuse_block: Option<Duration>,
+    #[serde(
+        default,
+        with = "humantime_serde::option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub credential_restriction: Option<Duration>,
 }
 
 impl ProviderCooldownOverrides {
@@ -84,6 +96,7 @@ impl ProviderCooldownOverrides {
             && self.auth_error.is_none()
             && self.retry_after_buffer.is_none()
             && self.abuse_block.is_none()
+            && self.credential_restriction.is_none()
     }
 }
 
@@ -103,6 +116,9 @@ impl RouterCooldownConfig {
                 .retry_after_buffer
                 .unwrap_or(self.retry_after_buffer),
             abuse_block: overrides.abuse_block.unwrap_or(self.abuse_block),
+            credential_restriction: overrides
+                .credential_restriction
+                .unwrap_or(self.credential_restriction),
         }
     }
 }
@@ -131,6 +147,10 @@ pub(crate) const fn default_abuse_block() -> Duration {
     Duration::from_hours(2)
 }
 
+pub(crate) const fn default_credential_restriction() -> Duration {
+    Duration::from_hours(2)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,5 +165,11 @@ mod tests {
 
         assert_eq!(merged.provider_error, defaults.provider_error);
         assert_eq!(merged.rate_limit, Duration::from_secs(90));
+    }
+
+    #[test]
+    fn default_includes_credential_restriction_tier() {
+        let config = RouterCooldownConfig::default();
+        assert_eq!(config.credential_restriction, Duration::from_hours(2));
     }
 }

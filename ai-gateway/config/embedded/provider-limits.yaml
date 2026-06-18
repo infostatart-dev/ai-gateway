@@ -6,6 +6,7 @@ cooldown-defaults:
   auth-error: 5m
   retry-after-buffer: 1s
   abuse-block: 2h
+  credential-restriction: 2h
 
 gemini:
   observed-at: "2026-06-18"
@@ -901,6 +902,7 @@ deepseek-web:
     rate-limit: 120s
     auth-error: 30m
     provider-error: 60s
+    credential-restriction: 4h
   tiers:
     free-single-session:
       limits:

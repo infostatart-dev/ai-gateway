@@ -73,6 +73,20 @@ pub fn auth_error_response() -> Response {
         .into_response()
 }
 
+pub fn credential_restricted_response() -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        axum::Json(json!({
+            "error": {
+                "message": "user is muted",
+                "code": "credential_restricted",
+                "restricted_until": "2026-06-19T09:34:11Z"
+            }
+        })),
+    )
+        .into_response()
+}
+
 pub fn quota_exhausted_response() -> Response {
     (
         StatusCode::TOO_MANY_REQUESTS,
@@ -219,6 +233,17 @@ mod tests {
         let daily = free_models_per_day_response();
         assert_eq!(daily.status(), StatusCode::TOO_MANY_REQUESTS);
         assert!(daily.headers().contains_key("x-ratelimit-reset"));
+    }
+
+    #[tokio::test]
+    async fn credential_restricted_profile_matches_openai_error_shape() {
+        let response = credential_restricted_response();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["error"]["code"], "credential_restricted");
     }
 
     #[test]

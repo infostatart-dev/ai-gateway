@@ -46,6 +46,9 @@ pub(super) struct RouteTrace {
     skipped: usize,
     deepseek_web: Option<DeepSeekWebTrace>,
     chatgpt_web: Option<ChatGptWebTrace>,
+    upstream_failure_kind: Option<String>,
+    restricted_until: Option<String>,
+    failover_class: Option<String>,
     terminal: TerminalRouteContext,
 }
 
@@ -58,6 +61,9 @@ impl RouteTrace {
             skipped: 0,
             deepseek_web: None,
             chatgpt_web: None,
+            upstream_failure_kind: None,
+            restricted_until: None,
+            failover_class: None,
             terminal: TerminalRouteContext::default(),
         }
     }
@@ -76,6 +82,19 @@ impl RouteTrace {
 
     pub(super) fn record_chatgpt_web(&mut self, trace: ChatGptWebTrace) {
         self.chatgpt_web = Some(trace);
+    }
+
+    pub(super) fn record_failure_signal(
+        &mut self,
+        class: crate::router::retry_after::FailoverClass,
+        ctx: Option<&crate::types::extensions::UpstreamFailureContext>,
+    ) {
+        self.failover_class = Some(format!("{class:?}"));
+        if let Some(ctx) = ctx {
+            self.upstream_failure_kind = Some(format!("{:?}", ctx.kind));
+            self.restricted_until =
+                ctx.restricted_until.map(|dt| dt.to_rfc3339());
+        }
     }
 
     pub(super) fn record_attempt(&mut self) {
@@ -116,6 +135,9 @@ impl RouteTrace {
             quota_scope: self.terminal.quota_scope.clone(),
             model_ladder_band: self.terminal.model_ladder_band.clone(),
             model_ladder_position: self.terminal.model_ladder_position,
+            upstream_failure_kind: self.upstream_failure_kind.clone(),
+            restricted_until: self.restricted_until.clone(),
+            failover_class: self.failover_class.clone(),
         }
     }
 

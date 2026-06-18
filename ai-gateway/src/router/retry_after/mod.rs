@@ -31,7 +31,11 @@ use crate::{
         provider_limits::ProviderQuotaProfile,
         router_cooldown::RouterCooldownConfig,
     },
-    types::response::Response,
+    router::upstream_failure::{
+        credential_restriction_cooldown, looks_like_credential_restricted,
+        parse_restricted_until_from_body,
+    },
+    types::{extensions::UpstreamFailureContext, response::Response},
 };
 
 /// How a failed candidate should influence same-provider sibling failover.
@@ -43,6 +47,8 @@ pub enum FailoverClass {
     QuotaExhausted,
     /// Upstream overload (`502`/`503`): skip remaining free siblings.
     Overload,
+    /// Account/credential temporarily restricted (mute, abuse): poison slot.
+    CredentialRestricted,
 }
 
 /// Best-effort quota-dimension label inferred from the HTTP status alone, for
@@ -68,6 +74,7 @@ pub fn quota_metric_label(
     match class {
         FailoverClass::Overload => "overload",
         FailoverClass::QuotaExhausted => "rpd",
+        FailoverClass::CredentialRestricted => "credential_restricted",
         FailoverClass::Transient if status == StatusCode::TOO_MANY_REQUESTS => {
             "rpm"
         }
@@ -153,6 +160,28 @@ pub async fn classify_and_cooldown(
     Option<Duration>,
 ) {
     let status = response.status();
+
+    if let Some(ctx) = response.extensions().get::<UpstreamFailureContext>()
+        && ctx.kind
+            == crate::router::upstream_failure::UpstreamFailureKind::CredentialRestricted
+    {
+        let restricted_until = ctx.restricted_until;
+        let (parts, body_bytes) = collect_response_body(response).await;
+        let cooldown =
+            credential_restriction_cooldown(restricted_until, config);
+        let response = Response::from_parts(
+            parts,
+            axum_core::body::Body::from(body_bytes),
+        );
+        return (
+            response,
+            cooldown,
+            FailoverClass::CredentialRestricted,
+            ExhaustionScope::Slot,
+            None,
+        );
+    }
+
     if status == StatusCode::TOO_MANY_REQUESTS {
         // Retry-After alone is a reliable RPM hint; X-RateLimit-Reset still
         // requires body classification (e.g. OpenRouter free-models-per-day).
@@ -227,6 +256,24 @@ pub async fn classify_and_cooldown(
             | StatusCode::PAYMENT_REQUIRED
     ) {
         let (parts, body_bytes) = collect_response_body(response).await;
+        if status == StatusCode::FORBIDDEN
+            && looks_like_credential_restricted(Some(body_bytes.as_ref()))
+        {
+            let until =
+                parse_restricted_until_from_body(Some(body_bytes.as_ref()));
+            let cooldown = credential_restriction_cooldown(until, config);
+            let response = Response::from_parts(
+                parts,
+                axum_core::body::Body::from(body_bytes),
+            );
+            return (
+                response,
+                cooldown,
+                FailoverClass::CredentialRestricted,
+                ExhaustionScope::Slot,
+                None,
+            );
+        }
         let cooldown = if looks_like_abuse_block(Some(body_bytes.as_ref())) {
             tracing::warn!(
                 cooldown_kind = "abuse-block",
@@ -417,6 +464,27 @@ mod tests {
         };
         assert_eq!(cooldown, config.provider_error + config.retry_after_buffer);
         assert_eq!(cooldown, Duration::from_secs(60 + 1));
+    }
+
+    #[tokio::test]
+    async fn credential_restricted_403_uses_slot_cooldown_not_provider_error() {
+        let catalog = ProviderLimitCatalog::default();
+        let config = catalog
+            .cooldown_for(&InferenceProvider::Named("deepseek-web".into()));
+        let body = br#"{"error":{"code":"credential_restricted","restricted_until":"2099-01-01T00:00:00Z"}}"#;
+        let response = http::Response::builder()
+            .status(StatusCode::FORBIDDEN)
+            .body(Body::from(body.as_slice()))
+            .unwrap();
+        let (_, cooldown, class, scope, _) = classify_and_cooldown(
+            response,
+            &config,
+            ProviderQuotaProfile::PerSession,
+        )
+        .await;
+        assert_eq!(class, FailoverClass::CredentialRestricted);
+        assert_eq!(scope, ExhaustionScope::Slot);
+        assert!(cooldown > config.provider_error + config.retry_after_buffer);
     }
 
     #[tokio::test]

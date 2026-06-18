@@ -1,4 +1,7 @@
 pub mod chatgpt_last_resort;
+pub mod deepseek_credential_restricted_failover;
+pub mod deepseek_four_slot_partial_restriction;
+pub mod deepseek_restricted_then_gemini_stability;
 pub mod failover_daily_quota;
 pub mod failover_quota;
 pub mod failover_rpm;

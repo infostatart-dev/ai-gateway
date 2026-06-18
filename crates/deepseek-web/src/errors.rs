@@ -4,6 +4,11 @@ use thiserror::Error;
 pub enum Error {
     #[error("session auth failed: {0}")]
     SessionAuth(String),
+    #[error("credential restricted: {message}")]
+    CredentialRestricted {
+        message: String,
+        restricted_until: Option<i64>,
+    },
     #[error("upstream HTTP {status}: {message}")]
     Upstream { status: u16, message: String },
     #[error("empty response from DeepSeek")]

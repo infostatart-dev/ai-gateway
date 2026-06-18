@@ -20,6 +20,7 @@ mise exec -- openspec validate --changes --strict
 | [gateway-load-acceptance](gateway-load-acceptance/) | Stage hardening: payload gate, pacing, failover scope | 13/20 | in progress |
 | [per-model-quota-domain](per-model-quota-domain/) | Unified per-model quota domain + OpenRouter consumer | 0/28 | proposed |
 | [autodefault-credential-pools](autodefault-credential-pools/) | Mini/nano binding audit, Gemini×16, DeepSeek×2 | 0/20 | proposed |
+| [upstream-credential-restriction](upstream-credential-restriction/) | CredentialRestricted signal, DeepSeek mute, slot failover + stability | 0/24 | proposed |
 
 ## Upstream / decision backlog
 

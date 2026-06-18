@@ -2,6 +2,7 @@
 //! chat completions.
 
 pub mod api;
+pub mod biz_error;
 pub mod completion;
 pub mod constants;
 pub mod cookie;

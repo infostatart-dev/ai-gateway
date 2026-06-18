@@ -15,6 +15,7 @@ pub mod service;
 pub mod strategy;
 pub mod token_estimate;
 pub mod unified_api;
+pub mod upstream_failure;
 
 pub(in crate::router) const FORCED_ROUTING_HEADER: http::HeaderName =
     http::HeaderName::from_static("helicone-forced-routing");

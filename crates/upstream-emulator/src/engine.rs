@@ -13,10 +13,10 @@ use crate::{
     state::SharedState,
     tokens::estimate_usage,
     wire::{
-        auth_error_response, free_models_per_day_response,
-        high_demand_response, never_purchased_response, not_found_response,
-        overload_response, quota_exhausted_response, rate_limit_response,
-        render_api_family,
+        auth_error_response, credential_restricted_response,
+        free_models_per_day_response, high_demand_response,
+        never_purchased_response, not_found_response, overload_response,
+        quota_exhausted_response, rate_limit_response, render_api_family,
     },
 };
 
@@ -76,6 +76,7 @@ fn forced_response(profile: ForcedProfile) -> Response {
         ForcedProfile::HighDemand => high_demand_response(),
         ForcedProfile::NeverPurchased => never_purchased_response(),
         ForcedProfile::FreeModelsPerDay => free_models_per_day_response(),
+        ForcedProfile::CredentialRestricted => credential_restricted_response(),
     }
 }
 

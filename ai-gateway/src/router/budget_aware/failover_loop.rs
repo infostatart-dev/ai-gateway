@@ -100,6 +100,7 @@ pub async fn run_failover_candidates(
                 &mut failed_credentials,
                 &mut failed_models,
                 &attempt_ctx,
+                &mut route_trace,
             )
             .await;
             route_trace.record_skipped(skipped);
@@ -325,6 +326,7 @@ async fn handle_successful_candidate(
                     ctx.failed_credentials,
                     ctx.failed_models,
                     attempt_ctx,
+                    route_trace,
                 )
                 .await;
                 route_trace.record_skipped(skipped);
@@ -378,9 +380,14 @@ async fn fail_over_candidate(
     failed_credentials: &mut HashSet<ProviderCredentialId>,
     failed_models: &mut HashSet<ModelCooldownKey>,
     attempt: &crate::types::extensions::UpstreamAttemptContext,
+    route_trace: &mut trace::RouteTrace,
 ) -> usize {
     let status = response.status();
     let model = candidate.capability.model.to_string();
+    let failure_ctx = response
+        .extensions()
+        .get::<crate::types::extensions::UpstreamFailureContext>()
+        .cloned();
     let (response, class, scope) = failure::record_classified_failure(
         this,
         &candidate.credential_id,
@@ -390,6 +397,7 @@ async fn fail_over_candidate(
         elapsed,
     )
     .await;
+    route_trace.record_failure_signal(class, failure_ctx.as_ref());
     let quota_profile = this
         .app_state
         .config()

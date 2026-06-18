@@ -9,6 +9,7 @@ pub enum ForcedProfile {
     HighDemand,
     NeverPurchased,
     FreeModelsPerDay,
+    CredentialRestricted,
 }
 
 #[derive(Debug, Default, Clone)]

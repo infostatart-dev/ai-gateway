@@ -180,6 +180,7 @@ impl Executor {
                         stats,
                     });
                 }
+                Err(e @ Error::CredentialRestricted { .. }) => break Err(e),
                 Err(e) => break Err(e),
             }
         };

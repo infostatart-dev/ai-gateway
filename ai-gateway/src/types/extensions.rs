@@ -88,6 +88,14 @@ pub struct GatewayProviderUsageExtension(
     pub crate::metrics::provider::GatewayProviderUsage,
 );
 
+/// Normalized upstream failure attached by provider dispatchers for router
+/// policy.
+#[derive(Debug, Clone)]
+pub struct UpstreamFailureContext {
+    pub kind: crate::router::upstream_failure::UpstreamFailureKind,
+    pub restricted_until: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 /// Deferred routing trace emission after response body metrics are collected.
 #[derive(Debug, Clone)]
 pub struct PendingRouteTrace {
@@ -107,4 +115,7 @@ pub struct PendingRouteTrace {
     pub quota_scope: Option<String>,
     pub model_ladder_band: Option<String>,
     pub model_ladder_position: Option<u16>,
+    pub upstream_failure_kind: Option<String>,
+    pub restricted_until: Option<String>,
+    pub failover_class: Option<String>,
 }

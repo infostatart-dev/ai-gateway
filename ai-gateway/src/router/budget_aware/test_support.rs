@@ -233,6 +233,45 @@ pub(crate) async fn openrouter_model_candidate(
     .await
 }
 
+pub(crate) async fn deepseek_model_candidate(
+    app_state: &AppState,
+    credential_id: &str,
+    model: &str,
+) -> BudgetCandidate {
+    build_candidate(
+        app_state,
+        InferenceProvider::Named("deepseek-web".into()),
+        credential_id,
+        0,
+        "deepseek-session",
+        model,
+        128_000,
+    )
+    .await
+}
+
+pub(crate) async fn deepseek_slots(
+    app_state: &AppState,
+    count: u8,
+) -> Vec<BudgetCandidate> {
+    const IDS: [&str; 4] = [
+        "deepseek-web-default",
+        "deepseek-web-2",
+        "deepseek-web-3",
+        "deepseek-web-4",
+    ];
+    let mut out = Vec::new();
+    for (index, id) in IDS.iter().enumerate() {
+        if index >= count as usize {
+            break;
+        }
+        out.push(
+            deepseek_model_candidate(app_state, id, "deepseek-chat").await,
+        );
+    }
+    out
+}
+
 pub(crate) async fn gemini_candidate(
     app_state: &AppState,
     credential_id: &str,

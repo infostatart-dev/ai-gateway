@@ -140,6 +140,10 @@ pub fn emit_pending_route_trace(
         quota_scope = pending.quota_scope.as_deref().unwrap_or("none"),
         model_ladder_band = pending.model_ladder_band.as_deref().unwrap_or("none"),
         model_ladder_position = pending.model_ladder_position.map_or(0, u32::from),
+        upstream_failure_kind =
+            pending.upstream_failure_kind.as_deref().unwrap_or("none"),
+        restricted_until = pending.restricted_until.as_deref().unwrap_or("none"),
+        failover_class = pending.failover_class.as_deref().unwrap_or("none"),
         "budget-aware route summary"
     );
 }

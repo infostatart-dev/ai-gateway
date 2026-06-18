@@ -129,4 +129,11 @@ Route trace logs `deepseek_web_turns`, `deepseek_web_upload_parts`, and
 Sessions expire when DeepSeek invalidates `userToken`. Symptoms: HTTP 401,
 `invalid_session` in error body. Re-run `deepseek login` or `deepseek import`.
 
+**Account restriction:** DeepSeek may return a temporary account block with a
+`restricted_until` deadline while `users/current` still succeeds. The gateway maps this
+to HTTP **403** with `error.code: credential_restricted` and optional
+`error.restricted_until`. Autodefault skips the restricted slot (cooldown until
+`restricted_until` or catalog `credential-restriction`) and fails over to another
+DeepSeek session or the next provider.
+
 See also: [credentials.md](credentials.md), [routing.md](routing.md).

@@ -104,3 +104,16 @@ pub fn openrouter_never_purchased_402() -> crate::types::response::Response {
         ))
         .unwrap()
 }
+
+pub fn credential_restricted(
+    restricted_until: Option<&str>,
+) -> crate::types::response::Response {
+    let until = restricted_until.unwrap_or("2026-06-19T09:34:11Z");
+    http::Response::builder()
+        .status(StatusCode::FORBIDDEN)
+        .header(http::header::CONTENT_TYPE, "application/json")
+        .body(Body::from(format!(
+            r#"{{"error":{{"message":"user is muted","code":"credential_restricted","restricted_until":"{until}"}}}}"#
+        )))
+        .unwrap()
+}

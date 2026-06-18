@@ -4,7 +4,7 @@ node_modules
 .env
 dev/session.json
 dev/perplexity-session.json
-dev/deepseek-session.json
+dev/deepseek-session*.json
 dev/secrets.local.yaml
 dev/secrets.local.backup.yaml
 dev/secrets.debug.*.yaml

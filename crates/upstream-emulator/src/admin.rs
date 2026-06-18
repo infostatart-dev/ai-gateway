@@ -74,6 +74,9 @@ async fn set_profile(
         "free-models-per-day" | "429-free-models-per-day" => {
             ForcedProfile::FreeModelsPerDay
         }
+        "credential-restricted" | "403-credential-restricted" => {
+            ForcedProfile::CredentialRestricted
+        }
         _ => {
             return (
                 StatusCode::BAD_REQUEST,

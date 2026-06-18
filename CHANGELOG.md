@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.4.2-beta.5] - 2026-06-18
+
+### Features
+
+- **Upstream credential restriction:** normalized `CredentialRestricted` failure
+  signal; DeepSeek temporary account blocks map to HTTP 403 `credential_restricted`
+  with per-slot cooldown from `restricted_until` (no empty-response retry loops)
+- **DeepSeek multi-slot routing:** failover across up to four session credentials;
+  a restricted slot poisons only itself — sibling slots stay eligible until their
+  own restriction event
+- **Upstream emulator:** `403-credential-restricted` wire profile for routing_load
+  and local emulation
+
+### Fixed
+
+- **DeepSeek biz JSON:** completion errors with `biz_code` are parsed before SSE
+  collection so restriction events fail fast instead of surfacing as 502 empty responses
+- **Structured output:** credential restriction on a retry turn exits immediately
+  without further schema retries
+
+### Testing
+
+- **routing_load:** DeepSeek credential restriction failover; three-of-four and
+  all-four restricted slot matrix; restricted DeepSeek slots then Gemini stability band
+- **deepseek-web:** biz-error parser, turn-level restriction mapping, structured-output
+  guard when restriction arrives mid-retry
+- **Lib coverage floor:** workspace line coverage stays above 48% (`mise run coverage:gate`)
+
 ## [0.4.2-beta.4] - 2026-06-18
 
 ### Discovered (live OpenRouter probe)

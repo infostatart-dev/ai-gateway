@@ -61,6 +61,7 @@ pub fn classify_exhaustion_scope(
             ExhaustionScope::Model
         }
         FailoverClass::QuotaExhausted => ExhaustionScope::Model,
+        FailoverClass::CredentialRestricted => ExhaustionScope::Slot,
         FailoverClass::Overload | FailoverClass::Transient => {
             ExhaustionScope::Slot
         }

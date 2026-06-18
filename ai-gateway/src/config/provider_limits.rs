@@ -678,6 +678,12 @@ mod tests {
                 .auth_error,
             Duration::from_secs(30 * 60)
         );
+        assert_eq!(
+            catalog
+                .cooldown_for(&InferenceProvider::Named("deepseek-web".into()))
+                .credential_restriction,
+            Duration::from_secs(4 * 3600)
+        );
     }
 
     #[test]
