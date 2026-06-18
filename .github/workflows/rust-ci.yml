@@ -4,9 +4,10 @@ on:
   push:
     branches: ["main"]
     # Skip when the push only updates OpenSpec planning artifacts (no Rust/build inputs).
+    # Also allow rust-ci.yml-only tweaks alongside openspec without triggering a build.
     paths-ignore:
-      - "openspec/**/*.md"
-      - "openspec/**/.openspec.yaml"
+      - "openspec/**"
+      - ".github/workflows/rust-ci.yml"
   pull_request:
     branches: ["main"]
     paths:
