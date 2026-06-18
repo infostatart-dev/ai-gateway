@@ -38,6 +38,7 @@ fn p2c_config_openai_anthropic_google() -> RouterConfigs {
             retries: None,
             rate_limit: None,
             providers: None,
+            ..Default::default()
         },
     )]))
 }

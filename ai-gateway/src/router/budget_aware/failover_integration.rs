@@ -105,6 +105,8 @@ mod structured_output_failover {
             max_cooldown_wait: Duration::from_secs(0),
             selection_mode: CandidateSelectionMode::BudgetThenCapability,
             credential_round_robin: super::super::credential_balance::CredentialRoundRobin::new_shared(),
+            source_model_selection:
+                crate::config::router::SourceModelSelection::Strict,
         }
     }
 
@@ -145,6 +147,7 @@ mod structured_output_failover {
                 supports_vision: false,
                 reasoning: true,
                 json_schema_rank: 0,
+                intent_tier: crate::router::intent::IntentTier::Deep,
             },
             service,
         }
@@ -198,6 +201,7 @@ mod structured_output_failover {
                 reasoning_preferred: true,
                 ..RequestRequirements::default()
             },
+            None,
         )
         .await
         .expect("second candidate should pass schema validation");
@@ -272,6 +276,7 @@ mod structured_output_failover {
                 json_schema_required: true,
                 ..RequestRequirements::default()
             },
+            None,
         )
         .await
         .expect_err("all syntax-invalid outputs must not return HTTP 200");
@@ -331,6 +336,7 @@ mod structured_output_failover {
                 reasoning_preferred: true,
                 ..RequestRequirements::default()
             },
+            None,
         )
         .await
         .expect(

@@ -40,6 +40,9 @@ pub(super) fn budget_aware_call(
         }
         let source_model =
             parsed.as_ref().and_then(extract_source_model_from_value);
+        let routing_intent = source_model
+            .as_ref()
+            .map(crate::router::intent::extract_routing_intent);
 
         let candidates =
             this.ordered_candidates(&requirements, source_model.as_ref())?;
@@ -50,6 +53,7 @@ pub(super) fn budget_aware_call(
             body_bytes,
             candidates,
             requirements,
+            routing_intent,
         )
         .await
     })

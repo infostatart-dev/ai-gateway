@@ -80,8 +80,9 @@ credentials:
 
 ### Gemini free siblings
 
-Four free-tier AI Studio slots share `tier: free` and equal `budget-rank` in
-embedded policy. Set each key under its own slot id:
+Sixteen free-tier AI Studio slots share `tier: free` and equal `budget-rank` in
+embedded policy. Set each key under its own slot id (`gemini-free` through
+`gemini-free-16`):
 
 ```yaml
 credentials:
@@ -92,6 +93,11 @@ credentials:
   gemini-free-3:
     api-key: ...
   gemini-free-4:
+    api-key: ...
+  gemini-free-5:
+    api-key: ...
+  # … gemini-free-6 … gemini-free-15 …
+  gemini-free-16:
     api-key: ...
   gemini-default:
     api-key: ...
@@ -112,6 +118,8 @@ to that path (or another path you prefer).
 ### DeepSeek Web
 
 Session file with `userToken` from chat.deepseek.com — cost-class **`free`**.
+Up to two browser sessions (`deepseek-web-default`, `deepseek-web-2`) round-robin
+with isolated pacing gates.
 See [deepseek-web.md](deepseek-web.md).
 
 ```bash
@@ -160,7 +168,7 @@ Each slot has a `budget-rank` in embedded YAML. **Lower values are preferred
 first** within the same provider when the budget-aware router selects
 candidates.
 
-See embedded config: all four `gemini-free*` slots (rank 0) are tried before
+See embedded config: all sixteen `gemini-free*` slots (rank 0) are tried before
 `gemini-default` (rank 10) when both are eligible.
 
 ## Startup behaviour

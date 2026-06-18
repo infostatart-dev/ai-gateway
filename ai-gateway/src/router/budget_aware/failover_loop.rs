@@ -28,6 +28,7 @@ pub async fn run_failover_candidates(
     body_bytes: bytes::Bytes,
     candidates: Vec<BudgetCandidate>,
     requirements: RequestRequirements,
+    routing_intent: Option<crate::router::intent::RoutingIntent>,
 ) -> Result<Response, ApiError> {
     let mut failed_credentials = HashSet::<ProviderCredentialId>::new();
     let mut route_trace = trace::RouteTrace::new(candidates.len());
@@ -110,6 +111,7 @@ pub async fn run_failover_candidates(
                     candidate,
                     response,
                     status,
+                    routing_intent,
                 ));
             }
             continue;
@@ -135,6 +137,7 @@ pub async fn run_failover_candidates(
             credential: None,
             status: None,
         },
+        None,
     );
     Err(ApiError::Internal(InternalError::ProviderNotFound))
 }
@@ -145,12 +148,40 @@ fn finish_success(
     candidate: &BudgetCandidate,
     mut response: Response,
     status: http::StatusCode,
+    routing_intent: Option<crate::router::intent::RoutingIntent>,
 ) -> Response {
     attach_routed_identity(
         &mut response,
         &candidate.credential_id,
         &candidate.capability.model,
     );
+    if let Some(intent) = routing_intent {
+        let intent_context = crate::types::extensions::RoutingIntentContext {
+            intent_tier: intent.preferred_tier,
+            selection_phase: super::intent_selection::selection_phase_for(
+                intent, candidate,
+            ),
+        };
+        response.extensions_mut().insert(intent_context);
+        this.app_state
+            .0
+            .metrics
+            .provider
+            .record_client_request(route_trace.attempts() > 1);
+        let outcome = trace::RouteOutcome {
+            label: "success",
+            provider: Some(&candidate.capability.provider),
+            credential: Some(&candidate.credential_id),
+            status: Some(status.as_u16()),
+        };
+        response.extensions_mut().insert(route_trace.attach_pending(
+            &this.router_id,
+            this.strategy,
+            &outcome,
+            Some(intent_context),
+        ));
+        return response;
+    }
     this.app_state
         .0
         .metrics
@@ -166,6 +197,7 @@ fn finish_success(
         &this.router_id,
         this.strategy,
         &outcome,
+        None,
     ));
     response
 }
@@ -202,6 +234,7 @@ async fn finish_terminal(
             credential: Some(&candidate.credential_id),
             status: Some(status.as_u16()),
         },
+        None,
     );
     response
 }

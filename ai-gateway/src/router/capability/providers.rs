@@ -317,7 +317,8 @@ fn inclusionai(cap: &mut ModelCapability) {
 mod tests {
     use super::*;
     use crate::{
-        router::capability::ModelCapability, types::model_id::ModelId,
+        router::{capability::ModelCapability, intent::IntentTier},
+        types::model_id::ModelId,
     };
 
     #[test]
@@ -335,6 +336,7 @@ mod tests {
             supports_vision: false,
             reasoning: false,
             json_schema_rank: 0,
+            intent_tier: IntentTier::Standard,
         };
         openrouter(&mut openrouter_cap, "openai/gpt-4o-mini");
         let mut groq_cap = ModelCapability {
@@ -350,6 +352,7 @@ mod tests {
             supports_vision: false,
             reasoning: false,
             json_schema_rank: 0,
+            intent_tier: IntentTier::Standard,
         };
         groq(&mut groq_cap, "llama-3.3-70b-versatile");
         assert!(openrouter_cap.json_schema_rank < groq_cap.json_schema_rank);
@@ -370,6 +373,7 @@ mod tests {
             supports_vision: false,
             reasoning: false,
             json_schema_rank: 0,
+            intent_tier: IntentTier::Standard,
         };
         cerebras(&mut cap, "gpt-oss-120b");
         assert!(cap.supports_json_schema);
@@ -391,6 +395,7 @@ mod tests {
             supports_vision: false,
             reasoning: false,
             json_schema_rank: 0,
+            intent_tier: IntentTier::Standard,
         };
         mistral(&mut cap, "magistral-medium-latest");
         assert!(cap.supports_json_schema);

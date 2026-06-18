@@ -256,6 +256,8 @@ mod tests {
         let catalog: CredentialCatalog =
             serde_yml::from_str(CREDENTIALS_YAML).unwrap();
         assert!(catalog.credentials.contains_key("gemini-free"));
+        assert!(catalog.credentials.contains_key("gemini-free-16"));
+        assert!(catalog.credentials.contains_key("deepseek-web-2"));
         assert!(catalog.credentials.contains_key("openrouter-default"));
         assert!(catalog.credentials.contains_key("longcat-default"));
         assert!(catalog.credentials.contains_key("cohere-default"));

@@ -9,6 +9,17 @@ pub fn ok_chat_completion() -> crate::types::response::Response {
         .unwrap()
 }
 
+/// Valid assistant JSON for [`super::payload::nano_json_strict_body`].
+pub fn ok_nano_json_schema_completion() -> crate::types::response::Response {
+    http::Response::builder()
+        .status(StatusCode::OK)
+        .header(http::header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            r#"{"choices":[{"message":{"content":"{\"ok\":true}"}}]}"#,
+        ))
+        .unwrap()
+}
+
 /// Valid assistant JSON for [`super::payload::fat_json_schema_body`].
 pub fn ok_fat_json_schema_completion() -> crate::types::response::Response {
     http::Response::builder()

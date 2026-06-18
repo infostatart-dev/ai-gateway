@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     config::providers::ProvidersConfig,
+    router::intent::IntentTier,
     types::{model_id::ModelId, provider::InferenceProvider},
 };
 
@@ -18,6 +19,8 @@ pub struct ModelCapabilityConfig {
     pub supports_vision: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intent_tier: Option<IntentTier>,
 }
 
 /// Same capability resolution as the router (embedded `model-capabilities` yaml

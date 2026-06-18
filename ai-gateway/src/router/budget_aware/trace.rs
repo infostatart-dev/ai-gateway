@@ -80,6 +80,7 @@ impl RouteTrace {
         router_id: &RouterId,
         strategy: &'static str,
         outcome: &RouteOutcome<'_>,
+        intent_context: Option<crate::types::extensions::RoutingIntentContext>,
     ) -> PendingRouteTrace {
         PendingRouteTrace {
             router_id: router_id.clone(),
@@ -95,6 +96,8 @@ impl RouteTrace {
             terminal_status: outcome.status,
             deepseek_web: self.deepseek_web,
             chatgpt_web: self.chatgpt_web,
+            intent_tier: intent_context.map(|c| c.intent_tier),
+            selection_phase: intent_context.map(|c| c.selection_phase),
         }
     }
 
@@ -103,9 +106,10 @@ impl RouteTrace {
         router_id: &RouterId,
         strategy: &'static str,
         outcome: &RouteOutcome<'_>,
+        intent_context: Option<crate::types::extensions::RoutingIntentContext>,
     ) {
         crate::metrics::provider::emit_pending_route_trace(
-            &self.attach_pending(router_id, strategy, outcome),
+            &self.attach_pending(router_id, strategy, outcome, intent_context),
             None,
             None,
         );

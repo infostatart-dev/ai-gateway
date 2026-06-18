@@ -11,6 +11,13 @@ use crate::{config::router::RouterConfig, types::secret::Secret};
 #[derive(Debug, Clone, AsRef, From, Into)]
 pub struct ProviderRequestId(pub(crate) http::HeaderValue);
 
+/// Resolved routing intent attached to successful autodefault responses.
+#[derive(Debug, Clone, Copy)]
+pub struct RoutingIntentContext {
+    pub intent_tier: crate::router::intent::IntentTier,
+    pub selection_phase: crate::router::intent::SelectionPhase,
+}
+
 /// Winning provider/model after router selection or failover.
 #[derive(Debug, Clone)]
 pub struct RoutedModelAndProvider(pub String);
@@ -95,4 +102,6 @@ pub struct PendingRouteTrace {
     pub terminal_status: Option<u16>,
     pub deepseek_web: Option<crate::router::budget_aware::DeepSeekWebTrace>,
     pub chatgpt_web: Option<crate::router::budget_aware::ChatGptWebTrace>,
+    pub intent_tier: Option<crate::router::intent::IntentTier>,
+    pub selection_phase: Option<crate::router::intent::SelectionPhase>,
 }

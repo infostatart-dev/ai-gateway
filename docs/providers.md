@@ -17,9 +17,7 @@ Embedded slots in [`credentials.yaml`](../ai-gateway/config/embedded/credentials
 | `openai-default` | openai | Standard OpenAI API |
 | `anthropic-default` | anthropic | Claude API |
 | `gemini-free` | gemini | Free-tier Google AI Studio (slot 1) |
-| `gemini-free-2` | gemini | Free-tier Google AI Studio (slot 2) |
-| `gemini-free-3` | gemini | Free-tier Google AI Studio (slot 3) |
-| `gemini-free-4` | gemini | Free-tier Google AI Studio (slot 4) |
+| `gemini-free-2` … `gemini-free-16` | gemini | Free-tier Google AI Studio (slots 2–16) |
 | `gemini-default` | gemini | Paid / Tier 3 project |
 | `groq-default` | groq | Free developer tier (no card) |
 | `openrouter-default` | openrouter | Aggregator; slugs must match live catalog |
@@ -93,6 +91,7 @@ curl http://localhost:8080/ai/chat/completions \
 ### DeepSeek Web
 
 - Browser session provider (`userToken` from chat.deepseek.com)
+- Credential slots: `deepseek-web-default`, `deepseek-web-2` (isolated pacing)
 - Models: `deepseek-web/deepseek-chat`, `deepseek-web/deepseek-reasoner`
 - Tools not supported initially
 - Setup: [deepseek-web.md](deepseek-web.md)

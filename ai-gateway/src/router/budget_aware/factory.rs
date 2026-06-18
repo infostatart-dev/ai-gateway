@@ -132,7 +132,7 @@ pub(super) async fn build(
     }
 
     let model_mapper =
-        ModelMapper::new_for_router(app_state.clone(), router_config);
+        ModelMapper::new_for_router(app_state.clone(), router_config.clone());
     let default_latency = app_state.config().discover.default_rtt;
     Ok(BudgetAwareRouter {
         app_state,
@@ -147,5 +147,6 @@ pub(super) async fn build(
         max_cooldown_wait,
         selection_mode,
         credential_round_robin: CredentialRoundRobin::new_shared(),
+        source_model_selection: router_config.source_model_selection(),
     })
 }

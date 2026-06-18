@@ -27,6 +27,11 @@ use crate::{
         mapper::model::ModelMapper,
     },
     router::{
+        intent::{
+            IntentTier, RoutingIntent, default_upstream_intent_tier,
+            extract_routing_intent, extract_routing_intent_from_name,
+            intent_proximity_score,
+        },
         provider_attempt::{
             ProviderState, is_failoverable_status, lock_provider_states,
             smoothed_latency,
@@ -83,6 +88,7 @@ pub struct ModelCapability {
     pub reasoning: bool,
     /// Secondary `json_schema` ordering signal (higher = more reliable).
     pub json_schema_rank: i8,
+    pub intent_tier: IntentTier,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -93,6 +99,7 @@ pub struct RequestRequirements {
     pub json_schema_required: bool,
     pub vision_required: bool,
     pub reasoning_preferred: bool,
+    pub preferred_intent_tier: Option<IntentTier>,
 }
 
 pub fn extract_requirements(req_body: &Bytes) -> RequestRequirements {
@@ -134,13 +141,15 @@ pub fn extract_requirements_from_value(
         });
 
     let model_name = value.get("model").and_then(|v| v.as_str()).unwrap_or("");
+    let intent = extract_routing_intent_from_name(model_name);
 
     RequestRequirements {
         min_context_tokens: None,
         tools_required,
         json_schema_required,
         vision_required,
-        reasoning_preferred: reasoning_preferred_for_model_name(model_name),
+        reasoning_preferred: intent.preferred_tier == IntentTier::Deep,
+        preferred_intent_tier: Some(intent.preferred_tier),
     }
 }
 
@@ -151,16 +160,6 @@ pub fn apply_payload_estimate(
     estimate: crate::router::token_estimate::PayloadEstimate,
 ) {
     requirements.min_context_tokens = Some(estimate.total());
-}
-
-fn reasoning_preferred_for_model_name(model_name: &str) -> bool {
-    let model_name = model_name.to_ascii_lowercase();
-    ["o1", "o3", "o4", "reasoner", "thinking"]
-        .iter()
-        .any(|keyword| model_name.contains(keyword))
-        || ["gpt-5-mini", "gpt-5-nano", "gpt-5"]
-            .iter()
-            .any(|keyword| model_name.contains(keyword))
 }
 
 /// Secondary ranking score for `budget-aware-capability-after`: higher means
@@ -175,7 +174,9 @@ pub(crate) fn capability_fit_score(
     } else if model.supports_json_schema {
         score += 1;
     }
-    if requirements.reasoning_preferred && model.reasoning {
+    if let Some(preferred) = requirements.preferred_intent_tier {
+        score += intent_proximity_score(preferred, model.intent_tier);
+    } else if requirements.reasoning_preferred && model.reasoning {
         score += 8;
     } else if model.reasoning {
         score += 1;
@@ -189,6 +190,21 @@ pub(crate) fn capability_fit_score(
     score
 }
 
+pub(crate) fn capability_fit_score_with_intent(
+    requirements: &RequestRequirements,
+    model: &ModelCapability,
+    intent: Option<RoutingIntent>,
+) -> u16 {
+    let mut score = capability_fit_score(requirements, model);
+    if let Some(intent) = intent {
+        score = score.saturating_add(intent_proximity_score(
+            intent.preferred_tier,
+            model.intent_tier,
+        ));
+    }
+    score
+}
+
 pub(crate) fn enrich_requirements_from_source_model(
     requirements: &mut RequestRequirements,
     source_model: Option<&ModelId>,
@@ -196,9 +212,10 @@ pub(crate) fn enrich_requirements_from_source_model(
     let Some(source_model) = source_model else {
         return;
     };
-    if reasoning_preferred_for_model_name(&source_model.to_string()) {
-        requirements.reasoning_preferred = true;
-    }
+    let intent = crate::router::intent::extract_routing_intent(source_model);
+    requirements.preferred_intent_tier = Some(intent.preferred_tier);
+    requirements.reasoning_preferred =
+        intent.preferred_tier == IntentTier::Deep;
 }
 
 pub(crate) fn extract_source_model(req_body: &Bytes) -> Option<ModelId> {
@@ -298,9 +315,11 @@ pub(crate) fn get_model_capability(
             .iter()
             .any(|&keyword| model_name.contains(keyword)),
         json_schema_rank: 0,
+        intent_tier: IntentTier::Standard,
     };
 
     providers::apply_provider_capabilities(&mut cap, provider, &model_name);
+    cap.intent_tier = default_upstream_intent_tier(&model_name);
     apply_model_metadata(&mut cap, metadata);
     cap
 }
@@ -327,6 +346,9 @@ fn apply_model_metadata(
     if let Some(reasoning) = metadata.reasoning {
         cap.reasoning = reasoning;
     }
+    if let Some(intent_tier) = metadata.intent_tier {
+        cap.intent_tier = intent_tier;
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -347,6 +369,7 @@ pub struct CapabilityAwareRouter {
     cascade: TierCascade,
     tiers_configured: bool,
     provider_limits: crate::config::provider_limits::ProviderLimitCatalog,
+    source_model_selection: crate::config::router::SourceModelSelection,
 }
 
 impl CapabilityAwareRouter {
@@ -403,6 +426,7 @@ impl CapabilityAwareRouter {
                 .unwrap_or(app_state.config().decision.shaper.cascade),
             tiers_configured: !model_tiers.is_empty(),
             provider_limits: app_state.config().provider_limits.clone(),
+            source_model_selection: router_config.source_model_selection(),
         })
     }
 
@@ -456,6 +480,31 @@ impl CapabilityAwareRouter {
         });
     }
 
+    fn candidate_passes_source_selection(
+        &self,
+        source_model: &ModelId,
+        candidate: &CapabilityCandidate,
+        intent: Option<&RoutingIntent>,
+        requirements: &RequestRequirements,
+    ) -> bool {
+        if self.source_model_selection
+            == crate::config::router::SourceModelSelection::Intent
+        {
+            if crate::config::chatgpt_web::is_chatgpt_web(
+                &candidate.capability.provider,
+            ) || crate::config::deepseek_web::is_deepseek_web(
+                &candidate.capability.provider,
+            ) {
+                return true;
+            }
+            return intent.is_none_or(|intent| {
+                candidate.capability.intent_tier
+                    >= intent.effective_floor(requirements)
+            });
+        }
+        self.matches_source_model(source_model, candidate)
+    }
+
     fn matches_source_model(
         &self,
         source_model: &ModelId,
@@ -485,13 +534,19 @@ impl CapabilityAwareRouter {
         source_model: Option<&ModelId>,
         policy_tier: Option<Tier>,
     ) -> Result<Vec<CapabilityCandidate>, InternalError> {
+        let intent = source_model.map(extract_routing_intent);
         let mut filtered: Vec<_> = self
             .candidates
             .iter()
             .filter(|c| {
                 supports(requirements, &c.capability)
                     && source_model.is_none_or(|source_model| {
-                        self.matches_source_model(source_model, c)
+                        self.candidate_passes_source_selection(
+                            source_model,
+                            c,
+                            intent.as_ref(),
+                            requirements,
+                        )
                     })
             })
             .cloned()

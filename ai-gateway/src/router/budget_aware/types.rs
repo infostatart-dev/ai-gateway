@@ -47,4 +47,6 @@ pub struct BudgetAwareRouter {
     pub(super) max_cooldown_wait: Duration,
     pub(super) selection_mode: CandidateSelectionMode,
     pub(super) credential_round_robin: Arc<CredentialRoundRobin>,
+    pub(super) source_model_selection:
+        crate::config::router::SourceModelSelection,
 }

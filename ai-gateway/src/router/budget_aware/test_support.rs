@@ -30,6 +30,120 @@ use crate::{
     },
 };
 
+pub(crate) fn intent_autodefault_router(
+    app_state: &AppState,
+    candidates: Vec<BudgetCandidate>,
+) -> BudgetAwareRouter {
+    let router_config = Arc::new(RouterConfig {
+        source_model_selection: Some(
+            crate::config::router::SourceModelSelection::Intent,
+        ),
+        ..Default::default()
+    });
+    BudgetAwareRouter {
+        app_state: app_state.clone(),
+        router_id: RouterId::Named("autodefault".into()),
+        endpoint_type: EndpointType::Chat,
+        strategy: "budget-aware-capability-after",
+        candidates: Arc::new(candidates),
+        model_mapper: ModelMapper::new_for_router(
+            app_state.clone(),
+            router_config.clone(),
+        ),
+        states: Arc::new(Mutex::new(HashMap::new())),
+        provider_priorities: Arc::new(IndexMap::new()),
+        default_latency: Duration::from_millis(10),
+        max_cooldown_wait: Duration::from_secs(0),
+        selection_mode: CandidateSelectionMode::BudgetThenCapability,
+        credential_round_robin: CredentialRoundRobin::new_shared(),
+        source_model_selection:
+            crate::config::router::SourceModelSelection::Intent,
+    }
+}
+
+pub(crate) async fn scout_candidate(
+    app_state: &AppState,
+    credential_id: &str,
+) -> BudgetCandidate {
+    let provider = InferenceProvider::Named("groq".into());
+    let cred = ProviderCredentialId::new(credential_id);
+    let model_id = ModelId::from_str_and_provider(
+        provider.clone(),
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+    )
+    .expect("model");
+    let router_config = Arc::new(RouterConfig::default());
+    let service = Dispatcher::new_with_model_id_and_provider_key_without_rate_limit_events(
+        app_state.clone(),
+        &RouterId::Named("routing-load".into()),
+        &router_config,
+        provider.clone(),
+        model_id.clone(),
+        Some(&ProviderKey::Secret(Secret::from("groq-key".to_string()))),
+        Some(&cred),
+    )
+    .await
+    .expect("dispatcher");
+    BudgetCandidate {
+        credential_id: cred,
+        credential_budget_rank: 0,
+        credential_cost_class: CostClass::Free,
+        credential_tier: "free".into(),
+        capability: ModelCapability {
+            provider,
+            model: model_id,
+            context_window: Some(131_072),
+            supports_tools: true,
+            supports_json_schema: true,
+            supports_vision: false,
+            reasoning: false,
+            json_schema_rank: 1,
+            intent_tier: crate::router::intent::IntentTier::FastThinking,
+        },
+        service,
+    }
+}
+
+pub(crate) async fn deep_paid_candidate(
+    app_state: &AppState,
+) -> BudgetCandidate {
+    let provider = InferenceProvider::Anthropic;
+    let cred = ProviderCredentialId::new("anthropic-test");
+    let model_id =
+        ModelId::from_str_and_provider(provider.clone(), "claude-sonnet-4-0")
+            .expect("model");
+    let router_config = Arc::new(RouterConfig::default());
+    let service = Dispatcher::new_with_model_id_and_provider_key_without_rate_limit_events(
+        app_state.clone(),
+        &RouterId::Named("routing-load".into()),
+        &router_config,
+        provider.clone(),
+        model_id.clone(),
+        Some(&ProviderKey::Secret(Secret::from("anthropic-key".to_string()))),
+        Some(&cred),
+    )
+    .await
+    .expect("dispatcher");
+    BudgetCandidate {
+        credential_id: cred,
+        credential_budget_rank: 0,
+        credential_cost_class: CostClass::Paid,
+        credential_tier: "tier-3".into(),
+        capability: ModelCapability {
+            provider,
+            model: model_id,
+            context_window: Some(200_000),
+            supports_tools: true,
+            supports_json_schema: true,
+            supports_vision: true,
+            reasoning: true,
+            json_schema_rank: 2,
+            intent_tier: crate::router::intent::IntentTier::Deep,
+        },
+        service,
+    }
+}
+
 pub(crate) fn empty_router(app_state: &AppState) -> BudgetAwareRouter {
     BudgetAwareRouter {
         app_state: app_state.clone(),
@@ -47,6 +161,8 @@ pub(crate) fn empty_router(app_state: &AppState) -> BudgetAwareRouter {
         max_cooldown_wait: Duration::from_secs(0),
         selection_mode: CandidateSelectionMode::BudgetThenCapability,
         credential_round_robin: CredentialRoundRobin::new_shared(),
+        source_model_selection:
+            crate::config::router::SourceModelSelection::Strict,
     }
 }
 
@@ -71,6 +187,14 @@ pub(crate) fn ordered_candidates(
     requirements: &crate::router::capability::RequestRequirements,
 ) -> Result<Vec<BudgetCandidate>, crate::error::internal::InternalError> {
     router.ordered_candidates(requirements, None)
+}
+
+pub(crate) fn ordered_candidates_for_source(
+    router: &BudgetAwareRouter,
+    requirements: &crate::router::capability::RequestRequirements,
+    source_model: &ModelId,
+) -> Result<Vec<BudgetCandidate>, crate::error::internal::InternalError> {
+    router.ordered_candidates(requirements, Some(source_model))
 }
 
 pub(crate) async fn gemini_candidate(
@@ -135,6 +259,7 @@ pub(crate) async fn chatgpt_candidate(app_state: &AppState) -> BudgetCandidate {
             supports_vision: true,
             reasoning: false,
             json_schema_rank: 1,
+            intent_tier: crate::router::intent::IntentTier::Standard,
         },
         service,
     }
@@ -216,6 +341,7 @@ async fn build_candidate(
             supports_vision: true,
             reasoning: false,
             json_schema_rank: 2,
+            intent_tier: crate::router::intent::IntentTier::Standard,
         },
         service,
     }

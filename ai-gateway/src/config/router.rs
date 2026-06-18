@@ -36,12 +36,31 @@ impl std::ops::Deref for RouterConfigs {
     }
 }
 
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    Eq,
+    PartialEq,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum SourceModelSelection {
+    #[default]
+    Strict,
+    Intent,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct RouterConfig {
     pub load_balance: BalanceConfig,
     #[serde(default)]
     pub decision: RouterDecisionConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_model_selection: Option<SourceModelSelection>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_mappings: Option<ModelMappingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -59,6 +78,7 @@ impl Default for RouterConfig {
         Self {
             load_balance: BalanceConfig::default(),
             decision: RouterDecisionConfig::default(),
+            source_model_selection: None,
             model_mappings: None,
             cache: Some(CacheConfig::default()),
             retries: None,
@@ -109,6 +129,11 @@ impl RouterConfig {
     }
 
     #[must_use]
+    pub fn source_model_selection(&self) -> SourceModelSelection {
+        self.source_model_selection.unwrap_or_default()
+    }
+
+    #[must_use]
     pub fn model_mappings(&self) -> Option<&ModelMappingConfig> {
         self.model_mappings.as_ref()
     }
@@ -122,6 +147,7 @@ impl crate::tests::TestDefault for RouterConfigs {
             RouterConfig {
                 model_mappings: None,
                 decision: RouterDecisionConfig::default(),
+                source_model_selection: None,
                 cache: None,
                 load_balance: BalanceConfig(HashMap::from([(
                     crate::endpoints::EndpointType::Chat,
@@ -172,6 +198,7 @@ mod tests {
         RouterConfig {
             model_mappings: None,
             decision: RouterDecisionConfig::default(),
+            source_model_selection: None,
             cache: Some(cache),
             load_balance: balance,
             retries: Some(retries),

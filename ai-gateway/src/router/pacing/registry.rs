@@ -104,4 +104,32 @@ mod tests {
         let _ = std::fs::remove_file(path_a);
         let _ = std::fs::remove_file(path_b);
     }
+
+    #[test]
+    #[serial_test::serial]
+    fn registry_isolates_deepseek_web_gates_by_credential_scope() {
+        let path_a = std::env::temp_dir().join("ai-gw-deepseek-pacing-a.json");
+        let path_b = std::env::temp_dir().join("ai-gw-deepseek-pacing-b.json");
+        std::fs::write(&path_a, r#"{"token":"session-a"}"#).unwrap();
+        std::fs::write(&path_b, r#"{"token":"session-b"}"#).unwrap();
+
+        let mut secrets = crate::config::secrets_file::SecretsFile::default();
+        secrets.register_session_path("deepseek-web-default", path_a.clone());
+        secrets.register_session_path("deepseek-web-2", path_b.clone());
+        let _guard =
+            crate::config::secrets_file::SecretsFile::install_for_test(secrets);
+
+        let registry = PacingRegistry::new(ProviderLimitCatalog::default());
+        let provider = InferenceProvider::Named("deepseek-web".into());
+        let cred_a = ProviderCredentialId::new("deepseek-web-default");
+        let cred_b = ProviderCredentialId::new("deepseek-web-2");
+        let gate_a =
+            registry.gate_for(&provider, Some(&cred_a)).expect("gate a");
+        let gate_b =
+            registry.gate_for(&provider, Some(&cred_b)).expect("gate b");
+        assert!(!Arc::ptr_eq(&gate_a, &gate_b));
+
+        let _ = std::fs::remove_file(path_a);
+        let _ = std::fs::remove_file(path_b);
+    }
 }

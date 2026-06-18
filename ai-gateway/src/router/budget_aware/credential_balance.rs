@@ -265,6 +265,74 @@ mod tests {
     }
 
     #[test]
+    fn sixteen_free_gemini_slots_rotate_first_account() {
+        let ranked: Vec<PoolEntry> = (1..=16)
+            .map(|index| {
+                let credential_id = if index == 1 {
+                    "gemini-free".to_string()
+                } else {
+                    format!("gemini-free-{index}")
+                };
+                PoolEntry {
+                    credential_id,
+                    provider: "gemini".into(),
+                    model: "gemini-2.5-flash".into(),
+                    budget_rank: 0,
+                }
+            })
+            .collect();
+        let mut rr = HashMap::new();
+        let mut first_accounts = Vec::new();
+        for _ in 0..16 {
+            let ids = balance_entries(ranked.clone(), &mut rr);
+            first_accounts.push(ids[0].clone());
+        }
+        let mut sorted_ids: Vec<String> = (1..=16)
+            .map(|index| {
+                if index == 1 {
+                    "gemini-free".to_string()
+                } else {
+                    format!("gemini-free-{index}")
+                }
+            })
+            .collect();
+        sorted_ids.sort();
+        assert_eq!(first_accounts, sorted_ids);
+    }
+
+    #[test]
+    fn two_deepseek_web_slots_alternate() {
+        let ranked = vec![
+            PoolEntry {
+                credential_id: "deepseek-web-default".into(),
+                provider: "deepseek-web".into(),
+                model: "deepseek-chat".into(),
+                budget_rank: 0,
+            },
+            PoolEntry {
+                credential_id: "deepseek-web-2".into(),
+                provider: "deepseek-web".into(),
+                model: "deepseek-chat".into(),
+                budget_rank: 0,
+            },
+        ];
+        let mut rr = HashMap::new();
+
+        assert_eq!(
+            balance_entries(ranked.clone(), &mut rr),
+            vec!["deepseek-web-2", "deepseek-web-default"]
+        );
+        assert_eq!(
+            balance_entries(ranked.clone(), &mut rr),
+            vec!["deepseek-web-default", "deepseek-web-2"]
+        );
+        assert_eq!(
+            balance_entries(ranked, &mut rr),
+            vec!["deepseek-web-2", "deepseek-web-default"]
+        );
+    }
+
+    #[test]
     fn openrouter_accounts_with_same_rank_alternate() {
         let ranked = vec![
             PoolEntry {

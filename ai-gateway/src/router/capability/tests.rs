@@ -66,7 +66,19 @@ fn test_extract_requirements_reasoning() {
 
     let body = Bytes::from(r#"{"model": "openai/gpt-5-mini"}"#);
     let reqs = extract_requirements(&body);
+    assert!(!reqs.reasoning_preferred);
+    assert_eq!(
+        reqs.preferred_intent_tier,
+        Some(crate::router::intent::IntentTier::FastThinking)
+    );
+
+    let body = Bytes::from(r#"{"model": "openai/gpt-5"}"#);
+    let reqs = extract_requirements(&body);
     assert!(reqs.reasoning_preferred);
+    assert_eq!(
+        reqs.preferred_intent_tier,
+        Some(crate::router::intent::IntentTier::Deep)
+    );
 }
 
 #[test]
@@ -103,6 +115,7 @@ fn capability_fit_score_prefers_reasoning_and_json_schema_matches() {
         supports_vision: false,
         reasoning: true,
         json_schema_rank: 0,
+        intent_tier: IntentTier::Standard,
     };
     let json_only = ModelCapability {
         reasoning: false,
@@ -126,6 +139,7 @@ fn test_supports_logic() {
         supports_vision: true,
         reasoning: false,
         json_schema_rank: 0,
+        intent_tier: IntentTier::Standard,
     };
 
     let mut reqs = RequestRequirements::default();
@@ -198,6 +212,7 @@ fn longcat_flash_lite_supports_json_schema() {
         supports_vision: false,
         reasoning: false,
         json_schema_rank: 0,
+        intent_tier: IntentTier::Standard,
     };
     apply_provider_capabilities(&mut cap, &provider, "LongCat-Flash-Lite");
     assert!(cap.supports_json_schema);

@@ -1,5 +1,5 @@
 use super::{
-    selection_mode,
+    intent_selection, selection_mode,
     types::{BudgetAwareRouter, BudgetCandidate, CandidateSelectionMode},
 };
 use crate::{
@@ -37,6 +37,7 @@ impl BudgetAwareRouter {
         requirements: &RequestRequirements,
         source_model: Option<&ModelId>,
     ) -> Result<Vec<BudgetCandidate>, InternalError> {
+        let intent = intent_selection::routing_intent_for_request(source_model);
         let limits = &self.app_state.config().provider_limits;
         let budget =
             crate::router::token_estimate::PayloadBudgetConfig::default();
@@ -46,9 +47,13 @@ impl BudgetAwareRouter {
             limits,
             budget,
             |candidate| {
-                source_model.is_none_or(|model| {
-                    self.matches_source_model(model, candidate, requirements)
-                })
+                intent_selection::passes_source_selection(
+                    self,
+                    source_model,
+                    candidate,
+                    requirements,
+                    intent,
+                )
             },
         );
 
@@ -61,7 +66,18 @@ impl BudgetAwareRouter {
             return Err(InternalError::ProviderNotFound);
         }
 
-        self.rank_candidates(&mut candidates, requirements);
+        if self.source_model_selection
+            == crate::config::router::SourceModelSelection::Intent
+        {
+            candidates = intent_selection::order_intent_bands(
+                self,
+                candidates,
+                requirements,
+                intent,
+            );
+        } else {
+            self.rank_candidates(&mut candidates, requirements, None);
+        }
         Ok(self.credential_round_robin.balance(candidates))
     }
 
@@ -96,209 +112,5 @@ impl BudgetAwareRouter {
                         candidate.capability.model.clone(),
                     )
             })
-    }
-}
-
-#[cfg(all(test, feature = "testing"))]
-mod autodefault_scenario_tests {
-    use std::{str::FromStr, sync::Arc, time::Duration};
-
-    use super::*;
-    use crate::{
-        app_state::AppState,
-        config::router::RouterConfig,
-        endpoints::EndpointType,
-        types::{provider::InferenceProvider, router::RouterId},
-    };
-
-    fn autodefault_providers() -> nonempty_collections::NESet<InferenceProvider>
-    {
-        nonempty_collections::nes![
-            InferenceProvider::Named("bazaarlink".into()),
-            InferenceProvider::OpenRouter,
-            InferenceProvider::Named("github-models".into()),
-            InferenceProvider::Named("mistral".into()),
-            InferenceProvider::Named("groq".into()),
-            InferenceProvider::Named("cerebras".into()),
-            InferenceProvider::Named("cloudflare".into()),
-            InferenceProvider::GoogleGemini,
-            InferenceProvider::Anthropic,
-        ]
-    }
-
-    async fn autodefault_budget_router() -> BudgetAwareRouter {
-        let app_state = AppState::test_default().await;
-        let mut provider_priorities = indexmap::IndexMap::new();
-        provider_priorities
-            .insert(InferenceProvider::Named("bazaarlink".into()), 20);
-        provider_priorities
-            .insert(InferenceProvider::Named("mistral".into()), 3);
-        provider_priorities.insert(InferenceProvider::OpenRouter, 1);
-        provider_priorities
-            .insert(InferenceProvider::Named("github-models".into()), 2);
-        provider_priorities.insert(InferenceProvider::Named("groq".into()), 7);
-        provider_priorities
-            .insert(InferenceProvider::Named("cerebras".into()), 8);
-        provider_priorities
-            .insert(InferenceProvider::Named("cloudflare".into()), 9);
-        provider_priorities.insert(InferenceProvider::GoogleGemini, 15);
-        provider_priorities.insert(InferenceProvider::Anthropic, 17);
-
-        BudgetAwareRouter::new_budget_then_capability(
-            app_state,
-            RouterId::Named("autodefault".into()),
-            Arc::new(RouterConfig::default()),
-            &autodefault_providers(),
-            &provider_priorities,
-            Duration::from_secs(3),
-            EndpointType::Chat,
-            "budget-aware-capability-after",
-        )
-        .await
-        .expect("autodefault-like router")
-    }
-
-    fn gpt_5_mini() -> ModelId {
-        ModelId::from_str("openai/gpt-5-mini").expect("source model")
-    }
-
-    fn candidate_key(
-        candidate: &BudgetCandidate,
-    ) -> (InferenceProvider, String) {
-        (
-            candidate.capability.provider.clone(),
-            candidate.capability.model.to_string(),
-        )
-    }
-
-    #[tokio::test]
-    async fn budget_then_capability_json_schema_prefers_cheapest_capable_providers()
-     {
-        let router = autodefault_budget_router().await;
-        let requirements = RequestRequirements {
-            json_schema_required: true,
-            ..RequestRequirements::default()
-        };
-
-        let candidates = router
-            .ordered_candidates(&requirements, Some(&gpt_5_mini()))
-            .expect("capable candidates");
-
-        assert!(
-            candidates
-                .iter()
-                .all(|candidate| candidate.capability.supports_json_schema),
-            "capability filter must drop models without json_schema support"
-        );
-
-        let ordered: Vec<_> = candidates.iter().map(candidate_key).collect();
-
-        assert_eq!(
-            ordered[0].0,
-            InferenceProvider::OpenRouter,
-            "cheapest provider first: {ordered:?}"
-        );
-
-        let groq = ordered
-            .iter()
-            .find(|(provider, _)| {
-                *provider == InferenceProvider::Named("groq".into())
-            })
-            .expect("groq json_schema candidate");
-        assert!(
-            groq.1.contains("llama-4-scout"),
-            "groq must map to structured-output model, got {}",
-            groq.1
-        );
-
-        let cerebras = ordered
-            .iter()
-            .find(|(provider, _)| {
-                *provider == InferenceProvider::Named("cerebras".into())
-            })
-            .expect("cerebras json_schema candidate");
-        assert!(
-            cerebras.1.contains("gpt-oss-120b"),
-            "cerebras must map to gpt-oss-120b for gpt-5-mini json_schema, \
-             got {}",
-            cerebras.1
-        );
-
-        let mistral = ordered
-            .iter()
-            .find(|(provider, model)| {
-                *provider == InferenceProvider::Named("mistral".into())
-                    && model.contains("magistral-medium-latest")
-            })
-            .expect("mistral json_schema candidate");
-        assert!(
-            mistral.1.contains("magistral-medium-latest"),
-            "mistral must map to magistral-medium-latest for gpt-5-mini \
-             json_schema+reasoning, got {}",
-            mistral.1
-        );
-
-        let cloudflare = ordered
-            .iter()
-            .find(|(provider, _)| {
-                *provider == InferenceProvider::Named("cloudflare".into())
-            })
-            .expect("cloudflare json_schema candidate");
-        assert!(
-            cloudflare.1.contains("deepseek-r1-distill-qwen-32b"),
-            "cloudflare must map to reasoning+json_schema model for \
-             gpt-5-mini, got {}",
-            cloudflare.1
-        );
-
-        assert!(
-            !ordered.iter().any(|(_, model)| model.contains("qwen3-32b")),
-            "groq/qwen3-32b must not pass json_schema capability filter"
-        );
-
-        assert!(
-            ordered.windows(2).all(|window| {
-                let left = candidates
-                    .iter()
-                    .find(|c| candidate_key(c) == window[0])
-                    .expect("left candidate");
-                let right = candidates
-                    .iter()
-                    .find(|c| candidate_key(c) == window[1])
-                    .expect("right candidate");
-                router.budget_rank(left) <= router.budget_rank(right)
-            }),
-            "providers must stay sorted by budget rank: {ordered:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn budget_then_capability_plain_chat_keeps_budget_order_with_mapping()
-    {
-        let router = autodefault_budget_router().await;
-        let candidates = router
-            .ordered_candidates(
-                &RequestRequirements::default(),
-                Some(&gpt_5_mini()),
-            )
-            .expect("plain chat candidates");
-
-        let ordered: Vec<_> = candidates.iter().map(candidate_key).collect();
-
-        assert_eq!(ordered[0].0, InferenceProvider::OpenRouter);
-        assert!(
-            ordered.windows(2).all(|window| {
-                let left = candidates
-                    .iter()
-                    .find(|c| candidate_key(c) == window[0])
-                    .expect("left candidate");
-                let right = candidates
-                    .iter()
-                    .find(|c| candidate_key(c) == window[1])
-                    .expect("right candidate");
-                router.budget_rank(left) <= router.budget_rank(right)
-            }),
-            "budget-first ordering for plain chat: {ordered:?}"
-        );
     }
 }

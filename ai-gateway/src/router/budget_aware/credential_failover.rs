@@ -83,6 +83,8 @@ mod tests {
             max_cooldown_wait: Duration::from_secs(0),
             selection_mode: CandidateSelectionMode::BudgetThenCapability,
             credential_round_robin: CredentialRoundRobin::new_shared(),
+            source_model_selection:
+                crate::config::router::SourceModelSelection::Strict,
         }
     }
 
@@ -135,6 +137,7 @@ mod tests {
                 supports_vision: true,
                 reasoning: false,
                 json_schema_rank: 2,
+                intent_tier: crate::router::intent::IntentTier::Standard,
             },
             service,
         }
@@ -176,6 +179,7 @@ mod tests {
                 supports_vision: true,
                 reasoning: false,
                 json_schema_rank: 2,
+                intent_tier: crate::router::intent::IntentTier::Standard,
             },
             service,
         }
@@ -226,6 +230,7 @@ mod tests {
             Bytes::from(r#"{"model":"gpt-4o-mini","messages":[]}"#),
             candidates,
             RequestRequirements::default(),
+            None,
         )
         .await
         .expect("failover reaches paid after quota skip");
@@ -260,6 +265,7 @@ mod tests {
             Bytes::from(r#"{"model":"gpt-4o-mini","messages":[]}"#),
             candidates,
             RequestRequirements::default(),
+            None,
         )
         .await
         .expect("failover reaches next free sibling after overload");
@@ -294,6 +300,7 @@ mod tests {
             Bytes::from(r#"{"model":"gpt-4o-mini","messages":[]}"#),
             candidates,
             RequestRequirements::default(),
+            None,
         )
         .await
         .expect("failover succeeds on sibling free credential");
@@ -326,6 +333,7 @@ mod tests {
             Bytes::from(r#"{"model":"gpt-4o-mini","messages":[]}"#),
             candidates,
             RequestRequirements::default(),
+            None,
         )
         .await
         .expect("failover succeeds on second credential");
@@ -365,6 +373,7 @@ mod tests {
                 body.clone(),
                 candidates,
                 RequestRequirements::default(),
+                None,
             )
             .await
             .expect("success");
@@ -419,6 +428,7 @@ mod tests {
             Bytes::from(r#"{"model":"gpt-4o-mini","messages":[]}"#),
             candidates,
             RequestRequirements::default(),
+            None,
         )
         .await
         .expect("paid gemini succeeds before anthropic");

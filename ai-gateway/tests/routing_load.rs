@@ -12,7 +12,15 @@ macro_rules! routing_load_test {
     };
 }
 
+routing_load_test!(
+    intent_fast_thinking_pool,
+    scenarios::intent_fast_thinking_pool::run
+);
 routing_load_test!(round_robin_concurrent, scenarios::round_robin::run);
+routing_load_test!(
+    gemini_sixteen_slot_concurrent,
+    scenarios::gemini_sixteen_slot::run
+);
 routing_load_test!(payload_filter_under_load, scenarios::payload_filter::run);
 routing_load_test!(failover_rpm_sibling, scenarios::failover_rpm::run);
 routing_load_test!(failover_daily_quota, scenarios::failover_quota::run);

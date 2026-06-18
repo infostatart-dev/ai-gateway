@@ -50,6 +50,41 @@ Then `paid-browser`:
 Default example model for autodefault: **`openai/gpt-5.4-nano`** (override with
 `AI_GATEWAY_AUTODEFAULT_DEFAULT_MODEL`).
 
+### Intent routing (0.4.1-beta.1)
+
+Autodefault treats the client `model` field as a **routing intent**, not a
+binding SKU in `model-mapping.yaml`. Configure with
+`source-model-selection: intent` on the router (autodefault sets this
+automatically).
+
+| Client model | Intent tier | Floor | Notes |
+|--------------|-------------|-------|-------|
+| `gpt-5-nano`, `gpt-5-mini` | fast-thinking | fast-thinking (json strict) / fast (plain) | mini ≡ nano |
+| plain `gpt-5` | deep | deep | no downgrade to scout |
+| other | standard | standard | default |
+
+**Payload shape:**
+
+- `response_format.type = json_schema` (strict) → only upstream with
+  `supports-json-schema: true` in the intent band
+- plain chat → json-schema and non-json upstream in the fast-thinking band
+
+**Asymmetric stability:** the router may escalate to a higher intent tier when
+the preferred band is exhausted, but never downgrade below the client floor.
+
+**Strict mode** (`source-model-selection: strict`, default for named routers):
+legacy behaviour — candidates must match `model-mapping.yaml` for the source
+model.
+
+Response headers on successful autodefault routes:
+
+```
+X-Routing-Intent-Tier: fast-thinking
+X-Routing-Selection-Phase: preferred | escalated
+```
+
+Route trace logs include `routing_intent_tier` and `routing_selection_phase`.
+
 **Breaking change (beta.17):** ChatGPT Web is no longer the first autodefault
 provider when a session file is present. Free API keys are tried first; browser
 sessions are last-resort fallbacks.

@@ -72,6 +72,7 @@ mod tests {
             supports_vision: false,
             reasoning: false,
             json_schema_rank: 0,
+            intent_tier: crate::router::intent::IntentTier::FastThinking,
         }
     }
 

@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.4.1-beta.2] - 2026-06-18
+
+### Features
+
+- **Gemini free pool:** sixteen credential slots (`gemini-free` … `gemini-free-16`)
+  for round-robin parallelism in autodefault
+- **DeepSeek Web pool:** second session slot `deepseek-web-2` with isolated pacing
+  gates and credential round-robin
+
+## [0.4.1-beta.1] - 2026-06-18
+
+### Features
+
+- **Autodefault intent routing:** client `model` is interpreted as a routing
+  intent tier (fast-thinking for `gpt-5-nano`/`mini`, deep for plain `gpt-5`)
+  instead of a strict `model-mapping.yaml` binding; autodefault sets
+  `source-model-selection: intent`
+- **Intent pool selection:** preferred-tier band first, asymmetric escalation
+  (no downgrade below client floor); plain chat widens fast-thinking pool to
+  include non-json upstream
+- **Observability:** `X-Routing-Intent-Tier`, `X-Routing-Selection-Phase`
+  response headers; route trace fields `routing_intent_tier` and
+  `routing_selection_phase`
+
+### Fixed
+
+- **Reasoning misclassification:** `gpt-5-nano`/`mini` no longer trigger deep
+  reasoning rank boost via substring match on `gpt-5`
+
+### Changed
+
+- **`model-mapping.yaml` role:** optional for autodefault intent mode; strict
+  binding remains default for named routers (`source-model-selection: strict`)
+- **`autodefault-credential-pools`:** mapping parity tasks are optional after
+  intent pool; Gemini×16 / DeepSeek×2 pool expansion remains recommended
+
 ## [0.3.0-beta.22] - 2026-06-17
 
 ### Features

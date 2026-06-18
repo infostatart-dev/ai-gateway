@@ -2,7 +2,8 @@ use std::{cmp::Ordering, time::Instant};
 
 use super::types::BudgetAwareRouter;
 use crate::router::{
-    capability::{RequestRequirements, capability_fit_score},
+    capability::{RequestRequirements, capability_fit_score_with_intent},
+    intent::{RoutingIntent, intent_proximity_score},
     provider_attempt::lock_credential_states,
 };
 
@@ -11,6 +12,7 @@ impl BudgetAwareRouter {
         &self,
         candidates: &mut [super::types::BudgetCandidate],
         requirements: &RequestRequirements,
+        intent: Option<RoutingIntent>,
     ) {
         let now = Instant::now();
         let states = lock_credential_states(&self.states);
@@ -22,6 +24,31 @@ impl BudgetAwareRouter {
             self.effective_budget_rank(left, left_state, now)
                 .cmp(&self.effective_budget_rank(right, right_state, now))
                 .then_with(|| {
+                    if let Some(intent) = intent {
+                        intent_proximity_score(
+                            intent.preferred_tier,
+                            right.capability.intent_tier,
+                        )
+                        .cmp(&intent_proximity_score(
+                            intent.preferred_tier,
+                            left.capability.intent_tier,
+                        ))
+                    } else if let Some(preferred) =
+                        requirements.preferred_intent_tier
+                    {
+                        intent_proximity_score(
+                            preferred,
+                            right.capability.intent_tier,
+                        )
+                        .cmp(&intent_proximity_score(
+                            preferred,
+                            left.capability.intent_tier,
+                        ))
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .then_with(|| {
                     if requirements.json_schema_required {
                         right
                             .capability
@@ -32,8 +59,17 @@ impl BudgetAwareRouter {
                     }
                 })
                 .then_with(|| {
-                    capability_fit_score(requirements, &right.capability).cmp(
-                        &capability_fit_score(requirements, &left.capability),
+                    capability_fit_score_with_intent(
+                        requirements,
+                        &right.capability,
+                        intent,
+                    )
+                    .cmp(
+                        &capability_fit_score_with_intent(
+                            requirements,
+                            &left.capability,
+                            intent,
+                        ),
                     )
                 })
                 .then_with(|| {

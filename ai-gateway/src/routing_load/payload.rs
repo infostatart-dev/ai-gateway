@@ -58,6 +58,31 @@ pub fn default_fat_body() -> Bytes {
     fat_json_schema_body(12_000)
 }
 
+/// Minimal strict-json body for autodefault intent routing load tests.
+pub fn nano_json_strict_body() -> Bytes {
+    Bytes::from(
+        json!({
+            "model": "openai/gpt-5-nano",
+            "stream": false,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "intent_load",
+                    "strict": true,
+                    "schema": {
+                        "type": "object",
+                        "properties": { "ok": {"type": "boolean"} },
+                        "required": ["ok"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "messages": [{ "role": "user", "content": "ping" }]
+        })
+        .to_string(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

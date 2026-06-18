@@ -12,6 +12,8 @@ The `deepseek-web` provider routes chat completions through a **browser session*
    credentials:
      deepseek-web-default:
        session-file: dev/deepseek-session.json
+     deepseek-web-2:
+       session-file: dev/deepseek-session-2.json
    ```
 
 2. Create the session (requires `deepseek-login` feature):
@@ -117,6 +119,8 @@ Oversized payloads use the shared `web-message-budget` planner:
 - **PoW cache** (45s TTL) reuses proof-of-work answers across upload turns
 
 Each upload/final turn consumes one **pacing** slot (`deepseek-web` RPM limits).
+With two session slots configured, pacing is **per credential** — a rate limit on
+one account does not block the other.
 Route trace logs `deepseek_web_turns`, `deepseek_web_upload_parts`, and
 `deepseek_web_pow_cache_hits`.
 

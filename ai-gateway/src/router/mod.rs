@@ -3,6 +3,7 @@ pub mod budget_probe;
 pub mod capability;
 pub mod direct;
 pub mod failover;
+pub mod intent;
 pub mod latency;
 pub mod meta;
 pub mod pacing;

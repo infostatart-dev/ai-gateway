@@ -15,7 +15,7 @@ use crate::{
         },
         decision::{RouterDecisionConfig, TierCascade},
         providers::ProvidersConfig,
-        router::RouterConfig,
+        router::{RouterConfig, SourceModelSelection},
     },
     endpoints::EndpointType,
     types::{provider::InferenceProvider, secret::Secret},
@@ -179,6 +179,7 @@ fn build_autodefault_router_config(
             enabled: true,
             tier_cascade: Some(TierCascade::FreeUp),
         },
+        source_model_selection: Some(SourceModelSelection::Intent),
         ..Default::default()
     }
 }
@@ -215,7 +216,10 @@ mod tests {
     use compact_str::CompactString;
 
     use super::*;
-    use crate::{config::cost_class::CostClass, types::router::RouterId};
+    use crate::{
+        config::{cost_class::CostClass, router::SourceModelSelection},
+        types::router::RouterId,
+    };
 
     static READ_TEST_DIR_SEQ: AtomicU64 = AtomicU64::new(0);
 
@@ -246,6 +250,10 @@ mod tests {
         ));
         assert!(router.decision.enabled);
         assert_eq!(router.decision.tier_cascade, Some(TierCascade::FreeUp));
+        assert_eq!(
+            router.source_model_selection(),
+            SourceModelSelection::Intent
+        );
     }
 
     fn registry_from_secrets(

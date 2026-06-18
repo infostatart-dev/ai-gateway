@@ -131,6 +131,12 @@ pub fn emit_pending_route_trace(
         chatgpt_web_turns = pending.chatgpt_web.map_or(0, |c| c.turns),
         chatgpt_web_upload_parts =
             pending.chatgpt_web.map_or(0, |c| c.upload_parts),
+        routing_intent_tier = pending
+            .intent_tier
+            .map_or("none", crate::router::intent::IntentTier::as_str),
+        routing_selection_phase = pending
+            .selection_phase
+            .map_or("none", crate::router::intent::SelectionPhase::as_str),
         "budget-aware route summary"
     );
 }

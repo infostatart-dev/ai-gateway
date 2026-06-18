@@ -35,6 +35,7 @@ pub async fn run() {
         default_fat_body(),
         candidates,
         RequestRequirements::default(),
+        None,
     )
     .await
     .expect("chatgpt last resort");
