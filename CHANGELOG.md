@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.5.4] - 2026-06-19
+
+Planning and local-dev fixes after verified Ollama Cloud behavior in dev.
+
+### Planning (OpenSpec)
+
+- **`ollama-prompt-json-per-model-quota`:** Ollama Cloud has no native
+  `response_format` / structured outputs API — valid JSON via **prompt-injected
+  schema** (`json-schema-delivery: prompt`). Spec covers reflection retry,
+  24h model-level JSON-validation cooldown, **`quota-profile: per-model`** (403
+  Pro slug must not kill the credential), free catalog trim to **`gpt-oss:120b`**
+  and **`gpt-oss:20b`**, and weighted session quota operator notes.
+
+### Fixed
+
+- **Local dev telemetry:** committed `local.yaml` uses `exporter: stdout` so
+  `cargo rl` does not log OTLP export errors on `:4317` when docker compose
+  otelcol is not running.
+
 ## [0.5.3] - 2026-06-19
 
 Fix local and sidecar startup when Helicone control plane is unreachable.

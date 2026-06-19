@@ -1,6 +1,6 @@
 telemetry:
   level: "info,ai_gateway=trace"
-  exporter: both
+  exporter: stdout
 
 server:
   port: 8080

@@ -24,6 +24,10 @@ On load, the gateway also:
 Local development uses `config/local.yaml` for non-secret settings plus
 `dev/secrets.local.yaml` for keys. No `.env` file is required.
 
+**Telemetry:** committed `local.yaml` uses `exporter: stdout` so `cargo rl`
+works without `docker compose` (OTEL collector on `:4317`). Use
+`exporter: both` only when `infrastructure/compose.yaml` otelcol is running.
+
 ## Embedded reference files
 
 Shipped under `ai-gateway/config/embedded/` and compiled into the binary:
