@@ -5,39 +5,22 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
-## [0.5.0.2] - 2026-06-19
-
-Routing ops hardening: synthetic work units, provider-stats health, clearer replay terminology.
-
-### Features
-
-- **Default work-unit ladder:** router routes always resolve a non-empty
-  `work_unit_id` (`X-Work-Unit-Id` → `Helicone-Session-Id` → `X-Request-Id` →
-  generated UUID); `work_unit_source` in route trace
-- **Response echo:** optional `X-Work-Unit-Id` on router responses when source is
-  `request-id` or `generated` (default on)
-- **Provider-stats `routing_health`:** per-credential `circuit_open`, `open_until`,
-  `success_rate`, `planner_excluded` on `GET /v1/observability/provider-stats`
-
-### Changed
-
-- Replay/trace score field `q_headroom` renamed to **`quota_capacity`** (serde
-  alias `q_headroom` retained for one release)
-
-### Documentation
-
-- [routing.md](docs/routing.md): header ladder, sticky vs spread FAQ, routing health
-
-## [0.5.0.1] - 2026-06-19
+## [0.5.1] - 2026-06-19
 
 First **0.5** release (non-beta). Autodefault replaces blind failover with
-caller-aware, quota-aware **route planning** on free-tier pools.
+caller-aware, quota-aware **route planning** on free-tier pools, plus ops
+hardening for deploy without invoker headers.
 
 ### Features
 
 - **Caller request context:** middleware parses `X-Agent-Name`,
   `X-Work-Unit-Id`, and `Helicone-Session-Id`; attaches `CallerRequestContext`
-  to router requests (work-unit header takes precedence over session id)
+  to router requests
+- **Default work-unit ladder:** router routes always resolve a non-empty
+  `work_unit_id` (`X-Work-Unit-Id` → `Helicone-Session-Id` → `X-Request-Id` →
+  generated UUID); `work_unit_source` in route trace
+- **Response echo:** optional `X-Work-Unit-Id` on router responses when source is
+  `request-id` or `generated` (default on)
 - **Route chain planner:** `plan_route_chain()` builds an ordered hop list (max
   **7** upstream attempts per inbound request, one replan on exhaustion) using
   credential health, pacing headroom, intent floor, and ladder bands
@@ -58,36 +41,43 @@ caller-aware, quota-aware **route planning** on free-tier pools.
 - **ReplayRecord (D19):** route trace carries `plan_snapshot_ts`, hop-0 score
   breakdown, and top-3 alternatives for post-incident replay
 - **Provider-stats:** configured credentials with zero attempts appear as
-  `status: idle`; optional `agent_name` on attempt records
+  `status: idle`; per-credential `routing_health` (`circuit_open`, `open_until`,
+  `success_rate`, `planner_excluded`); optional `agent_name` on attempt records
 
 ### Changed
 
 - **Failover loop** walks the planned chain instead of re-ranking the full pool
   on every hop
 - **Ranking** uses `max(slot, model)` cooldown in budget rank
-- **Documentation:** [routing.md](docs/routing.md) (invoker header contract,
-  stability order, concurrency guidance); [invoker-driver-follow-up.md](docs/invoker-driver-follow-up.md)
+- Replay/trace score field `q_headroom` renamed to **`quota_capacity`** (serde
+  alias `q_headroom` retained for one release)
+
+### Documentation
+
+- [routing.md](docs/routing.md): invoker header contract, work-unit ladder, sticky
+  vs spread FAQ, stability order, routing health; [invoker-driver-follow-up.md](docs/invoker-driver-follow-up.md)
   for out-of-repo Graphiti driver work
 
 ### Testing
 
-- **routing_load:** 32 scenarios on declarative `UpstreamMockScript` (11 new
-  caller-context / memory / quota cases)
+- **routing_load:** 33 scenarios on declarative `UpstreamMockScript` (caller-context,
+  memory, quota, request-id spread)
 - **Unit / integration:** `caller_context`, `credential_health_registry`,
   `budget_aware_plan`, `budget_aware_memory`, `budget_aware_snapshot`,
-  `replay_record`, `provider_observability`
+  `replay_record`, `provider_observability`, `verify_gemini_catalog`,
+  `verify_openrouter_catalog`
 - **Harness (D8):** `tests/rl/scenarios/`, `src/tests/routing_harness/`
   (`feature = testing`), shared mocks in `crates/gateway-tests`
 
 ### Upgrade notes
 
 - **Recommended headers:** send `X-Agent-Name` and `X-Work-Unit-Id` (or
-  `Helicone-Session-Id`) on every autodefault call for spread and route memory
+  `Helicone-Session-Id`) on every autodefault call for spread and route memory;
+  anonymous traffic still spreads via `X-Request-Id`
 - **Invoker driver** changes are **not** in this repo — see
   `docs/invoker-driver-follow-up.md`
-- **Observability:** use `GET /v1/observability/provider-stats` and route trace
-  fields (`route_memory_hit`, `planned_hops`, `plan_rebuilds`) to validate
-  rollout
+- **Observability:** use `GET /v1/observability/provider-stats` (`routing_health`)
+  and route trace fields (`route_memory_hit`, `work_unit_source`, `planned_hops`)
 
 ## [0.4.2-beta.5] - 2026-06-18
 

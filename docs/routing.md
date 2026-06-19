@@ -188,7 +188,7 @@ When failover needs an equivalent model on another provider,
 [`model-mapping.yaml`](../ai-gateway/config/embedded/model-mapping.yaml) supplies
 aliases (for example mapping `gpt-4o-mini` to several cheaper alternatives).
 
-## Caller context and route planning (0.5.0.1)
+## Caller context and route planning (0.5.1)
 
 Autodefault and budget-aware routers read inbound **caller context** headers for
 deterministic hop-0 spread, work-unit sticky routing, and observability.

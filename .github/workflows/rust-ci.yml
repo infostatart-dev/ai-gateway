@@ -11,7 +11,9 @@ on:
   pull_request:
     branches: ["main"]
     paths:
+      - "Cargo.toml"
       - "crates/**"
+      - "ai-gateway/config/**"
       - "ai-gateway/src/**"
       - "ai-gateway/stubs/**"
       - "ai-gateway/tests/**"
@@ -67,6 +69,12 @@ jobs:
         run: cargo --version
       - name: Test
         run: cargo +stable test --tests --all-features
+      - name: Verify embedded provider catalogs
+        run: >-
+          cargo +stable test -p ai-gateway
+          --test verify_gemini_catalog
+          --test verify_openrouter_catalog
+          --features testing
   coverage:
     runs-on: ubuntu-latest
     continue-on-error: true

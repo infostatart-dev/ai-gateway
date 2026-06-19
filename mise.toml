@@ -43,11 +43,11 @@ run = "cargo llvm-cov --workspace --all-features --lib --summary-only --fail-und
 
 [tasks."catalog:verify-gemini"]
 description = "Assert embedded Gemini catalog slugs exist in ListModels fixture"
-run = "cargo test -p ai-gateway --test verify_gemini_catalog"
+run = "cargo test -p ai-gateway --test verify_gemini_catalog --features testing"
 
 [tasks."catalog:verify-openrouter"]
 description = "Assert embedded OpenRouter catalog slugs exist in ListModels fixture"
-run = "cargo test -p ai-gateway --test verify_openrouter_catalog"
+run = "cargo test -p ai-gateway --test verify_openrouter_catalog --features testing"
 
 [tasks."predeploy:rust"]
 description = "Rust diff gate: fmt + clippy + lib tests + catalog verify"
