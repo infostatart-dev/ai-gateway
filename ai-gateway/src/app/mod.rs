@@ -11,6 +11,7 @@ mod helicone_init;
 pub mod run;
 pub mod service;
 pub mod stack;
+pub mod startup_tasks;
 pub mod state;
 
 pub type AppResponseBody = tower_http::body::UnsyncBoxBody<

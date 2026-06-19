@@ -8,4 +8,4 @@ routers:
           - anthropic
 
 helicone:
-  features: all
+  features: none

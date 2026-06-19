@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.5.3] - 2026-06-19
+
+Fix local and sidecar startup when Helicone control plane is unreachable.
+
+### Fixed
+
+- **HTTP startup gate:** sidecar mode no longer awaits Helicone control-plane
+  websocket connect before binding `server.port`. `cargo rl` and autodefault work
+  without a service on `:8585`.
+- **`local.yaml`:** `helicone.features: none` (removed stale `localhost:8585`
+  URLs).
+
+### Documentation
+
+- [docs/control-plane.md](docs/control-plane.md) — Helicone sidecar legacy,
+  Infostart control plane roadmap.
+- [configuration.md](docs/configuration.md), [DEVELOPMENT.md](DEVELOPMENT.md) —
+  clarify docker compose does not include Helicone Jawn.
+
 ## [0.5.1] - 2026-06-19
 
 First **0.5** release (non-beta). Autodefault replaces blind failover with

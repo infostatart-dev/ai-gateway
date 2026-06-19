@@ -26,8 +26,11 @@ Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/).
    to enable. See [`.env.template`](.env.template) for naming conventions and
    [README.md](README.md) for configuration overview.
 
-   Optional: set `HELICONE_CONTROL_PLANE_API_KEY` only if you enable Helicone
-   Cloud observability (`helicone.features` in config).
+   Optional: set `integrations.helicone.api-key` in the secrets file only if you
+   enable Helicone Cloud observability (`helicone.features` in config). See
+   [docs/control-plane.md](docs/control-plane.md) — **no** Helicone service is
+   required for `cargo rl`; `infrastructure/compose.yaml` does not run port
+   `8585`.
 
 3. **Start supporting services** (optional)
 
@@ -35,12 +38,14 @@ Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/).
    cd infrastructure && docker compose up -d && cd ..
    ```
 
+   Brings up OTEL collector (`4317`), Redis, Grafana — not Helicone Jawn.
+
 4. **Run the gateway**
 
    ```bash
    cargo run
 
-   # Or with a dev config file:
+   # Or with a dev config file (helicone.features: none):
    cargo rl
    ```
 

@@ -72,6 +72,7 @@ Embedded defaults live in `ai-gateway/config/embedded/`:
 - [Credentials and env vars](docs/credentials.md)
 - [Providers](docs/providers.md)
 - [Routing and failover](docs/routing.md)
+- [Control plane](docs/control-plane.md)
 - [Deployment](docs/deployment.md)
 - [ChatGPT Web session](docs/chatgpt-web.md)
 

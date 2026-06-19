@@ -103,6 +103,10 @@ Helicone API key: `integrations.helicone.api-key` in
 [`dev/secrets.local.yaml`](credentials.md). **Not required** for self-hosted
 operation. Sidecar mode with Helicone Cloud is [legacy](../SIDECAR.md).
 
+**Startup:** HTTP bind does **not** wait for a control-plane websocket (see
+[control-plane.md](control-plane.md)). `cargo rl` works without any service on
+port `8585`.
+
 ## Local secrets setup
 
 ```bash
@@ -118,4 +122,5 @@ change notes for legacy env vars.
 
 - [providers.md](providers.md)
 - [routing.md](routing.md)
+- [control-plane.md](control-plane.md)
 - [deployment.md](deployment.md)

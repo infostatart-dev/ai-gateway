@@ -1,9 +1,8 @@
 use std::{path::PathBuf, time::Duration};
 
 use ai_gateway::{
-    app::App,
+    app::{App, startup_tasks},
     config::Config,
-    control_plane::websocket::ControlPlaneClient,
     discover::monitor::{
         health::provider::HealthMonitor, rate_limit::RateLimitMonitor,
     },
@@ -284,12 +283,10 @@ fn init_telemetry(
 async fn run_app(config: Config) -> Result<(), RuntimeError> {
     const CLEANUP_INTERVAL: Duration = Duration::from_mins(5);
     let mut shutting_down = false;
-    let helicone_config = config.helicone.clone();
     let app = App::new(config).await?;
     let config = app.state.config();
     let health_monitor = HealthMonitor::new(app.state.clone());
     let rate_limit_monitor = RateLimitMonitor::new(app.state.clone());
-    let control_plane_state = app.state.0.control_plane_state.clone();
 
     let rate_limiting_cleanup_service =
         config.global.rate_limit.as_ref().map(|_| {
@@ -299,33 +296,14 @@ async fn run_app(config: Config) -> Result<(), RuntimeError> {
             )
         });
 
-    let mut tasks = vec![
-        "shutdown-signals",
-        "gateway",
-        "provider-health-monitor",
-        "provider-rate-limit-monitor",
-        "system-metrics",
-    ];
+    // Infostart control plane (router/org push) is deferred — see
+    // docs/control-plane.md. Helicone Cloud sidecar websocket must not
+    // block HTTP bind (0.5.3+).
+    let tasks = startup_tasks::meltdown_service_names(config);
     let mut meltdown = Meltdown::new().register(TaggedService::new(
         "shutdown-signals",
         ai_gateway::utils::meltdown::wait_for_shutdown_signals,
     ));
-
-    if config.helicone.is_auth_enabled()
-        && config.deployment_target.is_sidecar()
-    {
-        meltdown = meltdown.register(TaggedService::new(
-            "control-plane-client",
-            ControlPlaneClient::connect(
-                control_plane_state,
-                helicone_config,
-                config.control_plane.clone(),
-                app.state.clone(),
-            )
-            .await?,
-        ));
-        tasks.push("control-plane-client");
-    }
 
     if config.deployment_target.is_cloud() {
         meltdown = meltdown.register(TaggedService::new(
@@ -336,7 +314,6 @@ async fn run_app(config: Config) -> Result<(), RuntimeError> {
             )
             .await?,
         ));
-        tasks.push("database-listener");
     }
 
     meltdown = meltdown
@@ -356,7 +333,6 @@ async fn run_app(config: Config) -> Result<(), RuntimeError> {
             "rate-limiting-cleanup",
             rate_limiting_cleanup_service,
         ));
-        tasks.push("rate-limiting-cleanup");
     }
 
     info!(tasks = ?tasks, "starting services");
