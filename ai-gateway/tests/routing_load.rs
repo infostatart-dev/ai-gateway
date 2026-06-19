@@ -1,6 +1,8 @@
 //! Routing load verification integration tests.
 
-use ai_gateway::routing_load::scenarios;
+mod rl;
+
+use rl::scenarios;
 
 macro_rules! routing_load_test {
     ($name:ident, $scenario:expr) => {
@@ -63,12 +65,8 @@ routing_load_test!(
     scenarios::deepseek_credential_restricted_failover::run
 );
 routing_load_test!(
-    deepseek_three_of_four_restricted,
-    scenarios::deepseek_four_slot_partial_restriction::run_three_of_four_muted
-);
-routing_load_test!(
-    deepseek_all_four_restricted,
-    scenarios::deepseek_four_slot_partial_restriction::run_all_four_muted
+    deepseek_four_slot_partial_restriction,
+    scenarios::deepseek_four_slot_partial_restriction::run
 );
 routing_load_test!(
     deepseek_restricted_then_gemini_stability,
@@ -79,4 +77,45 @@ routing_load_test!(harness_round_robin, scenarios::harness_round_robin::run);
 routing_load_test!(
     harness_payload_filter,
     scenarios::harness_payload_filter::run
+);
+routing_load_test!(
+    credential_circuit_open,
+    scenarios::credential_circuit_open::run
+);
+routing_load_test!(
+    caller_request_id_spread,
+    scenarios::caller_request_id_spread::run
+);
+routing_load_test!(
+    caller_three_work_units,
+    scenarios::caller_three_work_units::run
+);
+routing_load_test!(route_plan_max_hops, scenarios::route_plan_max_hops::run);
+routing_load_test!(
+    stability_escalation_plan,
+    scenarios::stability_escalation_plan::run
+);
+routing_load_test!(
+    stability_never_downgrade,
+    scenarios::stability_never_downgrade::run
+);
+routing_load_test!(
+    dynamic_cooldown_skip,
+    scenarios::dynamic_cooldown_skip::run
+);
+routing_load_test!(
+    free_catalog_pacing_skip,
+    scenarios::free_catalog_pacing_skip::run
+);
+routing_load_test!(
+    route_memory_sticky_reuse,
+    scenarios::route_memory_sticky_reuse::run
+);
+routing_load_test!(
+    route_memory_invalidate_on_429,
+    scenarios::route_memory_invalidate_on_429::run
+);
+routing_load_test!(
+    quota_parallel_collision,
+    scenarios::quota_parallel_collision::run
 );

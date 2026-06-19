@@ -2,20 +2,33 @@
 
 Measured with `mise run coverage:lib` (`cargo llvm-cov --workspace --all-features --lib`).
 
-## Scope
+## Scope (one formula everywhere)
 
-- **Included:** workspace `#[test]` / `#[tokio::test]` in `src/lib.rs` modules (`--lib`).
-- **Excluded:** `ai-gateway/tests/*.rs` integration tests, `main.rs`, CLI binaries. HTTP handler paths are covered there, not in lib %.
+All coverage tasks and CI use the **same** command flags:
 
-## Workspace totals (2026-06-18, post improvement tranche)
+```bash
+cargo llvm-cov --workspace --all-features --lib
+```
+
+| Task | Extra flags |
+|------|-------------|
+| `coverage:lib` | `--summary-only` |
+| `coverage:report` | `--lcov --output-path lcov.info` |
+| `coverage:gate` | `--summary-only --fail-under-lines 48` |
+
+- **Included:** `#[test]` in each crate's `src/` (`--lib`).
+- **Excluded:** `ai-gateway/tests/` integration binaries, `main.rs`, CLI binaries, HTTP handlers without lib tests.
+- **No alternate slices** — one workspace percentage; integration paths are out of scope until a future `--tests` change.
+
+## Workspace totals (2026-06-18)
 
 | Metric    | Covered | Total  | %      |
 |-----------|---------|--------|--------|
-| Lines     | 16,644  | 33,900 | 50.90% |
-| Regions   | 21,915  | 43,549 | 50.32% |
-| Functions | 1,717   | 3,362  | 51.07% |
+| Lines     | 19,187  | 35,634 | **53.84%** |
+| Regions   | 24,480  | 45,572 | 53.72% |
+| Functions | 1,905   | 3,543  | 53.77% |
 
-## Per-crate line coverage (lib)
+## Per-crate line coverage (lib only)
 
 | Crate                 | Lines % |
 |-----------------------|---------|
@@ -46,7 +59,7 @@ Re-run `mise run coverage:lib` after the improvement tranche to refresh per-crat
 ## Not in scope for lib %
 
 - `app/run.rs`, `endpoints/*`, `cli/*_login.rs` — integration / manual paths
-- Target integration coverage in a future change (`--tests` scope)
+- `ai-gateway/tests/*` — run via `cargo test --tests`, not counted in lib coverage
 
 ## Updating this file
 

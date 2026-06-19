@@ -251,7 +251,7 @@ mod tests {
         let providers = ProvidersConfig::default();
         let provider = InferenceProvider::Named("longcat".into());
         let request = json!({
-            "model": "LongCat-Flash-Lite",
+            "model": "LongCat-2.0-Preview",
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
@@ -285,10 +285,10 @@ mod tests {
     #[test]
     fn non_capable_model_returns_422_for_json_schema_request() {
         let providers = ProvidersConfig::default();
-        // longcat's LongCat-Flash-Thinking doesn't support json_schema
-        let provider = InferenceProvider::Named("longcat".into());
+        // ollama-cloud deepseek reasoning models don't support json_schema
+        let provider = InferenceProvider::Named("ollama-cloud".into());
         let request = json!({
-            "model": "LongCat-Flash-Thinking",
+            "model": "deepseek-v4-pro",
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {

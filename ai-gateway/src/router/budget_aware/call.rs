@@ -36,6 +36,7 @@ mod test_hooks {
         queue().lock().expect("mock call queue").push_back(response);
     }
 
+    /// Deprecated: use [`install_upstream_mock`] from `gateway_tests`.
     pub fn push_for_credential(
         credential_id: &str,
         response: Result<Response, ApiError>,
@@ -48,7 +49,19 @@ mod test_hooks {
             .push_back(response);
     }
 
-    pub fn pop(credential_id: &str) -> Option<Result<Response, ApiError>> {
+    pub fn install_upstream_mock(script: gateway_tests::UpstreamMockScript) {
+        gateway_tests::install_upstream_mock(script);
+    }
+
+    pub fn pop(
+        credential_id: &str,
+        model: &str,
+    ) -> Option<Result<Response, ApiError>> {
+        if let Some(response) =
+            gateway_tests::pop_upstream_response(credential_id, model)
+        {
+            return Some(Ok(response));
+        }
         if let Some(response) = credential_queues()
             .lock()
             .expect("credential mock mutex")
@@ -61,6 +74,7 @@ mod test_hooks {
     }
 
     pub fn clear() {
+        gateway_tests::clear_upstream_mocks();
         if let Some(queue) = MOCK_CALLS.get() {
             queue.lock().expect("mock call queue").clear();
         }
@@ -84,20 +98,32 @@ mod test_hooks {
         }
 
         #[test]
-        fn credential_queue_is_isolated_from_global_fifo() {
+        fn script_precedes_legacy_fifo() {
             clear();
             push_for_credential("gemini-free", ok());
-            push(ok());
-            assert!(pop("gemini-free-2").is_some());
-            assert!(pop("gemini-free").is_some());
-            assert!(pop("gemini-free").is_none());
+            install_upstream_mock(
+                gateway_tests::UpstreamMockScript::new().binding(
+                    "gemini-free",
+                    "gemini-3.1-flash-lite",
+                    vec![gateway_tests::upstream::ok_chat_completion],
+                ),
+            );
+            let response = pop("gemini-free", "gemini-3.1-flash-lite")
+                .expect("script")
+                .expect("ok");
+            assert_eq!(response.status(), StatusCode::OK);
+            let legacy = pop("gemini-free", "other-model")
+                .expect("legacy fifo for same credential")
+                .expect("ok");
+            assert_eq!(legacy.status(), StatusCode::OK);
         }
     }
 }
 
 #[cfg(feature = "testing")]
 pub use test_hooks::{
-    clear as clear_test_call_responses, push as push_test_call_response,
+    clear as clear_test_call_responses, install_upstream_mock,
+    push as push_test_call_response,
     push_for_credential as push_test_call_response_for_credential,
 };
 
@@ -106,7 +132,10 @@ pub(super) async fn call_candidate(
     req: Request,
 ) -> Result<Response, ApiError> {
     #[cfg(feature = "testing")]
-    if let Some(response) = test_hooks::pop(candidate.credential_id.as_str()) {
+    if let Some(response) = test_hooks::pop(
+        candidate.credential_id.as_str(),
+        &candidate.capability.model.to_string(),
+    ) {
         return response;
     }
 

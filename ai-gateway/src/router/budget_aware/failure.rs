@@ -23,13 +23,33 @@ pub(super) async fn record_classified_failure(
     model: &str,
     response: Response,
     elapsed: Duration,
+    credential_tier: &str,
 ) -> (Response, FailoverClass, ExhaustionScope) {
     let limits = &router.app_state.config().provider_limits;
     let config = limits.cooldown_for(provider);
     let quota_profile = limits.quota_profile(provider);
     let status = response.status();
-    let (response, cooldown, class, scope, slot_cooldown) =
+    let (response, mut cooldown, class, scope, slot_cooldown) =
         classify_and_cooldown(response, &config, quota_profile).await;
+    let pacing_wait = router
+        .app_state
+        .upstream_pacing()
+        .gate_for(
+            provider,
+            Some(credential_id),
+            Some(credential_tier),
+            Some(model),
+        )
+        .map(|gate| async move { gate.peek_next_wait(0).await });
+    if let Some(wait_future) = pacing_wait {
+        cooldown = cooldown.max(wait_future.await);
+    }
+    router.app_state.credential_health().record_failover_class(
+        provider,
+        credential_id,
+        class,
+        scope,
+    );
     if status == http::StatusCode::PAYMENT_REQUIRED
         && scope == ExhaustionScope::Project
     {
@@ -100,7 +120,7 @@ mod tests {
             },
             retry_after::ExhaustionScope,
         },
-        routing_load::responses::openrouter_never_purchased_402,
+        tests::routing_harness::responses::openrouter_never_purchased_402,
         types::provider::InferenceProvider,
     };
 
@@ -150,6 +170,7 @@ mod tests {
             &candidate.capability.model.to_string(),
             openrouter_never_purchased_402(),
             std::time::Duration::from_millis(5),
+            candidate.credential_tier.as_str(),
         )
         .await;
         assert_eq!(scope, ExhaustionScope::Model);

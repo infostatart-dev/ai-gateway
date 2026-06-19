@@ -1,0 +1,15 @@
+[package]
+name = "gateway-tests"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = false
+description = "Shared industrial test harness: declarative upstream mocks and routing fixtures"
+
+[dependencies]
+axum-core = { workspace = true }
+http = { workspace = true }
+
+[lints]
+workspace = true

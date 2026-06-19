@@ -954,11 +954,16 @@ doubao:
                 tpd: 2000000
 
 ollama-cloud:
-  observed-at: "2026-06-17"
+  observed-at: "2026-06-19"
   scope: api-key
   source: ollama-cloud-pricing
   notes:
-    - Free tier is light usage on cloud-hosted models (~20M tokens/month est.).
+    - "Free tier is GPU-time based; session reset every 5h, weekly reset every 7 days."
+    - "Free-tier models verified 2026-06-19 (HTTP 200 on key): glm-4.7, gemma4:31b, gpt-oss:20b, gpt-oss:120b, nemotron-3-super, nemotron-3-ultra, minimax-m2.5, minimax-m3."
+    - "Pro-only on free key (403 subscription): kimi-k2.*, deepseek-v4-*, glm-5*, qwen3.5:397b, deepseek-v3.2, gemini-3-flash-preview, minimax-m2.7, glm-5.1/5.2."
+    - "OpenAI json_schema strict + native /api/chat format verified 2026-06-19: none of the free-tier models returned valid schema JSON (prose/markdown instead)."
+    - "Tagged slugs (e.g. qwen3.5:397b) match ollama.com/v1 model ids."
+    - "Upcoming retirements 2026-06-16 — see ollama.com/cloud docs."
   tiers:
     free:
       endpoints:

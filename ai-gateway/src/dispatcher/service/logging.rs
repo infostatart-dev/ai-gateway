@@ -147,6 +147,9 @@ impl Dispatcher {
         let tfft_attrs = provider_metric_attrs.clone();
         let is_stream = mapper_ctx.is_stream;
         let path = target_url.path().to_string();
+        let agent_name = pending_route_trace
+            .as_ref()
+            .and_then(|trace| trace.agent_name.clone());
         tokio::spawn(
             async move {
                 let tfft_future = TFFTFuture::new(start_instant, tfft_rx);
@@ -207,6 +210,7 @@ impl Dispatcher {
                     reported_usage,
                     request_body: Some(&req_body_bytes),
                     failover_class: None,
+                    agent_name: agent_name.as_deref(),
                 });
 
                 if request_kind == RequestKind::DirectProxy {
@@ -255,6 +259,7 @@ impl Dispatcher {
                             .observability
                             .estimate_tokens,
                         failover_class: None,
+                        agent_name: agent_name.as_deref(),
                     });
                     let usage_source = match record.usage_source {
                         crate::metrics::provider::attempt::UsageSource::Reported => {

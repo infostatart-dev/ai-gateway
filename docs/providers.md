@@ -56,11 +56,11 @@ OpenAI-compatible providers gated on secrets-file credentials. Autodefault prior
 
 | Provider | Base URL | Example model |
 |----------|----------|---------------|
-| `longcat` | `https://api.longcat.chat/openai/` | `longcat/LongCat-Flash-Lite` |
+| `longcat` | `https://api.longcat.chat/openai/` | `longcat/LongCat-2.0-Preview` |
 | `bazaarlink` | `https://bazaarlink.ai/api/v1/` | `bazaarlink/auto:free` |
 | `bluesminds` | `https://api.bluesminds.com/v1/` | `bluesminds/gpt-4.1-nano` |
 | `sambanova` | `https://api.sambanova.ai/v1/` | `sambanova/gpt-oss-120b` |
-| `ollama-cloud` | `https://ollama.com/v1/` | `ollama-cloud/kimi-k2.6` |
+| `ollama-cloud` | `https://ollama.com/v1/` | `ollama-cloud/glm-4.7` |
 | `inclusionai` | `https://api.inclusionai.tech/v1/` | `inclusionai/inclusion-model` |
 | `cohere` | `https://api.cohere.com/compatibility/v1/` | `cohere/command-a-03-2025` |
 | `doubao` | `https://ark.cn-beijing.volces.com/api/v3/` | `doubao/doubao-pro-32k` |
@@ -68,7 +68,7 @@ OpenAI-compatible providers gated on secrets-file credentials. Autodefault prior
 ```bash
 curl http://localhost:8080/ai/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"longcat/LongCat-Flash-Lite","messages":[{"role":"user","content":"hi"}]}'
+  -d '{"model":"longcat/LongCat-2.0-Preview","messages":[{"role":"user","content":"hi"}]}'
 ```
 
 ### Cloudflare Workers AI

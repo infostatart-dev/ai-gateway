@@ -12,7 +12,9 @@ use crate::{
         },
         token_estimate::{PayloadBudgetConfig, estimate_from_value},
     },
-    types::{request::Request, response::Response},
+    types::{
+        extensions::CallerRequestContext, request::Request, response::Response,
+    },
 };
 
 pub(super) fn budget_aware_call(
@@ -44,8 +46,56 @@ pub(super) fn budget_aware_call(
             .as_ref()
             .map(crate::router::intent::extract_routing_intent);
 
-        let candidates =
+        let pool =
             this.ordered_candidates(&requirements, source_model.as_ref())?;
+
+        let caller = parts
+            .extensions
+            .get::<CallerRequestContext>()
+            .cloned()
+            .unwrap_or_else(|| {
+                let (work_unit_id, work_unit_source) =
+                    crate::middleware::caller_context::resolve_work_unit(
+                        &http::HeaderMap::new(),
+                    );
+                CallerRequestContext {
+                    agent_name:
+                        crate::middleware::caller_context::DEFAULT_AGENT_NAME
+                            .to_string(),
+                    work_unit_id: Some(work_unit_id),
+                    work_unit_source,
+                }
+            });
+        let estimated_tokens = requirements.min_context_tokens.unwrap_or(0);
+        let plan = super::plan::plan_route_chain(
+            &this,
+            pool.clone(),
+            &requirements,
+            routing_intent,
+            &caller,
+            this.app_state.credential_health(),
+            this.app_state.route_memory(),
+            estimated_tokens,
+            &std::collections::HashSet::new(),
+        )
+        .await;
+        if plan.chain.is_empty() {
+            return Err(ApiError::Internal(InternalError::ProviderNotFound));
+        }
+        let candidates = plan.chain;
+        let mut parts = parts;
+        parts
+            .extensions
+            .insert(crate::types::extensions::RoutePlanContext {
+                caller: caller.clone(),
+                full_pool: pool,
+                estimated_tokens,
+                route_memory_hit: plan.route_memory_hit,
+                planned_hops: plan.planned_hops,
+                source_model: source_model.as_ref().map(ToString::to_string),
+                json_schema_required: requirements.json_schema_required,
+                replay: plan.replay,
+            });
 
         failover_loop::run_failover_candidates(
             this,

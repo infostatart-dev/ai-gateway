@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "crates/gateway-tests",
     "crates/chatgpt-web",
     "crates/deepseek-web",
     "crates/perplexity-web",
@@ -25,7 +26,7 @@ edition = "2024"
 authors = [ "Thomas Harmon <tom@helicone.ai>, Justin Torre <justin@helicone.ai>, Kavin Desi Valli <kavin@helicone.ai>, Charlie Wu <charlie@helicone.ai>", "Helicone Developers" ]
 license = "Apache-2.0"
 publish = false
-version = "0.4.2-beta.5"
+version = "0.5.2"
 
 
 [profile.release]
@@ -47,6 +48,7 @@ missing_panics_doc = { level = "allow" }
 struct_field_names = { level = "allow" }
 
 [workspace.dependencies]
+gateway-tests = { path = "./crates/gateway-tests" }
 telemetry = { path = "./crates/telemetry" }
 ai-gateway = { path = "./ai-gateway" }
 weighted-balance = { path = "./crates/weighted-balance" }

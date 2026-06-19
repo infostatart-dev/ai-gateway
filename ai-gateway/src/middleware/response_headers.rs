@@ -9,9 +9,15 @@ use http::{Request, Response};
 use pin_project_lite::pin_project;
 
 use crate::{
-    config::response_headers::ResponseHeadersConfig,
+    config::{
+        observability::ObservabilityResponseHeadersConfig,
+        response_headers::ResponseHeadersConfig,
+    },
     types::{
-        extensions::{ProviderRequestId, RoutedModelAndProvider},
+        extensions::{
+            CallerRequestContext, ProviderRequestId, RoutedModelAndProvider,
+            WorkUnitSource,
+        },
         provider::InferenceProvider,
     },
 };
@@ -19,15 +25,21 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct ResponseHeaderService<S> {
     config: ResponseHeadersConfig,
+    observability: ObservabilityResponseHeadersConfig,
     inner: S,
 }
 
 impl<S> ResponseHeaderService<S> {
     pub const fn new(
         config: ResponseHeadersConfig,
+        observability: ObservabilityResponseHeadersConfig,
         inner: S,
     ) -> ResponseHeaderService<S> {
-        ResponseHeaderService { config, inner }
+        ResponseHeaderService {
+            config,
+            observability,
+            inner,
+        }
     }
 }
 
@@ -54,18 +66,28 @@ where
     fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
         ResponseFuture {
             config: self.config,
+            observability: self.observability,
             inner: self.inner.call(req),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct ResponseHeaderLayer(ResponseHeadersConfig);
+pub struct ResponseHeaderLayer {
+    config: ResponseHeadersConfig,
+    observability: ObservabilityResponseHeadersConfig,
+}
 
 impl ResponseHeaderLayer {
     #[must_use]
-    pub const fn new(config: ResponseHeadersConfig) -> Self {
-        Self(config)
+    pub const fn new(
+        config: ResponseHeadersConfig,
+        observability: ObservabilityResponseHeadersConfig,
+    ) -> Self {
+        Self {
+            config,
+            observability,
+        }
     }
 }
 
@@ -73,13 +95,14 @@ impl<S> tower::Layer<S> for ResponseHeaderLayer {
     type Service = ResponseHeaderService<S>;
 
     fn layer(&self, service: S) -> ResponseHeaderService<S> {
-        ResponseHeaderService::new(self.0, service)
+        ResponseHeaderService::new(self.config, self.observability, service)
     }
 }
 
 pin_project! {
     pub struct ResponseFuture<F> {
         config: ResponseHeadersConfig,
+        observability: ObservabilityResponseHeadersConfig,
         #[pin]
         inner: F,
     }
@@ -164,6 +187,22 @@ where
                 );
             }
         }
+
+        if this.observability.echo_work_unit_id
+            && let Some(caller) =
+                response.extensions().get::<CallerRequestContext>()
+            && matches!(
+                caller.work_unit_source,
+                WorkUnitSource::RequestId | WorkUnitSource::Generated
+            )
+            && let Some(work_unit_id) = caller.work_unit_id.as_deref()
+            && let Ok(header_value) = http::HeaderValue::from_str(work_unit_id)
+        {
+            response.headers_mut().insert(
+                http::HeaderName::from_static("x-work-unit-id"),
+                header_value,
+            );
+        }
         Poll::Ready(Ok(response))
     }
 }
@@ -203,6 +242,7 @@ mod tests {
 
         let mut service = ResponseHeaderService::new(
             config,
+            ObservabilityResponseHeadersConfig::default(),
             create_mock_service(|| {
                 let mut response = Response::new("test".to_string());
                 response.extensions_mut().insert(InferenceProvider::OpenAI);
@@ -230,6 +270,7 @@ mod tests {
 
         let mut service = ResponseHeaderService::new(
             config,
+            ObservabilityResponseHeadersConfig::default(),
             create_mock_service(|| {
                 let mut response = Response::new("test".to_string());
                 response
@@ -259,6 +300,7 @@ mod tests {
 
         let mut service = ResponseHeaderService::new(
             config,
+            ObservabilityResponseHeadersConfig::default(),
             create_mock_service(|| {
                 let mut response = Response::new("test".to_string());
                 response.extensions_mut().insert(ProviderRequestId(
@@ -288,6 +330,7 @@ mod tests {
 
         let mut service = ResponseHeaderService::new(
             config,
+            ObservabilityResponseHeadersConfig::default(),
             create_mock_service(|| {
                 let mut response = Response::new("test".to_string());
                 response
@@ -323,6 +366,7 @@ mod tests {
 
         let mut service = ResponseHeaderService::new(
             config,
+            ObservabilityResponseHeadersConfig::default(),
             create_mock_service(|| Response::new("test".to_string())),
         );
 
@@ -349,6 +393,7 @@ mod tests {
 
         let mut service = ResponseHeaderService::new(
             config,
+            ObservabilityResponseHeadersConfig::default(),
             create_mock_service(|| {
                 let mut response = Response::new("test".to_string());
                 response.extensions_mut().insert(
@@ -401,6 +446,7 @@ mod tests {
 
         let mut service = ResponseHeaderService::new(
             config,
+            ObservabilityResponseHeadersConfig::default(),
             create_mock_service(|| Response::new("test".to_string())),
         );
 

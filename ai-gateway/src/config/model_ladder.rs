@@ -99,6 +99,26 @@ impl ModelLadderRegistry {
     }
 
     #[must_use]
+    pub fn models_in_band(
+        &self,
+        provider: &InferenceProvider,
+        tier: &str,
+        band: LadderBand,
+    ) -> Vec<String> {
+        let Some(tier_ladder) =
+            self.providers.get(provider).and_then(|t| t.get(tier))
+        else {
+            return Vec::new();
+        };
+        match band {
+            LadderBand::Fast => tier_ladder.fast.clone(),
+            LadderBand::Capacity => tier_ladder.capacity.clone(),
+            LadderBand::Stability => tier_ladder.stability.clone(),
+            LadderBand::Deprioritized => tier_ladder.deprioritized.clone(),
+        }
+    }
+
+    #[must_use]
     pub fn ladder_model_slugs(
         &self,
         provider: &InferenceProvider,

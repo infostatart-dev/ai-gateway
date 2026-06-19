@@ -13,8 +13,6 @@ pub mod logger;
 pub mod metrics;
 pub mod middleware;
 pub(crate) mod router;
-#[cfg(feature = "testing")]
-pub mod routing_load;
 pub mod store;
 #[cfg(feature = "testing")]
 pub mod tests;

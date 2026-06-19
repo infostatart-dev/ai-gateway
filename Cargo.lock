@@ -53,7 +53,7 @@ dependencies = [
 
 [[package]]
 name = "ai-gateway"
-version = "0.4.2-beta.5"
+version = "0.5.2"
 dependencies = [
  "anthropic-ai-sdk",
  "async-openai",
@@ -85,6 +85,7 @@ dependencies = [
  "eventsource-stream",
  "flate2",
  "futures",
+ "gateway-tests",
  "governor",
  "heck 0.5.0",
  "http 1.4.0",
@@ -1263,12 +1264,13 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chatgpt-web"
-version = "0.4.2-beta.5"
+version = "0.5.2"
 dependencies = [
  "base64 0.22.1",
  "chromiumoxide",
  "chrono",
  "futures",
+ "gateway-tests",
  "jsonschema",
  "rand 0.9.1",
  "regex",
@@ -1830,10 +1832,11 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
 name = "deepseek-web"
-version = "0.4.2-beta.5"
+version = "0.5.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
+ "gateway-tests",
  "hex",
  "rand 0.9.1",
  "regex",
@@ -2008,9 +2011,10 @@ checksum = "1c7a8fb8a9fbf66c1f703fe16184d10ca0ee9d23be5b4436400408ba54a95005"
 
 [[package]]
 name = "dynamic-router"
-version = "0.4.2-beta.5"
+version = "0.5.2"
 dependencies = [
  "futures",
+ "gateway-tests",
  "http 1.4.0",
  "pin-project",
  "pin-project-lite",
@@ -2452,6 +2456,14 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "slab",
+]
+
+[[package]]
+name = "gateway-tests"
+version = "0.5.2"
+dependencies = [
+ "axum-core",
+ "http 1.4.0",
 ]
 
 [[package]]
@@ -3523,9 +3535,10 @@ dependencies = [
 
 [[package]]
 name = "latency-router"
-version = "0.4.2-beta.5"
+version = "0.5.2"
 dependencies = [
  "futures",
+ "gateway-tests",
  "http 1.4.0",
  "pin-project",
  "rustc-hash",
@@ -3752,12 +3765,13 @@ dependencies = [
 
 [[package]]
 name = "mock-server"
-version = "0.4.2-beta.5"
+version = "0.5.2"
 dependencies = [
  "ai-gateway",
  "axum",
  "clap",
  "futures",
+ "gateway-tests",
  "rand 0.9.1",
  "serde",
  "serde_json",
@@ -4232,11 +4246,12 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "perplexity-web"
-version = "0.4.2-beta.5"
+version = "0.5.2"
 dependencies = [
  "chromiumoxide",
  "chrono",
  "futures",
+ "gateway-tests",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -6310,8 +6325,9 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "telemetry"
-version = "0.4.2-beta.5"
+version = "0.5.2"
 dependencies = [
+ "gateway-tests",
  "http 1.4.0",
  "log-panics",
  "opentelemetry",
@@ -7072,12 +7088,13 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "upstream-emulator"
-version = "0.4.2-beta.5"
+version = "0.5.2"
 dependencies = [
  "ai-gateway",
  "axum",
  "bytes",
  "clap",
+ "gateway-tests",
  "http 1.4.0",
  "indexmap 2.14.0",
  "reqwest 0.12.24",
@@ -7394,26 +7411,29 @@ dependencies = [
 
 [[package]]
 name = "web-browser-login"
-version = "0.4.2-beta.5"
+version = "0.5.2"
 dependencies = [
  "chromiumoxide",
  "futures",
+ "gateway-tests",
  "serde_json",
  "tokio",
 ]
 
 [[package]]
 name = "web-message-budget"
-version = "0.4.2-beta.5"
+version = "0.5.2"
 dependencies = [
+ "gateway-tests",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "web-structured-output"
-version = "0.4.2-beta.5"
+version = "0.5.2"
 dependencies = [
+ "gateway-tests",
  "jsonschema",
  "serde_json",
 ]
@@ -7467,9 +7487,10 @@ dependencies = [
 
 [[package]]
 name = "weighted-balance"
-version = "0.4.2-beta.5"
+version = "0.5.2"
 dependencies = [
  "futures",
+ "gateway-tests",
  "pin-project-lite",
  "rand 0.9.1",
  "thiserror 2.0.18",

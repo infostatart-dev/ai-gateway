@@ -21,7 +21,9 @@ use crate::{
         invalid_req::InvalidRequestError,
     },
     metrics::router::{RouterMetricsLayer, strategy_label},
-    middleware::{prompts::PromptLayer, rate_limit, request_context},
+    middleware::{
+        caller_context, prompts::PromptLayer, rate_limit, request_context,
+    },
     router::{meta::MIDDLEWARE_BUFFER_SIZE, strategy::RoutingStrategyService},
     types::router::RouterId,
     utils::handle_error::ErrorHandlerLayer,
@@ -64,6 +66,8 @@ impl Router {
             )?;
         let request_context_layer =
             request_context::Layer::for_router(router_config.clone());
+        let caller_context_layer =
+            caller_context::Layer::for_router(router_config.clone());
         for (endpoint_type, balance_config) in
             router_config.load_balance.as_ref()
         {
@@ -97,6 +101,7 @@ impl Router {
                 .map_err(|e| ApiError::from(InternalError::BufferError(e)))
                 .layer(buffer::BufferLayer::new(MIDDLEWARE_BUFFER_SIZE))
                 .layer(request_context_layer.clone())
+                .layer(caller_context_layer.clone())
                 .layer(router_metrics_layer)
                 .service(routing_strategy);
 

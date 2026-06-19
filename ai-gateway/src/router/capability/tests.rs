@@ -196,14 +196,14 @@ fn deepseek_web_excluded_when_tools_required() {
 }
 
 #[test]
-fn longcat_flash_lite_supports_json_schema() {
+fn longcat_2_preview_supports_json_schema() {
     use super::providers::apply_provider_capabilities;
     let provider = InferenceProvider::Named("longcat".into());
     let mut cap = ModelCapability {
         provider: provider.clone(),
         model: ModelId::from_str_and_provider(
             provider.clone(),
-            "LongCat-Flash-Lite",
+            "LongCat-2.0-Preview",
         )
         .unwrap(),
         context_window: None,
@@ -214,8 +214,9 @@ fn longcat_flash_lite_supports_json_schema() {
         json_schema_rank: 0,
         intent_tier: IntentTier::Standard,
     };
-    apply_provider_capabilities(&mut cap, &provider, "LongCat-Flash-Lite");
+    apply_provider_capabilities(&mut cap, &provider, "LongCat-2.0-Preview");
     assert!(cap.supports_json_schema);
+    assert_eq!(cap.context_window, Some(1_048_576));
 }
 
 #[test]

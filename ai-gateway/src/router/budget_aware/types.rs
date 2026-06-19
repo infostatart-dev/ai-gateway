@@ -21,7 +21,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub(crate) struct BudgetCandidate {
+pub struct BudgetCandidate {
     pub credential_id: ProviderCredentialId,
     pub credential_budget_rank: u16,
     pub credential_cost_class: CostClass,

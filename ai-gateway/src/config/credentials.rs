@@ -164,6 +164,11 @@ impl CredentialRegistry {
     }
 
     #[must_use]
+    pub fn all(&self) -> &[ProviderCredential] {
+        &self.credentials
+    }
+
+    #[must_use]
     pub fn has_for(&self, provider: &InferenceProvider) -> bool {
         self.credentials
             .iter()

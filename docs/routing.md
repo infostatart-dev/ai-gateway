@@ -188,6 +188,103 @@ When failover needs an equivalent model on another provider,
 [`model-mapping.yaml`](../ai-gateway/config/embedded/model-mapping.yaml) supplies
 aliases (for example mapping `gpt-4o-mini` to several cheaper alternatives).
 
+## Caller context and route planning (0.5.0.1)
+
+Autodefault and budget-aware routers read inbound **caller context** headers for
+deterministic hop-0 spread, work-unit sticky routing, and observability.
+
+### Invoker header contract
+
+| Header | Role |
+|--------|------|
+| `X-Agent-Name` | Invoker identity (preferred) |
+| `Helicone-Property-Agent` | Fallback agent name |
+| `X-Work-Unit-Id` | Sticky route memory key (preferred) |
+| `Helicone-Session-Id` | Fallback work-unit id when explicit id absent |
+| `X-Request-Id` | Synthetic work-unit when no session/explicit id (per-request spread) |
+
+**Work-unit resolution ladder** (router routes always get a non-empty id):
+
+1. `X-Work-Unit-Id` → `work_unit_source: explicit`
+2. `Helicone-Session-Id` → `helicone-session`
+3. `X-Request-Id` (set by the HTTP stack) → `request-id`
+4. Generated UUID v4 → `generated` (only when step 3 is absent)
+
+Route trace logs include `work_unit_source`. When the source is `request-id` or
+`generated`, the gateway may echo the resolved id in response header
+`X-Work-Unit-Id` (default on for router routes).
+
+When `work_unit_id` is present, the planner may reuse a recent successful
+`(credential, model)` binding for the same `(agent_name, work_unit_id)` pair.
+Binding failures (429, auth, quota) invalidate memory for that pair.
+
+### Sticky memory vs parallel spread (FAQ)
+
+**Sticky memory is intentional:** the same `(agent_name, work_unit_id)` prefers
+the last successful `(credential, model)` on hop 0. This is ideal for sequential
+turns in one chat session.
+
+**Parallel calls sharing one work unit** compete for the same sticky binding and
+pacing permits — cap concurrency per session or assign distinct work units
+(`session_id` per task).
+
+**Anonymous parallel traffic** without session headers still spreads: each request
+with a distinct `X-Request-Id` resolves to a different synthetic work unit.
+Multi-turn sticky across requests requires an explicit session header
+(`X-Work-Unit-Id` or `Helicone-Session-Id`).
+
+### Stability escalation order
+
+Within a credential slot, the planner walks the **model ladder** upward before
+cross-provider failover:
+
+1. **Fast** band (`gemini-3.1-flash-lite`, fast OpenRouter free models, …)
+2. **Capacity** band
+3. **Stability** band (`gemini-2.5-flash-lite`, …)
+4. **Deprioritized** band (e.g. Nemotron) only when higher bands lack headroom
+
+The router never downgrades below the client intent floor.
+
+### Invoker concurrency guidance
+
+When sending `X-Work-Unit-Id` / session id:
+
+- Treat each work unit as **one conversational lane** — concurrent calls with the
+  same id compete for the same sticky binding and pacing permits.
+- Limit parallel LLM calls per agent to roughly the count of **healthy free
+  credential slots** with headroom (see `GET /v1/observability/provider-stats`).
+- Distinct work units (`session_id` per chat/task) improve spread across Gemini
+  free slots and reduce 429 collisions.
+
+### Provider-stats routing health
+
+`GET /v1/observability/provider-stats` includes a per-credential
+`routing_health` object:
+
+| Field | Meaning |
+|-------|---------|
+| `circuit_open` | Credential circuit breaker is active |
+| `open_until` | Estimated wall-clock reopen time (when open) |
+| `success_rate` | Rolling 5-minute success ratio |
+| `planner_excluded` | Credential skipped by route planner (circuit or dead slot) |
+
+### Route trace and replay
+
+Terminal route logs include `planned_hops`, `plan_rebuilds`, `route_memory_hit`,
+`work_unit_source`, and a structured **`ReplayRecord`** with hop-0 score breakdown
+(`h_success`, `quota_capacity`, `hash_bias`, …) for incident analysis without
+prompt bodies. JSON field `q_headroom` is a deprecated alias for `quota_capacity`.
+
+### Invoker driver follow-up (out of repo)
+
+Implementation checklist: [invoker-driver-follow-up.md](invoker-driver-follow-up.md).
+
+The Graphiti / gateway **invoker driver** SHOULD:
+
+1. Pass `session_id` as `X-Work-Unit-Id` on `analyze_structured` / `chat` calls.
+2. Optionally mirror the same value in `Helicone-Session-Id`.
+3. Cap concurrent structured calls per session to the healthy free-slot estimate.
+
 ## Related
 
 - [configuration.md](configuration.md)

@@ -35,6 +35,7 @@ pub struct RecordAttemptInput<'a> {
     pub request_body: Option<&'a Bytes>,
     pub estimate_tokens: bool,
     pub failover_class: Option<FailoverClass>,
+    pub agent_name: Option<&'a str>,
 }
 
 #[must_use]
@@ -74,6 +75,7 @@ pub fn build_attempt_record(input: &RecordAttemptInput<'_>) -> AttemptRecord {
         usage_source,
         outcome,
         overload,
+        agent_name: input.agent_name.map(str::to_string),
     }
 }
 
@@ -109,6 +111,7 @@ mod tests {
             request_body: Some(&body),
             estimate_tokens: true,
             failover_class: None,
+            agent_name: None,
         });
         assert_eq!(record.usage_source, UsageSource::Estimated);
         assert_eq!(record.outcome, CallOutcome::SuccessDegraded);

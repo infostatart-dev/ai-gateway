@@ -29,6 +29,7 @@ default = []
 login = []
 
 [dev-dependencies]
+gateway-tests = { workspace = true }
 sha3 = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 serial_test = { workspace = true }

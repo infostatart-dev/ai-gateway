@@ -26,10 +26,15 @@ impl Default for ObservabilityConfig {
 pub struct ObservabilityResponseHeadersConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
+    #[serde(default = "default_true")]
+    pub echo_work_unit_id: bool,
 }
 
 impl Default for ObservabilityResponseHeadersConfig {
     fn default() -> Self {
-        Self { enabled: true }
+        Self {
+            enabled: true,
+            echo_work_unit_id: true,
+        }
     }
 }

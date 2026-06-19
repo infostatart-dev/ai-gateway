@@ -201,6 +201,7 @@ impl LoggerService {
                 reported_usage: usage,
                 request_body: Some(&self.request_body),
                 failover_class: None,
+                agent_name: None,
             },
         );
 

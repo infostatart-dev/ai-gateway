@@ -370,7 +370,7 @@ mod acceptance {
         };
         use crate::{
             router::intent::extract_routing_intent,
-            routing_load::{
+            tests::routing_harness::{
                 assert_identity::routed_identity,
                 payload::nano_json_strict_body,
                 responses::{ok_nano_json_schema_completion, rate_limited_rpm},
@@ -450,7 +450,7 @@ mod acceptance {
         };
         use crate::{
             router::intent::{IntentTier, extract_routing_intent},
-            routing_load::{
+            tests::routing_harness::{
                 assert_identity::routed_identity,
                 payload::nano_json_strict_body,
                 responses::ok_nano_json_schema_completion,
@@ -545,7 +545,7 @@ mod acceptance {
         };
         use crate::{
             router::intent::{IntentTier, extract_routing_intent},
-            routing_load::{
+            tests::routing_harness::{
                 assert_identity::routed_identity,
                 payload::nano_json_strict_body,
                 responses::{

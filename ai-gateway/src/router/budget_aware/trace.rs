@@ -50,10 +50,23 @@ pub(super) struct RouteTrace {
     restricted_until: Option<String>,
     failover_class: Option<String>,
     terminal: TerminalRouteContext,
+    agent_name: Option<String>,
+    work_unit_id: Option<String>,
+    work_unit_source: Option<crate::types::extensions::WorkUnitSource>,
+    planned_hops: Option<u32>,
+    plan_rebuilds: u32,
+    route_memory_hit: Option<bool>,
+    route_memory_invalidated: bool,
+    source_model: Option<String>,
+    json_schema_required: bool,
+    replay: Option<crate::types::extensions::PlanReplaySnapshot>,
 }
 
 impl RouteTrace {
-    pub(super) fn new(candidates: usize) -> Self {
+    pub(super) fn new_with_plan(
+        candidates: usize,
+        plan: Option<&crate::types::extensions::RoutePlanContext>,
+    ) -> Self {
         Self {
             _started: Instant::now(),
             candidates,
@@ -65,7 +78,32 @@ impl RouteTrace {
             restricted_until: None,
             failover_class: None,
             terminal: TerminalRouteContext::default(),
+            agent_name: plan.map(|p| p.caller.agent_name.clone()),
+            work_unit_id: plan.and_then(|p| p.caller.work_unit_id.clone()),
+            work_unit_source: plan.map(|p| p.caller.work_unit_source),
+            planned_hops: plan.map(|p| p.planned_hops),
+            plan_rebuilds: 0,
+            route_memory_hit: plan.map(|p| p.route_memory_hit),
+            route_memory_invalidated: false,
+            source_model: plan.and_then(|p| p.source_model.clone()),
+            json_schema_required: plan.is_some_and(|p| p.json_schema_required),
+            replay: plan.and_then(|p| p.replay.clone()),
         }
+    }
+
+    pub(super) fn set_replay(
+        &mut self,
+        replay: crate::types::extensions::PlanReplaySnapshot,
+    ) {
+        self.replay = Some(replay);
+    }
+
+    pub(super) fn set_plan_rebuilds(&mut self, count: u32) {
+        self.plan_rebuilds = count;
+    }
+
+    pub(super) fn record_route_memory_invalidated(&mut self) {
+        self.route_memory_invalidated = true;
     }
 
     pub(super) fn record_terminal(
@@ -138,6 +176,16 @@ impl RouteTrace {
             upstream_failure_kind: self.upstream_failure_kind.clone(),
             restricted_until: self.restricted_until.clone(),
             failover_class: self.failover_class.clone(),
+            agent_name: self.agent_name.clone(),
+            work_unit_id: self.work_unit_id.clone(),
+            work_unit_source: self.work_unit_source,
+            planned_hops: self.planned_hops,
+            plan_rebuilds: Some(self.plan_rebuilds),
+            route_memory_hit: self.route_memory_hit,
+            route_memory_invalidated: Some(self.route_memory_invalidated),
+            source_model: self.source_model.clone(),
+            json_schema_required: self.json_schema_required,
+            replay: self.replay.clone(),
         }
     }
 

@@ -10,3 +10,6 @@ description = "Shared JSON schema / structured output helpers for web-session pr
 [dependencies]
 jsonschema = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+gateway-tests = { workspace = true }

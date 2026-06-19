@@ -37,6 +37,7 @@ dynamic-router = { workspace = true }
 eventsource-stream = { workspace = true }
 flate2 = { workspace = true }
 futures = { workspace = true }
+gateway-tests = { workspace = true, optional = true }
 governor = { workspace = true }
 heck = { workspace = true }
 http = { workspace = true }
@@ -95,7 +96,7 @@ tracing-subscriber = { workspace = true, features = ['env-filter', 'std'] }
 typed-builder = { workspace = true }
 url = { workspace = true, features = ['serde'] }
 utoipa = { workspace = true }
-uuid = { workspace = true, features = ["serde", "v7"] }
+uuid = { workspace = true, features = ["serde", "v4", "v7"] }
 ts-rs = { workspace = true, features = ["uuid-impl"] }
 weighted-balance = { workspace = true }
 workspace_root = { workspace = true, optional = true }
@@ -112,7 +113,7 @@ pretty_assertions = { workspace = true }
 
 [features]
 default = []
-testing = ["dep:stubr", "dep:serial_test", "dep:workspace_root"]
+testing = ["dep:stubr", "dep:serial_test", "dep:workspace_root", "dep:gateway-tests"]
 redis-testing = []
 chatgpt-login = ["dep:chromiumoxide", "chatgpt-web/login"]
 deepseek-login = ["deepseek-web/login"]
@@ -200,6 +201,34 @@ required-features = ["testing"]
 
 [[test]]
 name = "routing_load"
+required-features = ["testing"]
+
+[[test]]
+name = "budget_aware_plan"
+required-features = ["testing"]
+
+[[test]]
+name = "budget_aware_memory"
+required-features = ["testing"]
+
+[[test]]
+name = "budget_aware_snapshot"
+required-features = ["testing"]
+
+[[test]]
+name = "credential_health_registry"
+required-features = ["testing"]
+
+[[test]]
+name = "caller_context"
+required-features = ["testing"]
+
+[[test]]
+name = "verify_gemini_catalog"
+required-features = ["testing"]
+
+[[test]]
+name = "verify_openrouter_catalog"
 required-features = ["testing"]
 
 

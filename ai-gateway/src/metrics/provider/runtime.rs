@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 
 use chrono::{DateTime, Utc};
 use opentelemetry::metrics::{Counter, Histogram, Meter};
@@ -21,6 +24,7 @@ pub struct GatewayProviderMetrics {
     pub tfft_ms: Histogram<f64>,
     pub generation_ms_per_output_token: Histogram<f64>,
     pub runtime: Arc<ProviderRuntimeRegistry>,
+    pub health: Arc<crate::router::budget_aware::CredentialHealthRegistry>,
 }
 
 #[derive(Debug)]
@@ -93,6 +97,11 @@ pub struct ProviderStatsRow {
     pub last_error_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_status_code: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub routing_health:
+        Option<crate::router::budget_aware::RoutingHealthSnapshot>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -151,6 +160,7 @@ pub struct AttemptRecord {
     pub usage_source: UsageSource,
     pub outcome: CallOutcome,
     pub overload: bool,
+    pub agent_name: Option<String>,
 }
 
 impl GatewayProviderMetrics {
@@ -188,6 +198,9 @@ impl GatewayProviderMetrics {
                 .with_description("Generation ms per output token")
                 .build(),
             runtime: Arc::new(ProviderRuntimeRegistry::new()),
+            health: Arc::new(
+                crate::router::budget_aware::CredentialHealthRegistry::new(),
+            ),
         }
     }
 
@@ -241,6 +254,18 @@ impl GatewayProviderMetrics {
 
         self.runtime
             .record_attempt(record, generation_ms_per_output_token(record));
+        let provider = crate::types::provider::InferenceProvider::from_str(
+            &record.provider,
+        )
+        .unwrap_or(crate::types::provider::InferenceProvider::OpenAI);
+        self.health.record_attempt(
+            &provider,
+            &crate::config::credentials::ProviderCredentialId::new(
+                &record.credential,
+            ),
+            record.outcome,
+            record.status_code,
+        );
     }
 
     pub fn record_client_request(&self, had_failover: bool) {
@@ -254,6 +279,19 @@ impl GatewayProviderMetrics {
         credential: Option<&str>,
     ) -> ProviderStatsSnapshot {
         self.runtime.snapshot(provider, credential)
+    }
+
+    #[must_use]
+    pub fn snapshot_with_credentials(
+        &self,
+        credentials: &crate::config::credentials::CredentialRegistry,
+        provider: Option<&str>,
+        credential: Option<&str>,
+    ) -> ProviderStatsSnapshot {
+        let mut snap = self.snapshot(provider, credential);
+        merge_idle_credentials(&mut snap, credentials, provider, credential);
+        merge_routing_health(&mut snap, &self.health);
+        snap
     }
 }
 
@@ -422,7 +460,95 @@ impl ProviderRuntimeEntry {
             last_call_at: self.last_call_at,
             last_error_at: self.last_error_at,
             last_status_code: self.last_status_code,
+            status: None,
+            routing_health: None,
         }
+    }
+}
+
+fn merge_idle_credentials(
+    snapshot: &mut ProviderStatsSnapshot,
+    credentials: &crate::config::credentials::CredentialRegistry,
+    provider: Option<&str>,
+    credential: Option<&str>,
+) {
+    use std::collections::HashSet;
+
+    let existing: HashSet<(String, String)> = snapshot
+        .providers
+        .iter()
+        .map(|row| (row.provider.clone(), row.credential.clone()))
+        .collect();
+    for cred in credentials.all() {
+        let prov = cred.provider.to_string();
+        if provider.is_some_and(|p| p != prov) {
+            continue;
+        }
+        let cred_id = cred.id.to_string();
+        if credential.is_some_and(|c| c != cred_id) {
+            continue;
+        }
+        if existing.contains(&(prov.clone(), cred_id.clone())) {
+            continue;
+        }
+        snapshot.providers.push(idle_provider_row(prov, cred_id));
+    }
+    snapshot
+        .providers
+        .sort_by(|a, b| a.provider.cmp(&b.provider));
+}
+
+fn idle_provider_row(provider: String, credential: String) -> ProviderStatsRow {
+    ProviderStatsRow {
+        provider,
+        credential,
+        calls: ProviderCallSnapshot {
+            attempts: 0,
+            success: 0,
+            success_degraded: 0,
+            client_error: 0,
+            server_error: 0,
+        },
+        status_codes: std::collections::BTreeMap::new(),
+        tokens: TokenSnapshot {
+            input: 0,
+            output: 0,
+            cached: 0,
+            reasoning: 0,
+            estimated_input: 0,
+            estimated_output: 0,
+        },
+        latency: LatencySnapshot {
+            avg_duration_ms: None,
+            avg_tfft_ms: None,
+            avg_generation_ms_per_output_token: None,
+            p50_generation_ms_per_output_token: None,
+            p95_generation_ms_per_output_token: None,
+        },
+        last_call_at: None,
+        last_error_at: None,
+        last_status_code: None,
+        status: Some("idle".to_string()),
+        routing_health: None,
+    }
+}
+
+fn merge_routing_health(
+    snapshot: &mut ProviderStatsSnapshot,
+    health: &crate::router::budget_aware::CredentialHealthRegistry,
+) {
+    use std::time::Instant;
+
+    let now = Instant::now();
+    for row in &mut snapshot.providers {
+        let provider =
+            crate::types::provider::InferenceProvider::from_str(&row.provider)
+                .expect("infallible provider parse");
+        let credential = crate::config::credentials::ProviderCredentialId::new(
+            &row.credential,
+        );
+        row.routing_health =
+            Some(health.routing_health_snapshot(&provider, &credential, now));
     }
 }
 
@@ -495,7 +621,7 @@ pub fn generation_ms_per_output_token(record: &AttemptRecord) -> Option<f64> {
 }
 
 fn base_attrs(record: &AttemptRecord) -> Vec<opentelemetry::KeyValue> {
-    vec![
+    let mut attrs = vec![
         opentelemetry::KeyValue::new("provider", record.provider.clone()),
         opentelemetry::KeyValue::new("credential", record.credential.clone()),
         opentelemetry::KeyValue::new("model", record.model.clone()),
@@ -506,7 +632,14 @@ fn base_attrs(record: &AttemptRecord) -> Vec<opentelemetry::KeyValue> {
         ),
         opentelemetry::KeyValue::new("stream", record.stream),
         opentelemetry::KeyValue::new("request_kind", record.request_kind),
-    ]
+    ];
+    if let Some(agent_name) = record.agent_name.as_deref() {
+        attrs.push(opentelemetry::KeyValue::new(
+            "agent_name",
+            agent_name.to_string(),
+        ));
+    }
+    attrs
 }
 
 fn attempt_attrs(record: &AttemptRecord) -> Vec<opentelemetry::KeyValue> {

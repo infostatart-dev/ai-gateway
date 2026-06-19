@@ -12,8 +12,8 @@ use crate::{
     router::retry_after::FailoverClass,
     types::{
         extensions::{
-            GatewayProviderUsageExtension, PendingRouteTrace, RequestKind,
-            UpstreamAttemptContext,
+            GatewayProviderUsageExtension, PendingRouteTrace, ReplayRecord,
+            RequestKind, UpstreamAttemptContext,
         },
         model_id::ModelId,
         provider::InferenceProvider,
@@ -36,6 +36,7 @@ pub struct DispatchMetricsInput<'a> {
     pub reported_usage: TokenUsage,
     pub request_body: Option<&'a Bytes>,
     pub failover_class: Option<FailoverClass>,
+    pub agent_name: Option<&'a str>,
 }
 
 pub fn record_upstream_attempt(input: &DispatchMetricsInput<'_>) {
@@ -59,6 +60,7 @@ pub fn record_upstream_attempt(input: &DispatchMetricsInput<'_>) {
         request_body: input.request_body,
         estimate_tokens: input.app_state.config().observability.estimate_tokens,
         failover_class: input.failover_class,
+        agent_name: input.agent_name,
     });
     input.app_state.0.metrics.provider.record_attempt(&record);
 }
@@ -91,6 +93,7 @@ pub fn attach_usage_header(
         request_body: input.request_body,
         estimate_tokens: app_state.config().observability.estimate_tokens,
         failover_class: input.failover_class,
+        agent_name: input.agent_name,
     });
     let generation_ms = generation_ms_per_output_token(&record);
     extensions.insert(GatewayProviderUsageExtension(build_usage_header(
@@ -144,6 +147,55 @@ pub fn emit_pending_route_trace(
             pending.upstream_failure_kind.as_deref().unwrap_or("none"),
         restricted_until = pending.restricted_until.as_deref().unwrap_or("none"),
         failover_class = pending.failover_class.as_deref().unwrap_or("none"),
+        agent_name = pending.agent_name.as_deref().unwrap_or("none"),
+        work_unit_id = pending.work_unit_id.as_deref().unwrap_or("none"),
+        work_unit_source = pending
+            .work_unit_source
+            .map_or("none", |source| match source {
+                crate::types::extensions::WorkUnitSource::Explicit => "explicit",
+                crate::types::extensions::WorkUnitSource::HeliconeSession => {
+                    "helicone-session"
+                }
+                crate::types::extensions::WorkUnitSource::RequestId => {
+                    "request-id"
+                }
+                crate::types::extensions::WorkUnitSource::Generated => {
+                    "generated"
+                }
+            }),
+        planned_hops = pending.planned_hops.map_or(0, u32::from),
+        plan_rebuilds = pending.plan_rebuilds.map_or(0, u32::from),
+        route_memory_hit = pending.route_memory_hit.is_some_and(|v| v),
+        route_memory_invalidated =
+            pending.route_memory_invalidated.is_some_and(|v| v),
         "budget-aware route summary"
     );
+    if let Some(replay) = build_replay_record(pending) {
+        tracing::info!(replay = ?replay, "route replay record");
+    }
+}
+
+#[must_use]
+pub fn build_replay_record(
+    pending: &PendingRouteTrace,
+) -> Option<ReplayRecord> {
+    let agent_name = pending.agent_name.as_deref()?;
+    let snapshot = pending.replay.as_ref()?;
+    Some(ReplayRecord {
+        agent_name: agent_name.to_string(),
+        work_unit_id: pending.work_unit_id.clone(),
+        source_model: pending.source_model.clone(),
+        json_schema_required: pending.json_schema_required,
+        planned_hops: pending.planned_hops.unwrap_or(pending.hops),
+        plan_rebuilds: pending.plan_rebuilds.unwrap_or(0),
+        route_memory_hit: pending.route_memory_hit.unwrap_or(false),
+        route_memory_invalidated: pending
+            .route_memory_invalidated
+            .unwrap_or(false),
+        plan_snapshot_ts: Some(snapshot.plan_snapshot_ts.clone()),
+        winner_credential: Some(snapshot.winner_credential.clone()),
+        winner_model: Some(snapshot.winner_model.clone()),
+        winner_score: Some(snapshot.winner.clone()),
+        top_alternatives: snapshot.top_alternatives.clone(),
+    })
 }

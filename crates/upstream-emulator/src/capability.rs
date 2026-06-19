@@ -72,7 +72,7 @@ mod tests {
         let providers = ProvidersConfig::default();
         let provider = InferenceProvider::Named("longcat".into());
         let body = json!({
-            "model": "LongCat-Flash-Lite",
+            "model": "LongCat-2.0-Preview",
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
@@ -93,9 +93,9 @@ mod tests {
     #[test]
     fn yaml_non_capable_model_stays_plain_ok() {
         let providers = ProvidersConfig::default();
-        let provider = InferenceProvider::Named("longcat".into());
+        let provider = InferenceProvider::Named("ollama-cloud".into());
         let body = json!({
-            "model": "LongCat-Flash-Thinking",
+            "model": "deepseek-v4-pro",
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {

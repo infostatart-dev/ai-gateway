@@ -9,12 +9,15 @@ mod failover_integration;
 mod failover_loop;
 mod failure;
 mod health;
+mod health_registry;
 mod intent_acceptance;
 mod intent_selection;
 mod ladder_filter;
 mod ladder_rank;
+mod memory;
 mod new_router;
 mod payload;
+pub(crate) mod plan;
 mod rank;
 mod rank_score;
 mod selection;
@@ -39,20 +42,24 @@ mod chatgpt_web_tests;
 mod credential_failover;
 
 #[cfg(feature = "testing")]
-pub(crate) use call::{
-    clear_test_call_responses, push_test_call_response,
+pub use call::{
+    clear_test_call_responses, install_upstream_mock, push_test_call_response,
     push_test_call_response_for_credential,
 };
 #[cfg(feature = "testing")]
-pub(crate) use failover_loop::run_failover_candidates;
+pub use failover_loop::run_failover_candidates;
+pub use health_registry::{CredentialHealthRegistry, RoutingHealthSnapshot};
+#[cfg(feature = "testing")]
+pub use memory::RouteBinding;
+pub use memory::WorkUnitRouteMemory;
 pub(crate) use rank::default_provider_budget_rank;
 #[cfg(feature = "testing")]
-pub(crate) use test_support::{
+pub use test_support::{
     balance_ranked, chatgpt_candidate, deep_paid_candidate,
     deepseek_model_candidate, deepseek_slots, empty_router, gemini_candidate,
     gemini_model_candidate, gemini_slots, groq_candidate,
     intent_autodefault_router, openrouter_model_candidate, ordered_candidates,
-    ordered_candidates_for_source, request_parts, router_with_candidates,
-    scout_candidate,
+    ordered_candidates_for_source, request_parts, router_app_state,
+    router_with_candidates, scout_candidate,
 };
-pub use types::BudgetAwareRouter;
+pub use types::{BudgetAwareRouter, BudgetCandidate};

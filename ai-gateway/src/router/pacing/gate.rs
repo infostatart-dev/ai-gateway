@@ -98,6 +98,20 @@ impl PacingGate {
         &self.limits
     }
 
+    /// Read-only estimate of wait until the next pacing slot (no permit
+    /// acquired).
+    pub async fn peek_next_wait(&self, estimated_tokens: u32) -> Duration {
+        self.next_wait(Instant::now(), estimated_tokens).await
+    }
+
+    /// Whether daily RPD/TPD quota still has headroom for `estimated_tokens`.
+    pub async fn daily_headroom_available(
+        &self,
+        estimated_tokens: u32,
+    ) -> bool {
+        self.check_daily(estimated_tokens).await.is_ok()
+    }
+
     async fn check_daily(&self, estimated_tokens: u32) -> Result<(), Duration> {
         let mut state = self.state.lock().await;
         match state.daily.would_reject(
@@ -211,5 +225,22 @@ mod tests {
         });
         gate.acquire(80).await.unwrap();
         assert!(gate.acquire(30).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn peek_next_wait_is_read_only() {
+        let gate = PacingGate::new(PacingLimits {
+            concurrent: 1,
+            rpm: 60,
+            tpm: None,
+            rpd: None,
+            tpd: None,
+            daily_reset_utc_hour: 0,
+            min_interval: Duration::from_millis(100),
+            max_queue_wait: Duration::from_secs(1),
+        });
+        let _hold = gate.acquire(0).await.unwrap();
+        let peek = gate.peek_next_wait(0).await;
+        assert!(peek >= Duration::from_millis(90));
     }
 }

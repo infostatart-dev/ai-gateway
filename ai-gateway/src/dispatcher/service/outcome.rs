@@ -225,6 +225,7 @@ impl Dispatcher {
             reported_usage,
             request_body: Some(&outcome.req_body_bytes),
             failover_class: None,
+            agent_name: None,
         };
         crate::metrics::provider::attach_usage_header(
             &self.app_state,

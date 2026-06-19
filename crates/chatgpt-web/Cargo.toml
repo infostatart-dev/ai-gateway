@@ -33,6 +33,7 @@ default = []
 login = ["dep:chromiumoxide", "dep:futures"]
 
 [dev-dependencies]
+gateway-tests = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 serial_test = { workspace = true }
 

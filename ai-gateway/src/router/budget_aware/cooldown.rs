@@ -16,24 +16,26 @@ impl BudgetAwareRouter {
             credential_id: candidate.credential_id.clone(),
             model: model.clone(),
         };
-        let remaining = {
+        let now = Instant::now();
+        let model_remaining = {
             let model_states = lock_model_states(&self.model_states);
-            let model_remaining = model_states
+            model_states
                 .get(&model_key)
                 .and_then(|state| state.cooldown_until)
-                .and_then(|until| until.checked_duration_since(Instant::now()));
-            if model_remaining.is_some() {
-                model_remaining
-            } else {
-                let states = lock_credential_states(&self.states);
-                states
-                    .get(&candidate.credential_id)
-                    .and_then(|state| state.cooldown_until)
-                    .and_then(|until| {
-                        until.checked_duration_since(Instant::now())
-                    })
-            }
+                .and_then(|until| until.checked_duration_since(now))
         };
+        let slot_remaining = {
+            let states = lock_credential_states(&self.states);
+            states
+                .get(&candidate.credential_id)
+                .and_then(|state| state.cooldown_until)
+                .and_then(|until| until.checked_duration_since(now))
+        };
+        let pacing_wait = self.pacing_wait(candidate).await;
+        let remaining = [model_remaining, slot_remaining, pacing_wait]
+            .into_iter()
+            .flatten()
+            .max();
 
         let Some(remaining) = remaining else {
             return true;
@@ -70,5 +72,23 @@ impl BudgetAwareRouter {
         );
         tokio::time::sleep(remaining).await;
         true
+    }
+
+    async fn pacing_wait(
+        &self,
+        candidate: &BudgetCandidate,
+    ) -> Option<std::time::Duration> {
+        let gate = self.app_state.upstream_pacing().gate_for(
+            &candidate.capability.provider,
+            Some(&candidate.credential_id),
+            Some(candidate.credential_tier.as_str()),
+            Some(&candidate.capability.model.to_string()),
+        )?;
+        let wait = gate.peek_next_wait(0).await;
+        if wait > std::time::Duration::ZERO {
+            Some(wait)
+        } else {
+            None
+        }
     }
 }

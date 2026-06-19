@@ -31,3 +31,6 @@ uuid = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+gateway-tests = { workspace = true }

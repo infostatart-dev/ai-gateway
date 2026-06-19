@@ -66,6 +66,8 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
         Arc::new(crate::router::budget_probe::BudgetProbeRegistry::new(
             config.provider_limits.clone(),
         ));
+    let route_memory =
+        Arc::new(crate::router::budget_aware::WorkUnitRouteMemory::new());
 
     Ok(AppState(Arc::new(InnerAppState {
         config,
@@ -93,5 +95,6 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
         policy_store: decision_state.policy_store,
         upstream_pacing,
         budget_probe,
+        route_memory,
     })))
 }

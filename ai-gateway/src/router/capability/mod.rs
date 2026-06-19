@@ -110,6 +110,7 @@ pub fn extract_requirements(req_body: &Bytes) -> RequestRequirements {
         .unwrap_or_default()
 }
 
+#[must_use]
 pub fn extract_requirements_from_value(
     value: &serde_json::Value,
 ) -> RequestRequirements {
@@ -223,7 +224,8 @@ pub(crate) fn extract_source_model(req_body: &Bytes) -> Option<ModelId> {
     extract_source_model_from_value(&value)
 }
 
-pub(crate) fn extract_source_model_from_value(
+#[must_use]
+pub fn extract_source_model_from_value(
     value: &serde_json::Value,
 ) -> Option<ModelId> {
     let model = value.get("model").and_then(|v| v.as_str())?;

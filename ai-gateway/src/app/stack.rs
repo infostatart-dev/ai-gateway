@@ -77,6 +77,7 @@ pub async fn build_service_stack(
         .layer(ErrorHandlerLayer::new(app_state.clone()))
         .layer(ResponseHeaderLayer::new(
             app_state.response_headers_config(),
+            app_state.observability_config().response_headers,
         ))
         .map_err(crate::error::internal::InternalError::BufferError)
         .layer(BufferLayer::new(1024))

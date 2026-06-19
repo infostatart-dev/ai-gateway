@@ -12,3 +12,6 @@ chromiumoxide = { workspace = true }
 futures = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
+
+[dev-dependencies]
+gateway-tests = { workspace = true }

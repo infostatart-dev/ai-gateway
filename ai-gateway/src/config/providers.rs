@@ -289,8 +289,8 @@ mod tests {
     fn longcat_model_id_strips_gateway_prefix() {
         use std::str::FromStr;
 
-        let model = ModelId::from_str("longcat/LongCat-Flash-Lite").unwrap();
-        assert_eq!(model.to_string(), "LongCat-Flash-Lite");
+        let model = ModelId::from_str("longcat/LongCat-2.0-Preview").unwrap();
+        assert_eq!(model.to_string(), "LongCat-2.0-preview");
     }
 
     #[test]

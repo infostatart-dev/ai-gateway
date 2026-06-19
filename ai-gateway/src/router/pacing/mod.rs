@@ -2,15 +2,14 @@
 //! provider account scope.
 
 mod daily;
-mod gate;
-mod limits;
+pub(crate) mod gate;
+pub(crate) mod limits;
 mod registry;
 mod scope;
 mod tpm;
 mod window;
 
-pub use gate::{PacingGate, PacingPermit};
-pub use limits::PacingLimits;
+use gate::PacingPermit;
 pub use registry::PacingRegistry;
 
 use crate::{

@@ -19,6 +19,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+gateway-tests = { workspace = true }
 tokio-test = { workspace = true }
 
 [lints]

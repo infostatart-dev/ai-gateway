@@ -243,21 +243,26 @@ mod cloudflare {
 
 fn longcat(cap: &mut ModelCapability, model_name: &str) {
     cap.supports_tools = true;
-    cap.context_window = Some(131_072);
-    cap.supports_json_schema =
-        !model_name.contains("Thinking") && !model_name.contains("Omni");
-    if model_name.contains("Thinking") {
-        cap.reasoning = true;
-    }
+    cap.context_window = Some(1_048_576);
+    cap.supports_json_schema = !model_name.contains("Thinking");
 }
 
 fn ollama_cloud(cap: &mut ModelCapability, model_name: &str) {
     cap.supports_tools = true;
-    cap.context_window = Some(262_144);
-    cap.supports_json_schema = model_name.contains("kimi");
-    if model_name.contains("deepseek") {
-        cap.reasoning = true;
-    }
+    cap.context_window = Some(
+        if model_name.contains("m3") || model_name.contains("v4-flash") {
+            1_048_576
+        } else {
+            262_144
+        },
+    );
+    cap.supports_json_schema = false;
+    cap.supports_vision = model_name.contains("kimi")
+        || model_name.contains("gemma")
+        || model_name.contains("qwen3.5")
+        || model_name.contains("minimax-m3")
+        || model_name.contains("gemini-3-flash");
+    cap.reasoning = true;
 }
 
 fn sambanova(cap: &mut ModelCapability, model_name: &str) {

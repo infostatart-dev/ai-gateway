@@ -30,7 +30,8 @@ use crate::{
     },
 };
 
-pub(crate) fn intent_autodefault_router(
+#[must_use]
+pub fn intent_autodefault_router(
     app_state: &AppState,
     candidates: Vec<BudgetCandidate>,
 ) -> BudgetAwareRouter {
@@ -62,7 +63,7 @@ pub(crate) fn intent_autodefault_router(
     }
 }
 
-pub(crate) async fn scout_candidate(
+pub async fn scout_candidate(
     app_state: &AppState,
     credential_id: &str,
 ) -> BudgetCandidate {
@@ -105,9 +106,7 @@ pub(crate) async fn scout_candidate(
     }
 }
 
-pub(crate) async fn deep_paid_candidate(
-    app_state: &AppState,
-) -> BudgetCandidate {
+pub async fn deep_paid_candidate(app_state: &AppState) -> BudgetCandidate {
     let provider = InferenceProvider::Anthropic;
     let cred = ProviderCredentialId::new("anthropic-test");
     let model_id =
@@ -145,7 +144,8 @@ pub(crate) async fn deep_paid_candidate(
     }
 }
 
-pub(crate) fn empty_router(app_state: &AppState) -> BudgetAwareRouter {
+#[must_use]
+pub fn empty_router(app_state: &AppState) -> BudgetAwareRouter {
     BudgetAwareRouter {
         app_state: app_state.clone(),
         router_id: RouterId::Named("routing-load".into()),
@@ -168,14 +168,21 @@ pub(crate) fn empty_router(app_state: &AppState) -> BudgetAwareRouter {
     }
 }
 
-pub(crate) fn balance_ranked(
+#[must_use]
+pub fn router_app_state(router: &BudgetAwareRouter) -> &AppState {
+    &router.app_state
+}
+
+#[must_use]
+pub fn balance_ranked(
     router: &BudgetAwareRouter,
     ranked: Vec<BudgetCandidate>,
 ) -> Vec<BudgetCandidate> {
     router.credential_round_robin.balance(ranked)
 }
 
-pub(crate) fn router_with_candidates(
+#[must_use]
+pub fn router_with_candidates(
     app_state: &AppState,
     candidates: Vec<BudgetCandidate>,
 ) -> BudgetAwareRouter {
@@ -184,14 +191,14 @@ pub(crate) fn router_with_candidates(
     router
 }
 
-pub(crate) fn ordered_candidates(
+pub fn ordered_candidates(
     router: &BudgetAwareRouter,
     requirements: &crate::router::capability::RequestRequirements,
 ) -> Result<Vec<BudgetCandidate>, crate::error::internal::InternalError> {
     router.ordered_candidates(requirements, None)
 }
 
-pub(crate) fn ordered_candidates_for_source(
+pub fn ordered_candidates_for_source(
     router: &BudgetAwareRouter,
     requirements: &crate::router::capability::RequestRequirements,
     source_model: &ModelId,
@@ -199,7 +206,7 @@ pub(crate) fn ordered_candidates_for_source(
     router.ordered_candidates(requirements, Some(source_model))
 }
 
-pub(crate) async fn gemini_model_candidate(
+pub async fn gemini_model_candidate(
     app_state: &AppState,
     credential_id: &str,
     model: &str,
@@ -216,7 +223,7 @@ pub(crate) async fn gemini_model_candidate(
     .await
 }
 
-pub(crate) async fn openrouter_model_candidate(
+pub async fn openrouter_model_candidate(
     app_state: &AppState,
     credential_id: &str,
     model: &str,
@@ -233,7 +240,7 @@ pub(crate) async fn openrouter_model_candidate(
     .await
 }
 
-pub(crate) async fn deepseek_model_candidate(
+pub async fn deepseek_model_candidate(
     app_state: &AppState,
     credential_id: &str,
     model: &str,
@@ -250,7 +257,7 @@ pub(crate) async fn deepseek_model_candidate(
     .await
 }
 
-pub(crate) async fn deepseek_slots(
+pub async fn deepseek_slots(
     app_state: &AppState,
     count: u8,
 ) -> Vec<BudgetCandidate> {
@@ -272,7 +279,7 @@ pub(crate) async fn deepseek_slots(
     out
 }
 
-pub(crate) async fn gemini_candidate(
+pub async fn gemini_candidate(
     app_state: &AppState,
     credential_id: &str,
     budget_rank: u16,
@@ -290,7 +297,7 @@ pub(crate) async fn gemini_candidate(
     .await
 }
 
-pub(crate) async fn groq_candidate(app_state: &AppState) -> BudgetCandidate {
+pub async fn groq_candidate(app_state: &AppState) -> BudgetCandidate {
     build_candidate(
         app_state,
         InferenceProvider::Named("groq".into()),
@@ -303,7 +310,7 @@ pub(crate) async fn groq_candidate(app_state: &AppState) -> BudgetCandidate {
     .await
 }
 
-pub(crate) async fn chatgpt_candidate(app_state: &AppState) -> BudgetCandidate {
+pub async fn chatgpt_candidate(app_state: &AppState) -> BudgetCandidate {
     let provider = InferenceProvider::Named("chatgpt-web".into());
     let cred = ProviderCredentialId::new("chatgpt-web-default");
     let model_id =
@@ -340,7 +347,7 @@ pub(crate) async fn chatgpt_candidate(app_state: &AppState) -> BudgetCandidate {
     }
 }
 
-pub(crate) async fn gemini_slots(
+pub async fn gemini_slots(
     app_state: &AppState,
     count: u8,
 ) -> Vec<BudgetCandidate> {
@@ -360,7 +367,7 @@ pub(crate) async fn gemini_slots(
 }
 
 #[must_use]
-pub(crate) fn request_parts() -> http::request::Parts {
+pub fn request_parts() -> http::request::Parts {
     http::Request::builder()
         .method(http::Method::POST)
         .uri("/v1/chat/completions")

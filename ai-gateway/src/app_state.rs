@@ -57,7 +57,11 @@ impl AppState {
         provider: Option<&str>,
         credential: Option<&str>,
     ) -> crate::metrics::provider::ProviderStatsSnapshot {
-        self.0.metrics.provider.snapshot(provider, credential)
+        self.0.metrics.provider.snapshot_with_credentials(
+            &self.0.config.credentials,
+            provider,
+            credential,
+        )
     }
 
     #[must_use]
@@ -82,6 +86,20 @@ impl AppState {
         &self,
     ) -> &Arc<crate::router::pacing::PacingRegistry> {
         &self.0.upstream_pacing
+    }
+
+    #[must_use]
+    pub fn route_memory(
+        &self,
+    ) -> &Arc<crate::router::budget_aware::WorkUnitRouteMemory> {
+        &self.0.route_memory
+    }
+
+    #[must_use]
+    pub fn credential_health(
+        &self,
+    ) -> &Arc<crate::router::budget_aware::CredentialHealthRegistry> {
+        &self.0.metrics.provider.health
     }
 }
 
@@ -116,6 +134,7 @@ pub struct InnerAppState {
     pub policy_store: Arc<dyn crate::middleware::decision::policy::PolicyStore>,
     pub upstream_pacing: Arc<crate::router::pacing::PacingRegistry>,
     pub budget_probe: Arc<crate::router::budget_probe::BudgetProbeRegistry>,
+    pub route_memory: Arc<crate::router::budget_aware::WorkUnitRouteMemory>,
 }
 
 impl fmt::Debug for InnerAppState {

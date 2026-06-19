@@ -27,7 +27,7 @@ description = "Lib unit tests — incremental compile OK"
 run = "cargo test --all-features --lib"
 
 [tasks."coverage:lib"]
-description = "Line coverage for lib unit tests (slow — not part of predeploy)"
+description = "Workspace lib unit tests — same scope as CI and coverage:gate"
 env = { CARGO_INCREMENTAL = "0" }
 run = "cargo llvm-cov --workspace --all-features --lib --summary-only"
 

@@ -5,7 +5,8 @@ use crate::{
     types::{extensions::RoutedModelAndProvider, model_id::ModelId},
 };
 
-pub const REAL_MODE_MODEL_AND_PROVIDER: &str = "X-RealMode-Model-And-Provider";
+/// Lowercase header name — matches [`attach_routed_identity`].
+pub const REAL_MODE_MODEL_AND_PROVIDER: &str = "x-realmode-model-and-provider";
 
 pub fn format_routed_identity(
     credential_id: &ProviderCredentialId,
@@ -25,7 +26,7 @@ pub fn attach_routed_identity<B>(
         .insert(RoutedModelAndProvider(identity.clone()));
     if let Ok(header_value) = HeaderValue::from_str(&identity) {
         response.headers_mut().insert(
-            http::HeaderName::from_static("x-realmode-model-and-provider"),
+            http::HeaderName::from_static(REAL_MODE_MODEL_AND_PROVIDER),
             header_value,
         );
     }

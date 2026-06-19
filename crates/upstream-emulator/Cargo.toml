@@ -26,6 +26,7 @@ web-structured-output = { workspace = true }
 tiktoken-rs = { version = "0.12.0", default-features = false }
 
 [dev-dependencies]
+gateway-tests = { workspace = true }
 reqwest = { workspace = true }
 
 [[bin]]

@@ -52,6 +52,17 @@ fn attempts(snapshot: &Value, provider: &str) -> u64 {
         .unwrap_or(0)
 }
 
+fn credential_row<'a>(
+    snapshot: &'a Value,
+    provider: &str,
+    credential: &str,
+) -> Option<&'a Value> {
+    snapshot.get("providers")?.as_array()?.iter().find(|row| {
+        row.get("provider").and_then(Value::as_str) == Some(provider)
+            && row.get("credential").and_then(Value::as_str) == Some(credential)
+    })
+}
+
 async fn fetch_stats(harness: &mut Harness, path: &str) -> Value {
     let request = Request::builder()
         .method(Method::GET)
@@ -142,6 +153,59 @@ async fn provider_stats_public_and_aggregates_two_providers() {
         .unwrap();
     let response = harness.call(authed_probe).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+#[serial_test::serial(default_mock)]
+async fn provider_stats_includes_idle_configured_credentials() {
+    let mut config = Config::test_default();
+    config.helicone.features = HeliconeFeatures::None;
+
+    let mock_args = MockArgs::builder()
+        .stubs(HashMap::from([
+            ("success:minio:upload_request", 0.into()),
+            ("success:jawn:log_request", 0.into()),
+        ]))
+        .build();
+    let mut harness = Harness::builder()
+        .with_config(config)
+        .with_mock_args(mock_args)
+        .build()
+        .await;
+
+    let snapshot =
+        fetch_stats(&mut harness, "/v1/observability/provider-stats").await;
+    let providers = snapshot
+        .get("providers")
+        .and_then(Value::as_array)
+        .expect("providers array");
+    assert!(
+        !providers.is_empty(),
+        "configured credentials should appear as idle rows"
+    );
+    let idle = providers
+        .iter()
+        .filter(|row| row.get("status").and_then(Value::as_str) == Some("idle"))
+        .count();
+    assert!(
+        idle > 0,
+        "at least one credential should be idle before any traffic"
+    );
+    let row = credential_row(&snapshot, "openai", "default")
+        .or_else(|| credential_row(&snapshot, "openai", "openai-default"));
+    if let Some(row) = row {
+        assert_eq!(row.get("status").and_then(Value::as_str), Some("idle"));
+        assert_eq!(
+            row.get("calls")
+                .and_then(|c| c.get("attempts"))
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        let health = row.get("routing_health").expect("routing_health object");
+        assert_eq!(health.get("circuit_open"), Some(&json!(false)));
+        assert_eq!(health.get("planner_excluded"), Some(&json!(false)));
+        assert!(health.get("success_rate").is_some());
+    }
 }
 
 #[tokio::test]
@@ -244,7 +308,10 @@ async fn usage_header_absent_when_disabled() {
     config.helicone.features = HeliconeFeatures::None;
     config.observability = ObservabilityConfig {
         estimate_tokens: true,
-        response_headers: ObservabilityResponseHeadersConfig { enabled: false },
+        response_headers: ObservabilityResponseHeadersConfig {
+            enabled: false,
+            echo_work_unit_id: true,
+        },
     };
 
     let mock_args = MockArgs::builder()
@@ -275,4 +342,32 @@ async fn usage_header_absent_when_disabled() {
         "header must be omitted when disabled"
     );
     drain(response).await;
+}
+
+#[tokio::test]
+#[serial_test::serial(default_mock)]
+async fn attempt_record_includes_agent_name_attribute() {
+    use ai_gateway::{
+        metrics::provider::{RecordAttemptInput, build_attempt_record},
+        types::extensions::RequestKind,
+    };
+
+    let record = build_attempt_record(&RecordAttemptInput {
+        provider: &ai_gateway::types::provider::InferenceProvider::OpenAI,
+        credential: "default",
+        model: None,
+        router_id: None,
+        attempt: None,
+        status: http::StatusCode::OK,
+        stream: false,
+        request_kind: RequestKind::Router,
+        duration_ms: 12.0,
+        tfft_ms: None,
+        reported_usage: ai_gateway::metrics::llm::TokenUsage::default(),
+        request_body: None,
+        estimate_tokens: false,
+        failover_class: None,
+        agent_name: Some("invoker-alpha"),
+    });
+    assert_eq!(record.agent_name.as_deref(), Some("invoker-alpha"));
 }
