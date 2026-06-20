@@ -32,45 +32,30 @@ pub fn resolve_pacing_scope(
     quota_profile: ProviderQuotaProfile,
 ) -> PacingScope {
     if is_chatgpt_web(provider) {
-        let path = credential_id
-            .map(ProviderCredentialId::as_str)
-            .and_then(chatgpt_session_path)
-            .map_or_else(
-                || {
-                    credential_id
-                        .map(|id| format!("credential:{}", id.as_str()))
-                        .unwrap_or_else(|| "missing-session".into())
-                },
-                |p| p.display().to_string(),
-            );
+        let path = session_scope_key(
+            credential_id,
+            credential_id
+                .map(ProviderCredentialId::as_str)
+                .and_then(chatgpt_session_path),
+        );
         return PacingScope::Session(path);
     }
     if is_deepseek_web(provider) {
-        let path = credential_id
-            .map(ProviderCredentialId::as_str)
-            .and_then(deepseek_session_path)
-            .map_or_else(
-                || {
-                    credential_id
-                        .map(|id| format!("credential:{}", id.as_str()))
-                        .unwrap_or_else(|| "missing-session".into())
-                },
-                |p| p.display().to_string(),
-            );
+        let path = session_scope_key(
+            credential_id,
+            credential_id
+                .map(ProviderCredentialId::as_str)
+                .and_then(deepseek_session_path),
+        );
         return PacingScope::Session(path);
     }
     if is_perplexity_web(provider) {
-        let path = credential_id
-            .map(ProviderCredentialId::as_str)
-            .and_then(perplexity_session_path)
-            .map_or_else(
-                || {
-                    credential_id
-                        .map(|id| format!("credential:{}", id.as_str()))
-                        .unwrap_or_else(|| "missing-session".into())
-                },
-                |p| p.display().to_string(),
-            );
+        let path = session_scope_key(
+            credential_id,
+            credential_id
+                .map(ProviderCredentialId::as_str)
+                .and_then(perplexity_session_path),
+        );
         return PacingScope::Session(path);
     }
     let credential = credential_id
@@ -84,6 +69,21 @@ pub fn resolve_pacing_scope(
         };
     }
     PacingScope::Credential(credential)
+}
+
+fn session_scope_key(
+    credential_id: Option<&ProviderCredentialId>,
+    session_path: Option<std::path::PathBuf>,
+) -> String {
+    session_path.map_or_else(
+        || {
+            credential_id.map_or_else(
+                || "missing-session".into(),
+                |id| format!("credential:{}", id.as_str()),
+            )
+        },
+        |path| path.display().to_string(),
+    )
 }
 
 #[must_use]
