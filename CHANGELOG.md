@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.5.5] - 2026-06-20
+
+**Quota admission control** for autodefault: the router now treats upstream limits as a
+hierarchical feasibility tree (tier → account → model) and refuses planned hops that
+cannot succeed — instead of probing with HTTP or short sleeps. Production failover rates
+drop when free-tier pools are saturated; operators get explicit signals when the gateway
+violates its own admission contract.
+
+### Features
+
+- **Hierarchical `QuotaAdmission`:** catalog-driven `PacingScope` ladder (L0 tier → L1
+  account → L2 model) answers «callable now?» before each planned hop
+- **Strict admission:** `headroom_score = 0` when any scope reports `next_wait > 0`; no
+  sleep-probe on intermediate hops — infeasible candidates skip without attempt counters
+- **Hop-time re-admit:** route planner and failover walk re-evaluate admission before
+  every hop; parallel work units spread across distinct feasible credential slots
+- **Upstream reconcile:** `apply_upstream_reconcile` on `PacingGate` after classified 429
+  responses so local pacing reflects upstream reset windows
+- **Repeat-429 guard:** upstream 429 on a hop already marked infeasible increments
+  `repeat_429_violations` (provider-stats + `gateway_repeat_429_violations_total` OTel)
+  — a gateway contract violation, not another cooldown extension
+
+### Changed
+
+- Failover loop skips infeasible hops with trace `skipped` instead of burning attempt budget
+- Quota snapshot and plan scoring use strict zero-wait semantics end-to-end
+- Provider-stats routing snapshot exposes `repeat_429_violations`; async enrichment path for
+  quota observability fields on credential rows
+
+### Verification
+
+- Unit: `quota_admission`, strict headroom in `budget_aware_plan` / snapshot paths
+- Integration: `routing_load` scenarios — zero-repeat-429, parallel account spread,
+  per-session DeepSeek, LongCat TPD, hop re-admit
+
+### Planning (OpenSpec)
+
+- Shipped **`hierarchical-quota-admission`** → living spec `quota-admission-control`
+- Archived superseded **`proactive-quota-scheduling`**; synced ops hardening, control-plane
+  startup, upstream failure signals, and related capabilities into `openspec/specs/` (27 total)
+- Phase 2 follow-up: **`distributed-quota-state`** (Redis shared counters for horizontal gateways)
+
 ## [0.5.4] - 2026-06-19
 
 Planning and local-dev fixes after verified Ollama Cloud behavior in dev.

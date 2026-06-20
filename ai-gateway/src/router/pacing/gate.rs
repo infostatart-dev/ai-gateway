@@ -19,6 +19,7 @@ struct GateState {
     tpm: TpmWindow,
     daily: DailyQuotaWindow,
     last_start: Option<Instant>,
+    upstream_reconcile_until: Option<Instant>,
 }
 
 /// Composite gate: concurrent + RPM/TPM minute windows + RPD/TPD daily quota.
@@ -40,6 +41,7 @@ impl PacingGate {
                 tpm: TpmWindow::default(),
                 daily: DailyQuotaWindow::new(daily_reset),
                 last_start: None,
+                upstream_reconcile_until: None,
             }),
         }
     }
@@ -112,6 +114,31 @@ impl PacingGate {
         self.check_daily(estimated_tokens).await.is_ok()
     }
 
+    /// Wait until upstream reconcile block expires (read-only).
+    pub async fn upstream_reconcile_wait(&self, now: Instant) -> Duration {
+        let state = self.state.lock().await;
+        state
+            .upstream_reconcile_until
+            .and_then(|until| until.checked_duration_since(now))
+            .unwrap_or(Duration::ZERO)
+    }
+
+    /// Block further admits until `until` after upstream quota truth.
+    pub async fn apply_upstream_reconcile(&self, until: Instant) {
+        let mut state = self.state.lock().await;
+        state.upstream_reconcile_until = Some(
+            state
+                .upstream_reconcile_until
+                .map_or(until, |prev| prev.max(until)),
+        );
+    }
+
+    /// Seconds until the daily quota window resets when RPD/TPD is exhausted.
+    pub async fn daily_reset_wait(&self) -> Duration {
+        let state = self.state.lock().await;
+        Duration::from_secs(state.daily.seconds_until_reset())
+    }
+
     async fn check_daily(&self, estimated_tokens: u32) -> Result<(), Duration> {
         let mut state = self.state.lock().await;
         match state.daily.would_reject(
@@ -141,7 +168,14 @@ impl PacingGate {
                 .min_interval
                 .saturating_sub(now.duration_since(last))
         });
-        rpm_wait.max(tpm_wait).max(interval_wait)
+        let reconcile_wait = state
+            .upstream_reconcile_until
+            .and_then(|until| until.checked_duration_since(now))
+            .unwrap_or(Duration::ZERO);
+        rpm_wait
+            .max(tpm_wait)
+            .max(interval_wait)
+            .max(reconcile_wait)
     }
 }
 

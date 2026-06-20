@@ -116,6 +116,26 @@ routing_load_test!(
     scenarios::route_memory_invalidate_on_429::run
 );
 routing_load_test!(
+    admission_zero_repeat_429,
+    scenarios::admission_zero_repeat_429::run
+);
+routing_load_test!(
+    admission_parallel_account_spread,
+    scenarios::admission_parallel_account_spread::run
+);
+routing_load_test!(
+    admission_hop_readmit,
+    scenarios::admission_hop_readmit::run
+);
+routing_load_test!(
+    admission_longcat_tpd,
+    scenarios::admission_longcat_tpd::run
+);
+routing_load_test!(
+    admission_per_session_deepseek,
+    scenarios::admission_per_session_deepseek::run
+);
+routing_load_test!(
     quota_parallel_collision,
     scenarios::quota_parallel_collision::run
 );

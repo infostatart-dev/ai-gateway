@@ -20,6 +20,7 @@ pub struct GatewayProviderMetrics {
     pub calls: Counter<u64>,
     pub responses_by_status: Counter<u64>,
     pub tokens: Counter<u64>,
+    pub repeat_429_violations: Counter<u64>,
     pub request_duration_ms: Histogram<f64>,
     pub tfft_ms: Histogram<f64>,
     pub generation_ms_per_output_token: Histogram<f64>,
@@ -39,6 +40,7 @@ pub struct ProviderRuntimeRegistry {
 struct RoutingTotals {
     client_requests: u64,
     requests_with_failover: u64,
+    repeat_429_violations: u64,
 }
 
 #[derive(Debug)]
@@ -80,6 +82,8 @@ pub struct ProviderStatsSnapshot {
     pub started_at: DateTime<Utc>,
     pub uptime_seconds: u64,
     pub providers: Vec<ProviderStatsRow>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub quota: Vec<super::quota_observability::QuotaProviderRow>,
     pub routing: RoutingSnapshot,
 }
 
@@ -102,6 +106,14 @@ pub struct ProviderStatsRow {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub routing_health:
         Option<crate::router::budget_aware::RoutingHealthSnapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quota_profile: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_available_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocked_reason: Option<crate::router::quota_admission::BlockedReason>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub models: Option<Vec<super::quota_observability::QuotaModelRow>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -142,6 +154,7 @@ pub struct RoutingSnapshot {
     pub client_requests: u64,
     pub requests_with_failover: u64,
     pub failover_rate: f64,
+    pub repeat_429_violations: u64,
 }
 
 pub struct AttemptRecord {
@@ -179,6 +192,13 @@ impl GatewayProviderMetrics {
                 .u64_counter("gateway_provider_tokens_total")
                 .with_unit("{token}")
                 .with_description("Tokens per upstream attempt")
+                .build(),
+            repeat_429_violations: meter
+                .u64_counter("gateway_repeat_429_violations_total")
+                .with_description(
+                    "Upstream 429 on scopes that were infeasible at hop admit \
+                     time",
+                )
                 .build(),
             request_duration_ms: meter
                 .f64_histogram("gateway_provider_request_duration_ms")
@@ -272,6 +292,11 @@ impl GatewayProviderMetrics {
         self.runtime.record_client_request(had_failover);
     }
 
+    pub fn record_repeat_429_violation(&self) {
+        self.repeat_429_violations.add(1, &[]);
+        self.runtime.record_repeat_429_violation();
+    }
+
     #[must_use]
     pub fn snapshot(
         &self,
@@ -316,6 +341,12 @@ impl ProviderRuntimeRegistry {
             routing.requests_with_failover =
                 routing.requests_with_failover.saturating_add(1);
         }
+    }
+
+    fn record_repeat_429_violation(&self) {
+        let mut routing = self.routing.lock().expect("routing totals");
+        routing.repeat_429_violations =
+            routing.repeat_429_violations.saturating_add(1);
     }
 
     fn record_attempt(
@@ -405,10 +436,12 @@ impl ProviderRuntimeRegistry {
             started_at,
             uptime_seconds,
             providers: rows,
+            quota: Vec::new(),
             routing: RoutingSnapshot {
                 client_requests: routing.client_requests,
                 requests_with_failover: routing.requests_with_failover,
                 failover_rate,
+                repeat_429_violations: routing.repeat_429_violations,
             },
         }
     }
@@ -462,6 +495,10 @@ impl ProviderRuntimeEntry {
             last_status_code: self.last_status_code,
             status: None,
             routing_health: None,
+            quota_profile: None,
+            next_available_at: None,
+            blocked_reason: None,
+            models: None,
         }
     }
 }
@@ -530,6 +567,10 @@ fn idle_provider_row(provider: String, credential: String) -> ProviderStatsRow {
         last_status_code: None,
         status: Some("idle".to_string()),
         routing_health: None,
+        quota_profile: None,
+        next_available_at: None,
+        blocked_reason: None,
+        models: None,
     }
 }
 
@@ -575,6 +616,7 @@ impl Clone for RoutingTotals {
         Self {
             client_requests: self.client_requests,
             requests_with_failover: self.requests_with_failover,
+            repeat_429_violations: self.repeat_429_violations,
         }
     }
 }

@@ -268,6 +268,23 @@ When sending `X-Work-Unit-Id` / session id:
 | `success_rate` | Rolling 5-minute success ratio |
 | `planner_excluded` | Credential skipped by route planner (circuit or dead slot) |
 
+### Quota admission observability
+
+`GET /v1/observability/provider-stats` exposes hierarchical quota state aligned
+with admission scopes:
+
+```text
+routing.repeat_429_violations   # root counter
+quota[]                           # provider → accounts[] → models[] (per-model)
+providers[].quota_profile         # per-model | per-slot | per-session
+providers[].next_available_at     # account-level (per-slot / per-session)
+providers[].blocked_reason        # rpm | rpd | upstream_reconcile | …
+providers[].models[]              # per-model slugs with own next_available_at
+```
+
+Admission blocks infeasible scopes before HTTP; `repeat_429_violations` increments
+only when a 429 still hits a scope that was infeasible at hop admit time.
+
 ### Route trace and replay
 
 Terminal route logs include `planned_hops`, `plan_rebuilds`, `route_memory_hit`,

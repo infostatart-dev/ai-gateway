@@ -5,25 +5,30 @@ TBD - created by archiving change client-context-route-planning. Update Purpose 
 ## Requirements
 ### Requirement: Plan short route chain before upstream walk
 
-Before the failover loop executes, the budget-aware router SHALL call
-`plan_route_chain` to produce an ordered list of at most **7** `BudgetCandidate`
-entries (configurable constant in code, not operator YAML in v1).
+Before the failover loop executes, the budget-aware router SHALL call `plan_route_chain` to
+produce an ordered list of at most **7** `BudgetCandidate` entries (configurable constant in code,
+not operator YAML in v1).
 
-The failover loop SHALL attempt only planned candidates in order. When the plan is
-exhausted without success, the router SHALL rebuild the plan once excluding failed
-hops. If the rebuilt plan is empty, the router SHALL return terminal failure.
+The failover loop SHALL attempt only planned candidates that pass hop-time re-admission. When the
+plan is exhausted without success, the router SHALL rebuild the plan once with a **fresh**
+`QuotaSnapshot`. If the rebuilt plan is empty, the router SHALL return terminal failure.
 
 #### Scenario: Successful request within plan length
 
-- **WHEN** the first planned candidate succeeds
+- **WHEN** the first feasible planned candidate succeeds
 - **THEN** upstream attempts equal 1
 - **AND** no candidate outside the plan is called
 
-#### Scenario: Plan rebuild after exhaustion
+#### Scenario: Plan rebuild uses fresh admission state
 
 - **WHEN** all candidates in the initial plan fail with failoverable errors
-- **AND** at least one viable candidate was excluded from the first plan only due to ordering
-- **THEN** the router rebuilds the plan once before returning terminal failure
+- **THEN** the router rebuilds the plan once with a new snapshot before terminal failure
+
+#### Scenario: Hop skipped when admission changes after plan
+
+- **WHEN** a planned hop was feasible at plan time
+- **AND** re-admission before dispatch shows infeasible
+- **THEN** the hop is skipped without HTTP
 
 #### Scenario: Plan caps hop count
 
@@ -82,15 +87,11 @@ behavior.
 
 ### Requirement: Stability escalation UP within plan before cross-provider hop
 
-The planner MUST, for Gemini free per-model ladders (`provider-ladders.yaml`),
-when preferred-band models on a credential are unavailable (cooldown, circuit, or
-quota exhausted per snapshot), append ladder hops **upward** on the **same**
-credential in order:
+The planner MUST append ladder hops **upward** on the **same** account only when each ladder model
+passes admission at plan time. The walk SHALL re-admit before each ladder hop.
 
-1. **capacity** band (`gemini-3.1-flash-lite`, `gemini-2.5-flash`)
-2. **stability** band (`gemini-2.5-flash-lite`)
-
-before switching to a different provider.
+Only feasible ladder models SHALL be appended. Stability escalation rules from
+`autodefault-intent-routing` remain unchanged.
 
 Stability escalation MUST NOT:
 
@@ -100,12 +101,17 @@ Stability escalation MUST NOT:
 - Select openrouter **deprioritized** models (e.g. nemotron) while Gemini stability
   band has headroom on any healthy slot
 
-#### Scenario: Fast band exhausted escalates to flash-lite on same slot
+#### Scenario: Fast band infeasible escalates to feasible flash-lite same account
 
-- **WHEN** a fast-thinking json request plans against `gemini-free-9`
-- **AND** fast-band models on that slot have zero quota headroom
-- **AND** `gemini-3.1-flash-lite` on the same slot has positive headroom
-- **THEN** the plan includes the flash-lite hop before any openrouter hop
+- **WHEN** fast-band models on `gemini-free-9` are infeasible
+- **AND** `gemini-3.1-flash-lite` on the same account is feasible
+- **THEN** the plan includes flash-lite before any cross-provider hop
+
+#### Scenario: Ladder omits infeasible intermediate models
+
+- **WHEN** fast-band and capacity-band models are infeasible
+- **AND** stability-band model is feasible
+- **THEN** the plan includes only the feasible stability-band hop
 
 #### Scenario: Stability band before cross-provider
 

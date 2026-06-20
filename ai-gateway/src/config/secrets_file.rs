@@ -119,7 +119,8 @@ impl SecretsFile {
     }
 
     /// Holds the global secrets install lock for the duration of a unit test.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
+    #[must_use]
     pub fn install_for_test(secrets: Self) -> InstalledSecretsGuard {
         InstalledSecretsGuard::install(secrets)
     }
@@ -188,16 +189,16 @@ impl SecretsFile {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testing"))]
 static TEST_INSTALL_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// Serializes tests that mutate the process-wide [`SecretsFile`] install slot.
-#[cfg(test)]
+#[cfg(any(test, feature = "testing"))]
 pub struct InstalledSecretsGuard {
     _lock: std::sync::MutexGuard<'static, ()>,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testing"))]
 impl InstalledSecretsGuard {
     fn install(secrets: SecretsFile) -> Self {
         let lock = TEST_INSTALL_MUTEX
@@ -209,7 +210,7 @@ impl InstalledSecretsGuard {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testing"))]
 impl Drop for InstalledSecretsGuard {
     fn drop(&mut self) {
         *INSTALLED.write().expect("secrets install lock poisoned") = None;

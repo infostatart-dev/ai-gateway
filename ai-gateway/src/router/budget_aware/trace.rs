@@ -60,6 +60,7 @@ pub(super) struct RouteTrace {
     source_model: Option<String>,
     json_schema_required: bool,
     replay: Option<crate::types::extensions::PlanReplaySnapshot>,
+    repeat_429_violations: u32,
 }
 
 impl RouteTrace {
@@ -88,6 +89,7 @@ impl RouteTrace {
             source_model: plan.and_then(|p| p.source_model.clone()),
             json_schema_required: plan.is_some_and(|p| p.json_schema_required),
             replay: plan.and_then(|p| p.replay.clone()),
+            repeat_429_violations: 0,
         }
     }
 
@@ -141,6 +143,11 @@ impl RouteTrace {
 
     pub(super) fn record_skipped(&mut self, count: usize) {
         self.skipped = self.skipped.saturating_add(count);
+    }
+
+    pub(super) fn record_repeat_429_violation(&mut self) {
+        self.repeat_429_violations =
+            self.repeat_429_violations.saturating_add(1);
     }
 
     pub(super) fn attempts(&self) -> u32 {

@@ -1,5 +1,6 @@
 pub mod attempt;
 pub mod dispatch;
+pub mod quota_observability;
 pub mod recorder;
 pub mod reservoir;
 pub mod runtime;

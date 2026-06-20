@@ -13,4 +13,4 @@ Planning lives in **`openspec/`**, not `.ai/` or `.todos/`.
 
 Before implementing a feature, check for an active change. Decision changes must record the chosen option in `design.md` before code lands.
 
-Cursor: `/opsx:propose`, `/opsx:apply`, `/opsx:archive`.
+Cursor: `/opsx:propose`, `/opsx:apply`, `/opsx:verify`, `/opsx:archive` (full list: [docs/planning.md](docs/planning.md)).

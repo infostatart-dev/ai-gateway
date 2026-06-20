@@ -59,7 +59,7 @@ pub fn build_chain(
         }
     }
     plan.truncate(MAX_PLAN_HOPS);
-    apply_spread(&mut plan, ctx.caller);
+    apply_spread(&mut plan, ctx.caller, &scored);
     plan
 }
 
@@ -202,21 +202,53 @@ fn deprioritized_while_gemini_stability_available(
     })
 }
 
-fn apply_spread(plan: &mut [BudgetCandidate], caller: &CallerRequestContext) {
+fn apply_spread(
+    plan: &mut [BudgetCandidate],
+    caller: &CallerRequestContext,
+    scored: &[(f64, BudgetCandidate)],
+) {
     let Some(work_unit) = caller.work_unit_id.as_deref() else {
         return;
     };
     if plan.is_empty() {
         return;
     }
-    let anchor = &plan[0];
-    let anchor_model = anchor.capability.model.to_string();
-    let anchor_provider = &anchor.capability.provider;
+    let anchor_model = plan[0].capability.model.to_string();
+    let anchor_provider = plan[0].capability.provider.clone();
+    let feasible_peers: Vec<BudgetCandidate> = scored
+        .iter()
+        .filter(|(_, candidate)| {
+            candidate.capability.provider == anchor_provider
+                && candidate.capability.model.to_string() == anchor_model
+        })
+        .map(|(_, candidate)| candidate.clone())
+        .collect();
+    if feasible_peers.is_empty() {
+        return;
+    }
+    let mut spread_pool: Vec<_> = feasible_peers
+        .iter()
+        .map(|candidate| candidate.credential_id.to_string())
+        .collect();
+    spread_pool.sort();
+    let idx = super::score::spread_pool_index(
+        &caller.agent_name,
+        work_unit,
+        &spread_pool,
+    );
+    if let Some(candidate) = feasible_peers
+        .iter()
+        .find(|candidate| candidate.credential_id.as_str() == spread_pool[idx])
+    {
+        plan[0] = candidate.clone();
+    }
+
     let peer_positions: Vec<usize> = plan
         .iter()
         .enumerate()
+        .skip(1)
         .filter(|(_, candidate)| {
-            candidate.capability.provider == *anchor_provider
+            candidate.capability.provider == anchor_provider
                 && candidate.capability.model.to_string() == anchor_model
         })
         .map(|(index, _)| index)

@@ -40,6 +40,7 @@ the response header use `usage.source=estimated` and classify the attempt as
 | `gateway_provider_request_duration_ms` | Histogram | wall time |
 | `gateway_provider_tfft_ms` | Histogram | streaming only |
 | `gateway_provider_generation_ms_per_output_token` | Histogram | `(duration_ms - tfft_ms) / max(output_tokens, 1)` |
+| `gateway_repeat_429_violations_total` | Counter | 429 on scopes infeasible at hop admit time |
 
 Shared attributes: `provider`, `credential`, `model`, `router_id`, `attempt_index`,
 `stream`, `request_kind`, `outcome`.

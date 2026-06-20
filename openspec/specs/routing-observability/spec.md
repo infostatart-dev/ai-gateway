@@ -108,7 +108,7 @@ The top-level provider-stats list SHALL remain per `(provider, credential)` in v
 ### Requirement: Route trace plan and memory metadata
 
 The per-request routing trace SHALL include `planned_hops`, `plan_rebuilds`,
-`agent_name`, `work_unit_id` (nullable), `route_memory_hit`, and
+`agent_name`, `work_unit_id`, `work_unit_source`, `route_memory_hit`, and
 `route_memory_invalidated` in structured log emission.
 
 #### Scenario: Plan metadata on multi-hop success
@@ -128,11 +128,12 @@ sufficient to reconstruct the operational routing decision without message seman
 
 The record SHALL include at minimum:
 
-- Request contract: `source_model`, `json_schema_required`, `agent_name`, `work_unit_id`
+- Request contract: `source_model`, `json_schema_required`, `agent_name`, `work_unit_id`,
+  `work_unit_source`
 - `plan_snapshot_ts` (instant or monotonic counter at plan time)
 - Plan metadata: `planned_hops`, `plan_rebuilds`, `route_memory_hit`, `route_memory_invalidated`
 - Winner hop 0: `credential_id`, `model_slug`, aggregate `score`
-- Score breakdown for winner: `h_success`, `q_headroom`, `q_cooldown_secs`, `m_affinity`,
+- Score breakdown for winner: `h_success`, `quota_capacity`, `q_cooldown_secs`, `m_affinity`,
   `hash_bias`, `l_band`, `cost_class`
 
 The record SHOULD include up to three next-best feasible alternatives with
@@ -144,7 +145,8 @@ incident analysis.
 #### Scenario: Trace supports incident replay
 
 - **WHEN** a routed request completes (success or terminal failure)
-- **THEN** structured route trace contains winner hop 0 score breakdown
+- **THEN** structured route trace contains winner hop 0 score breakdown with
+  `quota_capacity`
 - **AND** `plan_snapshot_ts` is present
 - **AND** no message body or prompt text is required to explain the hop-0 choice
 
@@ -153,4 +155,101 @@ incident analysis.
 - **WHEN** the router performs a plan rebuild after initial plan exhaustion
 - **THEN** route trace records `plan_rebuilds=1`
 - **AND** the terminal trace references the snapshot used for the successful or final hop
+
+### Requirement: Credential routing health in provider-stats
+
+`GET /v1/observability/provider-stats` SHALL include a `routing_health` object on each
+provider row with:
+
+- `circuit_open` (bool)
+- `open_until` (RFC3339 timestamp, present when `circuit_open` is true)
+- `success_rate` (float 0.0–1.0, rolling window)
+- `planner_excluded` (bool) — true when circuit is open or credential is dead in the
+  health registry
+
+Values SHALL reflect `CredentialHealthRegistry` state at snapshot time.
+
+#### Scenario: Circuit-open credential visible in stats
+
+- **WHEN** `gemini-free-8` has circuit-open in the health registry
+- **AND** provider-stats is queried
+- **THEN** the row for `gemini-free-8` includes `routing_health.circuit_open = true`
+- **AND** includes `routing_health.planner_excluded = true`
+
+#### Scenario: Healthy credential not excluded
+
+- **WHEN** `gemini-free-9` has no open circuit and success rate above threshold
+- **THEN** `routing_health.planner_excluded` is false
+
+#### Scenario: Idle configured credential includes health defaults
+
+- **WHEN** a configured credential has zero attempts since startup
+- **THEN** the idle row still includes `routing_health` with `circuit_open = false`
+- **AND** `success_rate = 1.0` (no failures observed)
+
+### Requirement: Quota capacity terminology in observability
+
+Operator-facing JSON and structured route logs SHALL use **quota capacity** naming:
+
+- Replay score field: `quota_capacity` (0.0–1.0 at plan time)
+- Route trace and docs SHALL refer to "quota capacity at plan time", not "headroom"
+
+The gateway MAY emit deprecated alias `q_headroom` with the same numeric value for one
+minor release.
+
+#### Scenario: Replay record uses quota capacity field
+
+- **WHEN** a routed request emits `ReplayRecord`
+- **THEN** the winner score breakdown includes `quota_capacity`
+- **AND** the value equals the planner quota capacity score for that hop
+
+#### Scenario: Deprecated alias preserved
+
+- **WHEN** a consumer reads `q_headroom` from replay JSON
+- **THEN** it receives the same value as `quota_capacity` during the deprecation window
+
+### Requirement: Provider-stats exposes hierarchical quota tree
+
+`GET /v1/observability/provider-stats` SHALL return quota observability as a tree aligned with
+admission hierarchy:
+
+```text
+quota[] → { provider, accounts[] } → models[] (when quota-profile: per-model)
+```
+
+Each **account** node SHALL include: `credential_id`, `quota_profile`, `calls`, routing health,
+`next_available_at`, `blocked_reason`.
+
+Each **model** node (per-model providers only) SHALL include: `slug`, `next_available_at`,
+`blocked_reason`, attempt counters when non-zero.
+
+When limits apply only at account level (`per-slot`, `per-session`), model nodes SHALL be omitted
+and limits are understood to inherit from the account node.
+
+The flat `providers[]` array SHALL remain for backward-compatible call counters; enriched rows MAY
+duplicate `quota_profile`, `next_available_at`, and `blocked_reason` from the tree.
+
+#### Scenario: Gemini account shows per-model children
+
+- **WHEN** provider `gemini` has `quota-profile: per-model`
+- **AND** `gemini-free-3` has blocked preview slug and feasible flash-lite slug
+- **THEN** account row includes `models[]` with distinct `next_available_at` per slug
+
+#### Scenario: LongCat account has no model children
+
+- **WHEN** provider `longcat` is per-slot
+- **THEN** account row has no `models[]`
+- **AND** `next_available_at` on the account reflects shared gate state
+
+### Requirement: Repeat 429 violations on observability snapshot
+
+The provider-stats snapshot root SHALL include `repeat_429_violations` (count since process start).
+The gateway SHALL expose the same counter as OpenTelemetry metric
+`gateway_repeat_429_violations_total`. Route trace hops SHALL include `repeat_429_violation` when
+applicable.
+
+#### Scenario: Clean deployment shows zero violations
+
+- **WHEN** no infeasible scope receives upstream 429
+- **THEN** `repeat_429_violations` is 0
 

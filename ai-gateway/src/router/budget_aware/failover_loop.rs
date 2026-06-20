@@ -84,6 +84,27 @@ pub async fn run_failover_candidates(
                         &failed_models,
                     )
                 });
+            let estimated_tokens =
+                plan_ctx.as_ref().map_or(0, |ctx| ctx.estimated_tokens);
+            let admit_verdict = this
+                .admit_candidate(
+                    candidate,
+                    estimated_tokens,
+                    std::time::Instant::now(),
+                )
+                .await;
+            if !admit_verdict.feasible {
+                tracing::debug!(
+                    credential = %candidate.credential_id,
+                    provider = %candidate.capability.provider,
+                    model = %candidate.capability.model,
+                    wait_ms = admit_verdict.next_wait.as_millis(),
+                    blocked_reason = ?admit_verdict.blocked_reason,
+                    "re-admit skipped infeasible hop"
+                );
+                route_trace.record_skipped(1);
+                continue;
+            }
             if !this.wait_for_candidate(candidate, has_next_candidate).await {
                 route_trace.record_skipped(1);
                 continue;
@@ -105,6 +126,7 @@ pub async fn run_failover_candidates(
                     attempt_index,
                     upstream_attempts: route_trace.attempts(),
                     credential: candidate.credential_id.to_string(),
+                    admit_feasible: admit_verdict.feasible,
                 };
             req.extensions_mut().insert(attempt_ctx.clone());
             if let Some(tokens) = requirements.min_context_tokens {
@@ -456,6 +478,15 @@ async fn fail_over_candidate(
 ) -> usize {
     let status = response.status();
     let model = candidate.capability.model.to_string();
+    if status == http::StatusCode::TOO_MANY_REQUESTS && !attempt.admit_feasible
+    {
+        route_trace.record_repeat_429_violation();
+        this.app_state
+            .0
+            .metrics
+            .provider
+            .record_repeat_429_violation();
+    }
     let failure_ctx = response
         .extensions()
         .get::<crate::types::extensions::UpstreamFailureContext>()

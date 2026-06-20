@@ -44,6 +44,15 @@ pub(super) async fn record_classified_failure(
     if let Some(wait_future) = pacing_wait {
         cooldown = cooldown.max(wait_future.await);
     }
+    if let Some(gate) = router.app_state.upstream_pacing().gate_for(
+        provider,
+        Some(credential_id),
+        Some(credential_tier),
+        Some(model),
+    ) {
+        let until = std::time::Instant::now() + cooldown;
+        gate.apply_upstream_reconcile(until).await;
+    }
     router.app_state.credential_health().record_failover_class(
         provider,
         credential_id,

@@ -105,6 +105,7 @@ pub struct UpstreamAttemptContext {
     pub attempt_index: u32,
     pub upstream_attempts: u32,
     pub credential: String,
+    pub admit_feasible: bool,
 }
 
 /// Terminal JSON header payload (`X-Gateway-Provider-Usage`).

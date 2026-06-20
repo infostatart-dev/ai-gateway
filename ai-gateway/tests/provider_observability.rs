@@ -210,6 +210,65 @@ async fn provider_stats_includes_idle_configured_credentials() {
 
 #[tokio::test]
 #[serial_test::serial(default_mock)]
+async fn provider_stats_includes_quota_tree() {
+    let mut config = Config::test_default();
+    config.helicone.features = HeliconeFeatures::None;
+
+    let mock_args = MockArgs::builder()
+        .stubs(HashMap::from([
+            ("success:minio:upload_request", 0.into()),
+            ("success:jawn:log_request", 0.into()),
+        ]))
+        .build();
+    let mut harness = Harness::builder()
+        .with_config(config)
+        .with_mock_args(mock_args)
+        .build()
+        .await;
+
+    let snapshot =
+        fetch_stats(&mut harness, "/v1/observability/provider-stats").await;
+    assert_eq!(
+        snapshot
+            .get("routing")
+            .and_then(|r| r.get("repeat_429_violations"))
+            .and_then(Value::as_u64),
+        Some(0)
+    );
+    let providers = snapshot
+        .get("providers")
+        .and_then(Value::as_array)
+        .expect("providers array");
+    let enriched = providers
+        .iter()
+        .find(|row| row.get("quota_profile").is_some())
+        .expect("at least one row should include quota_profile after enrich");
+    assert!(
+        enriched
+            .get("quota_profile")
+            .and_then(Value::as_str)
+            .is_some()
+    );
+    let quota = snapshot
+        .get("quota")
+        .and_then(Value::as_array)
+        .expect("quota tree");
+    assert!(!quota.is_empty(), "quota tree should list providers");
+    let accounts = quota
+        .iter()
+        .find_map(|node| node.get("accounts").and_then(Value::as_array))
+        .expect("quota node with accounts");
+    assert!(!accounts.is_empty());
+    assert!(
+        accounts[0]
+            .get("credential_id")
+            .and_then(Value::as_str)
+            .is_some()
+    );
+}
+
+#[tokio::test]
+#[serial_test::serial(default_mock)]
 async fn usage_header_reported_on_router_completion() {
     let mut config = Config::test_default();
     config.helicone.features = HeliconeFeatures::None;

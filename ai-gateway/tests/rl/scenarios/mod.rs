@@ -1,3 +1,8 @@
+pub mod admission_hop_readmit;
+pub mod admission_longcat_tpd;
+pub mod admission_parallel_account_spread;
+pub mod admission_per_session_deepseek;
+pub mod admission_zero_repeat_429;
 pub mod caller_request_id_spread;
 pub mod caller_three_work_units;
 pub mod chatgpt_last_resort;

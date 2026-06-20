@@ -3,10 +3,9 @@ use std::collections::HashSet;
 use ai_gateway::{
     app_state::AppState,
     tests::budget_aware::{
-        CallOutcome, CredentialHealthRegistry, InferenceProvider,
-        MAX_PLAN_HOPS, RequestRequirements, empty_router,
-        gemini_model_candidate, hash_bias, openrouter_model_candidate,
-        plan_route_chain,
+        CallOutcome, CredentialHealthRegistry, MAX_PLAN_HOPS,
+        RequestRequirements, empty_router, gemini_model_candidate, hash_bias,
+        openrouter_model_candidate, plan_route_chain,
     },
     types::extensions::{CallerRequestContext, WorkUnitSource},
 };
@@ -214,6 +213,89 @@ async fn plain_chat_widens_intent_floor_for_fast_upstream() {
             .model
             .to_string()
             .contains("gemini-2.5-flash")
+    );
+}
+
+#[tokio::test]
+async fn sixteen_gemini_flash_lite_slots_are_plan_feasible() {
+    let app_state = AppState::test_default().await;
+    let router = empty_router(&app_state);
+    let mut pool = Vec::new();
+    for index in 1..=16 {
+        let id = if index == 1 {
+            "gemini-free".to_string()
+        } else {
+            format!("gemini-free-{index}")
+        };
+        pool.push(
+            gemini_model_candidate(&app_state, &id, "gemini-3.1-flash-lite")
+                .await,
+        );
+    }
+    let caller = CallerRequestContext {
+        agent_name: "spread-check".to_string(),
+        work_unit_id: Some("unit-1".to_string()),
+        work_unit_source: WorkUnitSource::Explicit,
+    };
+    let plan = plan_route_chain(
+        &router,
+        pool,
+        &RequestRequirements::default(),
+        None,
+        &caller,
+        &CredentialHealthRegistry::new(),
+        app_state.route_memory(),
+        100,
+        &HashSet::new(),
+    )
+    .await;
+    assert!(!plan.chain.is_empty());
+}
+
+#[tokio::test]
+async fn eight_work_units_spread_first_hop_across_sixteen_gemini_slots() {
+    let app_state = AppState::test_default().await;
+    let router = empty_router(&app_state);
+    let mut pool = Vec::new();
+    for index in 1..=16 {
+        let id = if index == 1 {
+            "gemini-free".to_string()
+        } else {
+            format!("gemini-free-{index}")
+        };
+        pool.push(
+            gemini_model_candidate(&app_state, &id, "gemini-3.1-flash-lite")
+                .await,
+        );
+    }
+    let mut picks = HashSet::new();
+    for unit in 1..=8 {
+        let caller = CallerRequestContext {
+            agent_name: format!("admission-spread-{unit}"),
+            work_unit_id: Some(format!("unit-{unit}")),
+            work_unit_source: WorkUnitSource::Explicit,
+        };
+        let plan = plan_route_chain(
+            &router,
+            pool.clone(),
+            &RequestRequirements::default(),
+            None,
+            &caller,
+            &CredentialHealthRegistry::new(),
+            app_state.route_memory(),
+            100,
+            &HashSet::new(),
+        )
+        .await;
+        assert!(
+            !plan.chain.is_empty(),
+            "unit-{unit} must have a feasible first hop"
+        );
+        picks.insert(plan.chain[0].credential_id.to_string());
+    }
+    assert!(
+        picks.len() >= 8,
+        "expected eight distinct first-hop accounts, got {picks:?}"
     );
 }
 

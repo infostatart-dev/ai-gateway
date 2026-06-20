@@ -1,6 +1,7 @@
 use std::{
     future::{Ready, ready},
     marker::PhantomData,
+    pin::Pin,
     task::{Context, Poll},
 };
 
@@ -10,6 +11,8 @@ use http::{Method, Request, StatusCode, header::CONTENT_TYPE};
 use tower::{Layer, Service};
 
 use crate::app_state::AppState;
+
+type BoxFuture<T> = Pin<Box<dyn std::future::Future<Output = T> + Send>>;
 
 #[derive(Debug, Clone)]
 pub struct HealthCheckLayer<ReqBody, E> {
@@ -78,7 +81,13 @@ where
 {
     type Response = Response;
     type Error = S::Error;
-    type Future = Either<Ready<Result<Self::Response, Self::Error>>, S::Future>;
+    type Future = Either<
+        Either<
+            Ready<Result<Self::Response, Self::Error>>,
+            BoxFuture<Result<Self::Response, Self::Error>>,
+        >,
+        S::Future,
+    >;
 
     fn poll_ready(
         &mut self,
@@ -89,14 +98,23 @@ where
 
     fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
         if req.method() == Method::GET || req.method() == Method::HEAD {
-            let path = req.uri().path();
+            let path = req.uri().path().to_string();
             if path == "/health" {
-                return Either::Left(ready(Ok(healthy_response())));
+                return Either::Left(Either::Left(ready(Ok(
+                    healthy_response(),
+                ))));
             }
-            if let Some(response) =
-                observability_response(&self.app_state, path)
-            {
-                return Either::Left(ready(Ok(response)));
+            if let Some((provider, credential)) = observability_filter(&path) {
+                let app_state = self.app_state.clone();
+                return Either::Left(Either::Right(Box::pin(async move {
+                    let snapshot = app_state
+                        .provider_stats_snapshot_async(
+                            provider.as_deref(),
+                            credential.as_deref(),
+                        )
+                        .await;
+                    Ok(json_response(snapshot))
+                })));
             }
         }
         Either::Right(self.inner.call(req))
@@ -111,23 +129,18 @@ fn healthy_response() -> Response {
         .expect("always valid if tests pass")
 }
 
-fn observability_response(
-    app_state: &AppState,
+fn observability_filter(
     path: &str,
-) -> Option<Response> {
+) -> Option<(Option<String>, Option<String>)> {
     const PREFIX: &str = "/v1/observability/provider-stats";
     if path == PREFIX {
-        return Some(json_response(
-            app_state.provider_stats_snapshot(None, None),
-        ));
+        return Some((None, None));
     }
     let rest = path.strip_prefix(PREFIX)?.strip_prefix('/')?;
     if rest.is_empty() || rest.contains('/') {
         return None;
     }
-    Some(json_response(
-        app_state.provider_stats_snapshot(Some(rest), None),
-    ))
+    Some((Some(rest.to_string()), None))
 }
 
 fn json_response<T: serde::Serialize>(value: T) -> Response {

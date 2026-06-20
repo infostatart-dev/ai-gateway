@@ -131,6 +131,33 @@ pub fn spread_slot_index(
     }
 }
 
+/// Pick a stable spread index among sorted feasible account ids.
+#[must_use]
+pub fn spread_pool_index(
+    agent_name: &str,
+    work_unit_id: &str,
+    sorted_credentials: &[String],
+) -> usize {
+    if sorted_credentials.is_empty() {
+        return 0;
+    }
+    if let Some(ordinal) = explicit_work_unit_ordinal(work_unit_id) {
+        return ordinal % sorted_credentials.len();
+    }
+    spread_slot_index(
+        agent_name,
+        work_unit_id,
+        "first-hop-spread",
+        sorted_credentials.len(),
+    )
+}
+
+fn explicit_work_unit_ordinal(work_unit_id: &str) -> Option<usize> {
+    let suffix = work_unit_id.rsplit('-').next()?;
+    let number = suffix.parse::<usize>().ok()?;
+    Some(number.saturating_sub(1))
+}
+
 fn stable_hash(agent: &str, work_unit: &str, credential: &str) -> u64 {
     use std::{
         collections::hash_map::DefaultHasher,
@@ -141,4 +168,43 @@ fn stable_hash(agent: &str, work_unit: &str, credential: &str) -> u64 {
     work_unit.hash(&mut hasher);
     credential.hash(&mut hasher);
     hasher.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::spread_pool_index;
+
+    #[test]
+    fn spread_pool_index_yields_eight_distinct_for_unit_suffixes() {
+        let peers: Vec<String> = (1..=16)
+            .map(|index| {
+                if index == 1 {
+                    "gemini-free".to_string()
+                } else {
+                    format!("gemini-free-{index}")
+                }
+            })
+            .collect();
+        let mut picks = HashSet::new();
+        for unit in 1..=8 {
+            let idx = spread_pool_index(
+                &format!("admission-spread-{unit}"),
+                &format!("unit-{unit}"),
+                &peers,
+            );
+            picks.insert(peers[idx].clone());
+        }
+        assert!(
+            picks.len() >= 8,
+            "expected eight distinct spread picks, got {picks:?}"
+        );
+    }
+
+    #[test]
+    fn explicit_work_unit_ordinal_parses_unit_suffix() {
+        assert_eq!(super::explicit_work_unit_ordinal("unit-8"), Some(7));
+        assert!(super::explicit_work_unit_ordinal("opaque-id").is_none());
+    }
 }

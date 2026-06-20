@@ -8,13 +8,20 @@ use chrono::Utc;
 use super::super::types::BudgetCandidate;
 use crate::{
     config::catalog_limit_resolve::normalize_model_slug,
-    router::{budget_aware::types::BudgetAwareRouter, pacing::PacingRegistry},
+    router::{
+        budget_aware::types::BudgetAwareRouter,
+        pacing::PacingRegistry,
+        quota_admission::{
+            AdmissionVerdict, BlockedReason, evaluate_candidate,
+        },
+    },
 };
 
 #[derive(Debug, Clone)]
 pub struct QuotaSnapshotEntry {
     pub next_wait: Duration,
     pub headroom_score: f64,
+    pub blocked_reason: BlockedReason,
 }
 
 #[derive(Debug, Clone)]
@@ -27,12 +34,13 @@ impl QuotaSnapshot {
     pub async fn capture(
         pacing: &PacingRegistry,
         health: &crate::router::budget_aware::CredentialHealthRegistry,
-        _router: &BudgetAwareRouter,
+        router: &BudgetAwareRouter,
         candidates: &[BudgetCandidate],
         estimated_tokens: u32,
-        max_cooldown_wait: Duration,
+        _max_cooldown_wait: Duration,
         now: Instant,
     ) -> Self {
+        let limits = &router.app_state.config().provider_limits;
         let mut entries = HashMap::new();
         for candidate in candidates {
             let model = candidate.capability.model.to_string();
@@ -41,46 +49,17 @@ impl QuotaSnapshot {
             if entries.contains_key(&key) {
                 continue;
             }
-            if health.is_circuit_open(
-                &candidate.capability.provider,
-                &candidate.credential_id,
+            let verdict = evaluate_candidate(
+                pacing,
+                health,
+                limits,
+                router,
+                candidate,
+                estimated_tokens,
                 now,
-            ) {
-                entries.insert(
-                    key,
-                    QuotaSnapshotEntry {
-                        next_wait: Duration::MAX,
-                        headroom_score: 0.0,
-                    },
-                );
-                continue;
-            }
-            let gate = pacing.gate_for(
-                &candidate.capability.provider,
-                Some(&candidate.credential_id),
-                Some(candidate.credential_tier.as_str()),
-                Some(slug.as_str()),
-            );
-            let (next_wait, daily_ok) = if let Some(gate) = gate {
-                let wait = gate.peek_next_wait(estimated_tokens).await;
-                let daily =
-                    gate.daily_headroom_available(estimated_tokens).await;
-                (wait, daily)
-            } else {
-                (Duration::ZERO, true)
-            };
-            let headroom_score = if !daily_ok || next_wait > max_cooldown_wait {
-                0.0
-            } else {
-                1.0 / (1.0 + next_wait.as_secs_f64())
-            };
-            entries.insert(
-                key,
-                QuotaSnapshotEntry {
-                    next_wait,
-                    headroom_score,
-                },
-            );
+            )
+            .await;
+            entries.insert(key, entry_from_verdict(&verdict));
         }
         Self {
             captured_at: Utc::now(),
@@ -105,7 +84,27 @@ impl QuotaSnapshot {
     }
 
     #[must_use]
+    pub fn blocked_reason(
+        &self,
+        credential_id: &str,
+        model: &str,
+    ) -> BlockedReason {
+        let slug = normalize_model_slug(model);
+        self.entries
+            .get(&(credential_id.to_string(), slug))
+            .map_or(BlockedReason::None, |entry| entry.blocked_reason)
+    }
+
+    #[must_use]
     pub fn captured_at(&self) -> chrono::DateTime<Utc> {
         self.captured_at
+    }
+}
+
+fn entry_from_verdict(verdict: &AdmissionVerdict) -> QuotaSnapshotEntry {
+    QuotaSnapshotEntry {
+        next_wait: verdict.next_wait,
+        headroom_score: verdict.headroom_score(),
+        blocked_reason: verdict.blocked_reason,
     }
 }

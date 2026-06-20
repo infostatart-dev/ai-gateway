@@ -14,6 +14,10 @@ pub use crate::{
         },
         capability::RequestRequirements,
         pacing::{PacingRegistry, gate::PacingGate, limits::PacingLimits},
+        quota_admission::{
+            AdmissionVerdict, BlockedReason, PacingAdmissionScope,
+            evaluate_candidate, evaluate_pacing_admission,
+        },
     },
     types::provider::InferenceProvider,
 };

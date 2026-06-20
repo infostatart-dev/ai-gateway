@@ -8,6 +8,7 @@ pub mod latency;
 pub mod meta;
 pub mod pacing;
 pub mod provider_attempt;
+pub mod quota_admission;
 pub mod retry_after;
 pub mod routed_identity;
 pub mod router_details;

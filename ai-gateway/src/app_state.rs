@@ -64,6 +64,18 @@ impl AppState {
         )
     }
 
+    pub async fn provider_stats_snapshot_async(
+        &self,
+        provider: Option<&str>,
+        credential: Option<&str>,
+    ) -> crate::metrics::provider::ProviderStatsSnapshot {
+        let snap = self.provider_stats_snapshot(provider, credential);
+        crate::metrics::provider::quota_observability::enrich_snapshot(
+            self, snap,
+        )
+        .await
+    }
+
     #[must_use]
     pub fn config(&self) -> &Config {
         &self.0.config
