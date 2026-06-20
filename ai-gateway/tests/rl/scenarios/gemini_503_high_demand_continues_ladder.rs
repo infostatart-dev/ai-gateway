@@ -17,7 +17,11 @@ pub async fn run() {
     clear_test_call_responses();
     install_upstream_mock(
         UpstreamMockScript::new()
-            .binding("gemini-free-8", "gemini-3.5-flash", vec![high_demand_503])
+            .binding(
+                "gemini-free-8",
+                "gemini-3.5-flash-preview",
+                vec![high_demand_503],
+            )
             .binding(
                 "gemini-free-8",
                 "gemini-3.1-flash-lite",
@@ -28,8 +32,12 @@ pub async fn run() {
     let app_state = AppState::test_default().await;
     let router = empty_router(&app_state);
     let ranked = vec![
-        gemini_model_candidate(&app_state, "gemini-free-8", "gemini-3.5-flash")
-            .await,
+        gemini_model_candidate(
+            &app_state,
+            "gemini-free-8",
+            "gemini-3.5-flash-preview",
+        )
+        .await,
         gemini_model_candidate(
             &app_state,
             "gemini-free-8",

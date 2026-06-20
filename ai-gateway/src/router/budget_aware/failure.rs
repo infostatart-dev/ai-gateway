@@ -74,7 +74,9 @@ pub(super) async fn record_classified_failure(
         elapsed,
         cooldown,
     );
-    if let Some(slot_cooldown) = slot_cooldown {
+    if let Some(slot_cooldown) = slot_cooldown
+        && scope != ExhaustionScope::Model
+    {
         router.update_failure_state(credential_id, elapsed, slot_cooldown);
     }
     if entered_cooldown {

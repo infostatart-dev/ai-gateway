@@ -34,7 +34,12 @@ violates its own admission contract.
 - Provider-stats routing snapshot exposes `repeat_429_violations`; async enrichment path for
   quota observability fields on credential rows
 
-### Verification
+### Fixed
+
+- Per-session pacing scopes no longer collapse unrelated credentials into a
+  shared `missing-session` bucket (four-slot DeepSeek failover).
+- Per-model Gemini 503 high-demand keeps ladder walking on the same credential
+  (model-scoped exhaustion does not apply slot cooldown).
 
 - Unit: `quota_admission`, strict headroom in `budget_aware_plan` / snapshot paths
 - Integration: `routing_load` scenarios — zero-repeat-429, parallel account spread,

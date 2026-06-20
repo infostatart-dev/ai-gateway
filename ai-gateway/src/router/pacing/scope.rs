@@ -36,7 +36,11 @@ pub fn resolve_pacing_scope(
             .map(ProviderCredentialId::as_str)
             .and_then(chatgpt_session_path)
             .map_or_else(
-                || "missing-session".into(),
+                || {
+                    credential_id
+                        .map(|id| format!("credential:{}", id.as_str()))
+                        .unwrap_or_else(|| "missing-session".into())
+                },
                 |p| p.display().to_string(),
             );
         return PacingScope::Session(path);
@@ -46,7 +50,11 @@ pub fn resolve_pacing_scope(
             .map(ProviderCredentialId::as_str)
             .and_then(deepseek_session_path)
             .map_or_else(
-                || "missing-session".into(),
+                || {
+                    credential_id
+                        .map(|id| format!("credential:{}", id.as_str()))
+                        .unwrap_or_else(|| "missing-session".into())
+                },
                 |p| p.display().to_string(),
             );
         return PacingScope::Session(path);
@@ -56,7 +64,11 @@ pub fn resolve_pacing_scope(
             .map(ProviderCredentialId::as_str)
             .and_then(perplexity_session_path)
             .map_or_else(
-                || "missing-session".into(),
+                || {
+                    credential_id
+                        .map(|id| format!("credential:{}", id.as_str()))
+                        .unwrap_or_else(|| "missing-session".into())
+                },
                 |p| p.display().to_string(),
             );
         return PacingScope::Session(path);
