@@ -28,6 +28,10 @@ routing_load_test!(
     scenarios::gemini_model_ladder_same_slot::run
 );
 routing_load_test!(
+    gemini_multi_account_cross_provider_plan,
+    scenarios::gemini_multi_account_cross_provider_plan::run
+);
+routing_load_test!(
     gemini_stability_escalation,
     scenarios::gemini_stability_escalation::run
 );

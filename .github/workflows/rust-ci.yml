@@ -48,6 +48,8 @@ jobs:
         run: cargo --version
       - name: Clippy
         run: cargo +stable ci-clippy
+      - name: Dead code gate (ai-gateway)
+        run: RUSTFLAGS="-D dead_code" cargo +stable build -p ai-gateway --lib
   test:
     runs-on: ubuntu-latest
     env:

@@ -4,8 +4,8 @@ use ai_gateway::{
     metrics::provider::build_replay_record,
     types::{
         extensions::{
-            PendingRouteTrace, PlanReplaySnapshot, ReplayScoreBreakdown,
-            WorkUnitSource,
+            BlockedReason, PendingRouteTrace, PlanReplaySnapshot,
+            ReplayQuotaExcluded, ReplayScoreBreakdown, WorkUnitSource,
         },
         provider::InferenceProvider,
         router::RouterId,
@@ -27,8 +27,11 @@ fn sample_snapshot() -> PlanReplaySnapshot {
             hash_bias: 0.42,
             l_band: 2,
             cost_class: "free".to_string(),
+            blocked_reason: None,
+            next_available_at: None,
         },
         top_alternatives: vec![],
+        quota_excluded: vec![],
     }
 }
 
@@ -75,6 +78,77 @@ fn replay_record_serializes_winner_breakdown() {
     assert_eq!(json["winner_score"]["h_success"], 0.9);
     assert_eq!(json["json_schema_required"], true);
     assert_eq!(json["route_memory_hit"], true);
+    assert!(json["winner_score"].get("blocked_reason").is_none());
+}
+
+#[test]
+fn replay_record_serializes_quota_block_metadata() {
+    let pending = PendingRouteTrace {
+        router_id: RouterId::Named(CompactString::new("autodefault")),
+        strategy: "budget-aware-capability-after",
+        hops: 1,
+        candidates: 2,
+        skipped: 0,
+        outcome_label: "terminal_failure",
+        terminal_provider: None,
+        terminal_credential: None,
+        terminal_status: Some(503),
+        deepseek_web: None,
+        chatgpt_web: None,
+        intent_tier: None,
+        selection_phase: None,
+        quota_scope: None,
+        model_ladder_band: None,
+        model_ladder_position: None,
+        upstream_failure_kind: None,
+        restricted_until: None,
+        failover_class: None,
+        agent_name: Some("invoker-alpha".to_string()),
+        work_unit_id: Some("unit-2".to_string()),
+        work_unit_source: Some(WorkUnitSource::Explicit),
+        planned_hops: Some(1),
+        plan_rebuilds: Some(0),
+        route_memory_hit: Some(false),
+        route_memory_invalidated: Some(false),
+        source_model: Some("gpt-5-nano".to_string()),
+        json_schema_required: false,
+        replay: Some(PlanReplaySnapshot {
+            plan_snapshot_ts: "2026-06-18T12:00:00Z".to_string(),
+            winner_credential: "gemini-free-9".to_string(),
+            winner_model: "gemini-3.1-flash-lite".to_string(),
+            winner: ReplayScoreBreakdown {
+                score: 0.0,
+                h_success: 0.9,
+                quota_capacity: 0.0,
+                q_cooldown_secs: 12.0,
+                m_affinity: 0.0,
+                hash_bias: 0.0,
+                l_band: 2,
+                cost_class: "free".to_string(),
+                blocked_reason: Some(BlockedReason::Rpm),
+                next_available_at: Some("2026-06-18T12:00:30Z".to_string()),
+            },
+            top_alternatives: vec![],
+            quota_excluded: vec![ReplayQuotaExcluded {
+                credential: "gemini-free-3".to_string(),
+                model: "gemini-3-flash-preview".to_string(),
+                blocked_reason: BlockedReason::Rpm,
+                next_available_at: Some("2026-06-18T12:00:45Z".to_string()),
+                quota_capacity: 0.0,
+            }],
+        }),
+    };
+
+    let replay = build_replay_record(&pending).expect("replay");
+    let json = serde_json::to_value(&replay).unwrap();
+    assert_eq!(json["winner_score"]["blocked_reason"], "rpm");
+    assert_eq!(
+        json["winner_score"]["next_available_at"],
+        "2026-06-18T12:00:30Z"
+    );
+    assert_eq!(json["quota_excluded"][0]["credential"], "gemini-free-3");
+    assert_eq!(json["quota_excluded"][0]["blocked_reason"], "rpm");
+    assert_eq!(json["quota_excluded"][0]["quota_capacity"], 0.0);
 }
 
 #[test]

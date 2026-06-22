@@ -18,6 +18,7 @@ pub mod free_catalog_pacing_skip;
 pub mod gemini_404_retires_model_not_slot;
 pub mod gemini_503_high_demand_continues_ladder;
 pub mod gemini_model_ladder_same_slot;
+pub mod gemini_multi_account_cross_provider_plan;
 pub mod gemini_sixteen_slot;
 pub mod gemini_stability_escalates_up;
 pub mod gemini_stability_escalation;

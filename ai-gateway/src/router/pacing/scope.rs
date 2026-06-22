@@ -98,20 +98,6 @@ pub fn pacing_scope_key(scope: &PacingScope) -> String {
     }
 }
 
-#[must_use]
-#[allow(dead_code)]
-pub fn gate_scope_key(
-    provider: &InferenceProvider,
-    credential_id: Option<&ProviderCredentialId>,
-) -> String {
-    pacing_scope_key(&resolve_pacing_scope(
-        provider,
-        credential_id,
-        None,
-        ProviderQuotaProfile::PerSlot,
-    ))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,7 +114,6 @@ mod tests {
             ProviderQuotaProfile::PerSlot,
         );
         assert_eq!(pacing_scope_key(&scope), "gemini-free");
-        assert_eq!(gate_scope_key(&provider, Some(&id)), "gemini-free");
     }
 
     #[test]

@@ -4,7 +4,10 @@ use crate::{
         cost_class::CostClass,
         model_ladder::{LadderBand, ModelLadderRegistry},
     },
-    router::budget_aware::{CredentialHealthRegistry, memory::RouteBinding},
+    router::{
+        budget_aware::{CredentialHealthRegistry, memory::RouteBinding},
+        quota_admission::BlockedReason,
+    },
     types::extensions::ReplayScoreBreakdown,
 };
 
@@ -15,6 +18,8 @@ pub struct ScoreInput<'a> {
     pub affinity: bool,
     pub hash_bias: f64,
     pub cooldown_secs: f64,
+    pub quota_blocked_reason: Option<BlockedReason>,
+    pub quota_next_available_at: Option<String>,
 }
 
 const W_HEALTH: f64 = 0.30;
@@ -24,12 +29,6 @@ const W_HASH: f64 = 0.10;
 const W_COST: f64 = 0.10;
 const W_COOLDOWN: f64 = 0.15;
 const W_LADDER: f64 = 0.05;
-
-#[allow(dead_code)]
-#[must_use]
-pub fn score(input: &ScoreInput<'_>) -> f64 {
-    score_breakdown(input).score
-}
 
 #[must_use]
 pub fn score_breakdown(input: &ScoreInput<'_>) -> ReplayScoreBreakdown {
@@ -55,6 +54,16 @@ pub fn score_breakdown(input: &ScoreInput<'_>) -> ReplayScoreBreakdown {
         + W_COST * (1.0 / (1.0 + cost))
         - W_COOLDOWN * norm_cooldown(q_cooldown_secs)
         - W_LADDER * f64::from(l_band);
+    let (blocked_reason, next_available_at) = if quota_capacity <= 0.0 {
+        (
+            input
+                .quota_blocked_reason
+                .filter(|reason| *reason != BlockedReason::None),
+            input.quota_next_available_at.clone(),
+        )
+    } else {
+        (None, None)
+    };
     ReplayScoreBreakdown {
         score,
         h_success,
@@ -64,6 +73,8 @@ pub fn score_breakdown(input: &ScoreInput<'_>) -> ReplayScoreBreakdown {
         hash_bias,
         l_band,
         cost_class,
+        blocked_reason,
+        next_available_at,
     }
 }
 

@@ -169,6 +169,8 @@ pub struct RoutePlanContext {
     pub replay: Option<PlanReplaySnapshot>,
 }
 
+pub use crate::router::quota_admission::BlockedReason;
+
 /// Planner-time snapshot for hop-0 replay (D19).
 #[derive(Debug, Clone)]
 pub struct PlanReplaySnapshot {
@@ -177,6 +179,7 @@ pub struct PlanReplaySnapshot {
     pub winner_model: String,
     pub winner: ReplayScoreBreakdown,
     pub top_alternatives: Vec<ReplayAlternative>,
+    pub quota_excluded: Vec<ReplayQuotaExcluded>,
 }
 
 /// Deterministic replay payload for post-mortem route analysis (D19).
@@ -202,6 +205,8 @@ pub struct ReplayRecord {
     pub winner_score: Option<ReplayScoreBreakdown>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub top_alternatives: Vec<ReplayAlternative>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub quota_excluded: Vec<ReplayQuotaExcluded>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -215,6 +220,10 @@ pub struct ReplayScoreBreakdown {
     pub hash_bias: f64,
     pub l_band: u16,
     pub cost_class: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocked_reason: Option<BlockedReason>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_available_at: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -222,4 +231,14 @@ pub struct ReplayAlternative {
     pub credential: String,
     pub model: String,
     pub score: f64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ReplayQuotaExcluded {
+    pub credential: String,
+    pub model: String,
+    pub blocked_reason: BlockedReason,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_available_at: Option<String>,
+    pub quota_capacity: f64,
 }

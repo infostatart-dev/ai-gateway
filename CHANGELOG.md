@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.5.6] - 2026-06-18
+
+**Replay quota block metadata** — plan-time `QuotaSnapshot` now feeds incident replay:
+operators see `blocked_reason`, `next_available_at`, and `quota_excluded` in route trace
+JSON without re-hitting provider-stats.
+
+### Changed
+
+- **`ReplayRecord`:** winner score breakdown includes optional `blocked_reason` and
+  `next_available_at` when `quota_capacity == 0` at plan time
+- **`quota_excluded`:** up to eight pool candidates omitted for zero headroom, with
+  plan-time block reason (distinct from circuit-open health exclusions)
+- **`QuotaSnapshot`:** stores and exposes `next_available_at` from admission verdict
+
+### Quality
+
+- Removed dead `score()` wrapper and `gate_scope_key()` helper
+- CI: `RUSTFLAGS=-D dead_code` build gate on `ai-gateway` lib
+
 ## [0.5.5] - 2026-06-20
 
 **Quota admission control** for autodefault: the router now treats upstream limits as a

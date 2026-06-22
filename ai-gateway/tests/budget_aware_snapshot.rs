@@ -3,9 +3,10 @@ use std::time::{Duration, Instant};
 use ai_gateway::{
     app_state::AppState,
     tests::budget_aware::{
-        CallOutcome, CredentialHealthRegistry, InferenceProvider, PacingGate,
-        PacingLimits, PacingRegistry, ProviderCredentialId, QuotaSnapshot,
-        empty_router, gemini_model_candidate,
+        BlockedReason, CallOutcome, CredentialHealthRegistry,
+        InferenceProvider, PacingGate, PacingLimits, PacingRegistry,
+        ProviderCredentialId, QuotaSnapshot, empty_router,
+        gemini_model_candidate,
     },
 };
 
@@ -82,5 +83,53 @@ async fn catalog_slug_normalization_matches_snapshot_key() {
         snapshot
             .headroom_score("gemini-free-2", "models/gemini-2.5-flash-lite")
             >= 0.0
+    );
+}
+
+#[tokio::test]
+async fn rpm_blocked_snapshot_exposes_reason_and_next_available_at() {
+    let app_state = AppState::test_default().await;
+    let candidate = gemini_model_candidate(
+        &app_state,
+        "gemini-free-3",
+        "gemini-2.5-flash-lite",
+    )
+    .await;
+    let gate = app_state
+        .upstream_pacing()
+        .gate_for(
+            &candidate.capability.provider,
+            Some(&candidate.credential_id),
+            Some(candidate.credential_tier.as_str()),
+            Some(&candidate.capability.model.to_string()),
+        )
+        .expect("gate");
+    for _ in 0..15 {
+        let _permit = gate.acquire(0).await.unwrap();
+    }
+    let health = CredentialHealthRegistry::new();
+    let router = empty_router(&app_state);
+    let snapshot = QuotaSnapshot::capture(
+        app_state.upstream_pacing(),
+        &health,
+        &router,
+        std::slice::from_ref(&candidate),
+        0,
+        Duration::from_secs(3),
+        Instant::now(),
+    )
+    .await;
+    assert_eq!(
+        snapshot.headroom_score("gemini-free-3", "gemini-2.5-flash-lite"),
+        0.0
+    );
+    assert_ne!(
+        snapshot.blocked_reason("gemini-free-3", "gemini-2.5-flash-lite"),
+        BlockedReason::None
+    );
+    assert!(
+        snapshot
+            .next_available_at("gemini-free-3", "gemini-2.5-flash-lite")
+            .is_some()
     );
 }

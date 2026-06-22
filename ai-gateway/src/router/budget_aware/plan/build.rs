@@ -49,18 +49,66 @@ pub fn build_chain(
     }
 
     append_intra_slot_ladder(router, ctx, &scored, &mut plan, &mut used);
-    for (_, candidate) in &scored {
+    append_scored_hops(&scored, &mut plan, &mut used);
+    plan.truncate(MAX_PLAN_HOPS);
+    apply_spread(&mut plan, ctx.caller, &scored);
+    plan
+}
+
+fn append_scored_hops(
+    scored: &[(f64, BudgetCandidate)],
+    plan: &mut Vec<BudgetCandidate>,
+    used: &mut HashSet<(ProviderCredentialId, String)>,
+) {
+    let Some(anchor) = anchor_credential_for_ladder(scored, plan) else {
+        append_scored_hops_pass(scored, plan, used, |_| true);
+        return;
+    };
+    let anchor_provider = scored
+        .iter()
+        .find(|(_, candidate)| candidate.credential_id == anchor)
+        .map(|(_, candidate)| candidate.capability.provider.clone());
+    let Some(anchor_provider) = anchor_provider else {
+        append_scored_hops_pass(scored, plan, used, |_| true);
+        return;
+    };
+    append_scored_hops_pass(scored, plan, used, |candidate| {
+        candidate.capability.provider != anchor_provider
+    });
+    append_scored_hops_pass(scored, plan, used, |_| true);
+}
+
+fn append_scored_hops_pass(
+    scored: &[(f64, BudgetCandidate)],
+    plan: &mut Vec<BudgetCandidate>,
+    used: &mut HashSet<(ProviderCredentialId, String)>,
+    include: impl Fn(&BudgetCandidate) -> bool,
+) {
+    for (_, candidate) in scored {
         if plan.len() >= MAX_PLAN_HOPS {
             break;
+        }
+        if !include(candidate) {
+            continue;
         }
         let key = plan_key(candidate);
         if used.insert(key) {
             plan.push(candidate.clone());
         }
     }
-    plan.truncate(MAX_PLAN_HOPS);
-    apply_spread(&mut plan, ctx.caller, &scored);
-    plan
+}
+
+fn anchor_credential_for_ladder(
+    scored: &[(f64, BudgetCandidate)],
+    plan: &[BudgetCandidate],
+) -> Option<ProviderCredentialId> {
+    plan.first()
+        .map(|candidate| candidate.credential_id.clone())
+        .or_else(|| {
+            scored
+                .first()
+                .map(|(_, candidate)| candidate.credential_id.clone())
+        })
 }
 
 fn append_intra_slot_ladder(
@@ -75,13 +123,13 @@ fn append_intra_slot_ladder(
         .intent
         .map(|intent| intent.effective_floor(ctx.requirements))
         .or(ctx.requirements.preferred_intent_tier);
-    let mut slots: Vec<ProviderCredentialId> = scored
-        .iter()
-        .map(|(_, c)| c.credential_id.clone())
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect();
-    slots.sort_by_key(std::string::ToString::to_string);
+    let Some(anchor) = anchor_credential_for_ladder(scored, plan) else {
+        return;
+    };
+    // Ladder escalation is per primary slot only; other accounts enter via
+    // scored cross-provider hops so multi-account pools cannot monopolize
+    // MAX_PLAN_HOPS.
+    let slots = [anchor];
 
     for slot in slots {
         if plan.len() >= MAX_PLAN_HOPS {

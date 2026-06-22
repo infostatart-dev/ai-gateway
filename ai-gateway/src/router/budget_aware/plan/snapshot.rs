@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 
 use super::super::types::BudgetCandidate;
 use crate::{
@@ -22,6 +22,7 @@ pub struct QuotaSnapshotEntry {
     pub next_wait: Duration,
     pub headroom_score: f64,
     pub blocked_reason: BlockedReason,
+    pub next_available_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone)]
@@ -96,6 +97,18 @@ impl QuotaSnapshot {
     }
 
     #[must_use]
+    pub fn next_available_at(
+        &self,
+        credential_id: &str,
+        model: &str,
+    ) -> Option<DateTime<Utc>> {
+        let slug = normalize_model_slug(model);
+        self.entries
+            .get(&(credential_id.to_string(), slug))
+            .and_then(|entry| entry.next_available_at)
+    }
+
+    #[must_use]
     pub fn captured_at(&self) -> chrono::DateTime<Utc> {
         self.captured_at
     }
@@ -106,5 +119,6 @@ fn entry_from_verdict(verdict: &AdmissionVerdict) -> QuotaSnapshotEntry {
         next_wait: verdict.next_wait,
         headroom_score: verdict.headroom_score(),
         blocked_reason: verdict.blocked_reason,
+        next_available_at: verdict.next_available_at,
     }
 }

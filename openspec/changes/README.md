@@ -25,6 +25,7 @@ mise exec -- openspec validate --changes --strict
 
 | Change | Focus | Tasks |
 |--------|-------|-------|
+| [quota-snapshot-replay-wiring](quota-snapshot-replay-wiring/) | Replay quota block metadata (0.5.6) | 23/26 | ready to archive |
 | [ollama-prompt-json-per-model-quota](ollama-prompt-json-per-model-quota/) | Ollama prompt JSON + per-model quota | 0/27 |
 | [docs-link-hygiene](docs-link-hygiene/) | README / doc link fixes ([#297](https://github.com/Helicone/ai-gateway/issues/297)) | 0/12 |
 | [health-monitor-concurrency](health-monitor-concurrency/) | Decision ([#247](https://github.com/Helicone/ai-gateway/pull/247)) | 0/9 |
@@ -32,7 +33,7 @@ mise exec -- openspec validate --changes --strict
 | [azure-openai-provider](azure-openai-provider/) | Decision ([#289](https://github.com/Helicone/ai-gateway/issues/289)) | 0/9 |
 | [openai-responses-agents-sdk](openai-responses-agents-sdk/) | Decision ([#173](https://github.com/Helicone/ai-gateway/issues/173)) | 0/11 |
 
-**Active total:** 10 changes — run `openspec list` for live counts.
+**Active total:** 11 changes — run `openspec list` for live counts.
 
 ## Archive
 

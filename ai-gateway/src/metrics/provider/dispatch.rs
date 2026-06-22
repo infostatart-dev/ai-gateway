@@ -197,5 +197,6 @@ pub fn build_replay_record(
         winner_model: Some(snapshot.winner_model.clone()),
         winner_score: Some(snapshot.winner.clone()),
         top_alternatives: snapshot.top_alternatives.clone(),
+        quota_excluded: snapshot.quota_excluded.clone(),
     })
 }

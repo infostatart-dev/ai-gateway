@@ -350,3 +350,125 @@ async fn replan_excludes_failed_hop() {
             .all(|c| c.credential_id.as_str() == "gemini-free-9")
     );
 }
+
+#[tokio::test]
+async fn eight_gemini_accounts_plan_includes_openrouter_within_hop_cap() {
+    const SLOTS: [&str; 8] = [
+        "gemini-free",
+        "gemini-free-2",
+        "gemini-free-3",
+        "gemini-free-4",
+        "gemini-free-5",
+        "gemini-free-6",
+        "gemini-free-7",
+        "gemini-free-8",
+    ];
+    const MODELS: [&str; 4] = [
+        "gemini-3-flash-preview",
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash-lite",
+    ];
+
+    let app_state = AppState::test_default().await;
+    let router = empty_router(&app_state);
+    let mut pool = Vec::new();
+    for slot in SLOTS {
+        for model in MODELS {
+            pool.push(gemini_model_candidate(&app_state, slot, model).await);
+        }
+    }
+    pool.push(
+        openrouter_model_candidate(
+            &app_state,
+            "openrouter-default",
+            "openai/gpt-oss-120b:free",
+        )
+        .await,
+    );
+    let caller = CallerRequestContext {
+        agent_name: "cross-provider-plan".to_string(),
+        work_unit_id: Some("unit-dev".to_string()),
+        work_unit_source: WorkUnitSource::Explicit,
+    };
+    let plan = plan_route_chain(
+        &router,
+        pool,
+        &RequestRequirements::default(),
+        None,
+        &caller,
+        &CredentialHealthRegistry::new(),
+        app_state.route_memory(),
+        100,
+        &HashSet::new(),
+    )
+    .await;
+    assert!(!plan.chain.is_empty());
+    assert!(plan.chain.len() <= MAX_PLAN_HOPS);
+    assert!(
+        plan.chain.iter().any(|candidate| {
+            candidate.capability.provider.to_string() == "openrouter"
+        }),
+        "plan must reserve a cross-provider hop when eight gemini slots share \
+         the pool: {:?}",
+        plan.chain
+            .iter()
+            .map(|c| format!("{}/{}", c.credential_id, c.capability.model))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
+async fn plan_replay_lists_quota_excluded_candidates() {
+    use ai_gateway::tests::budget_aware::BlockedReason;
+
+    let app_state = AppState::test_default().await;
+    let router = empty_router(&app_state);
+    let saturated = gemini_model_candidate(
+        &app_state,
+        "gemini-free-3",
+        "gemini-3-flash-preview",
+    )
+    .await;
+    let gate = app_state
+        .upstream_pacing()
+        .gate_for(
+            &saturated.capability.provider,
+            Some(&saturated.credential_id),
+            Some(saturated.credential_tier.as_str()),
+            Some(&saturated.capability.model.to_string()),
+        )
+        .expect("gate");
+    for _ in 0..15 {
+        let _permit = gate.acquire(0).await.unwrap();
+    }
+    let feasible = gemini_model_candidate(
+        &app_state,
+        "gemini-free-9",
+        "gemini-2.5-flash-lite",
+    )
+    .await;
+    let caller = CallerRequestContext {
+        agent_name: "invoker".to_string(),
+        work_unit_id: Some("unit-1".to_string()),
+        work_unit_source: WorkUnitSource::Explicit,
+    };
+    let plan = plan_route_chain(
+        &router,
+        vec![saturated, feasible],
+        &RequestRequirements::default(),
+        None,
+        &caller,
+        &CredentialHealthRegistry::new(),
+        app_state.route_memory(),
+        0,
+        &HashSet::new(),
+    )
+    .await;
+    let replay = plan.replay.expect("plan replay");
+    assert_eq!(replay.quota_excluded.len(), 1);
+    assert_eq!(replay.quota_excluded[0].credential, "gemini-free-3");
+    assert_eq!(replay.quota_excluded[0].model, "gemini-3-flash-preview");
+    assert_ne!(replay.quota_excluded[0].blocked_reason, BlockedReason::None);
+    assert!(replay.quota_excluded[0].next_available_at.is_some());
+}

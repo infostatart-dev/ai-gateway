@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::{
     PlanContext,
     build::effective_cooldown_secs,
@@ -5,12 +7,19 @@ use super::{
 };
 use crate::{
     config::credentials::ProviderCredentialId,
-    router::budget_aware::{
-        memory::RouteBinding,
-        types::{BudgetAwareRouter, BudgetCandidate},
+    router::{
+        budget_aware::{
+            memory::RouteBinding,
+            types::{BudgetAwareRouter, BudgetCandidate},
+        },
+        quota_admission::BlockedReason,
     },
-    types::extensions::{PlanReplaySnapshot, ReplayAlternative},
+    types::extensions::{
+        PlanReplaySnapshot, ReplayAlternative, ReplayQuotaExcluded,
+    },
 };
+
+const MAX_QUOTA_EXCLUDED: usize = 8;
 
 pub struct ScoredCandidate {
     pub breakdown: crate::types::extensions::ReplayScoreBreakdown,
@@ -26,29 +35,12 @@ pub fn rank_survivors(
     let mut scored: Vec<_> = survivors
         .iter()
         .map(|candidate| {
-            let model = candidate.capability.model.to_string();
-            let headroom = ctx
-                .snapshot
-                .headroom_score(candidate.credential_id.as_str(), &model);
-            let affinity = memory_binding
-                .is_some_and(|binding| binding_matches(candidate, binding));
-            let hash =
-                ctx.caller.work_unit_id.as_deref().map_or(0.0, |work_unit| {
-                    hash_bias(
-                        &ctx.caller.agent_name,
-                        work_unit,
-                        candidate.credential_id.as_str(),
-                    )
-                });
-            let cooldown_secs = planner_cooldown_secs(router, ctx, candidate);
-            let breakdown = score_breakdown(&ScoreInput {
+            let breakdown = score_breakdown(&score_input_for_candidate(
+                router,
+                ctx,
                 candidate,
-                health: ctx.health,
-                headroom,
-                affinity,
-                hash_bias: hash,
-                cooldown_secs,
-            });
+                memory_binding,
+            ));
             ScoredCandidate {
                 breakdown,
                 candidate: candidate.clone(),
@@ -80,17 +72,9 @@ pub fn capture_replay(
         .find(|entry| plan_key(&entry.candidate) == hop_key)
         .map_or_else(
             || {
-                score_breakdown(&ScoreInput {
-                    candidate: hop0,
-                    health: ctx.health,
-                    headroom: ctx.snapshot.headroom_score(
-                        hop0.credential_id.as_str(),
-                        &hop0.capability.model.to_string(),
-                    ),
-                    affinity: false,
-                    hash_bias: 0.0,
-                    cooldown_secs: planner_cooldown_secs(router, ctx, hop0),
-                })
+                score_breakdown(&score_input_for_candidate(
+                    router, ctx, hop0, None,
+                ))
             },
             |entry| entry.breakdown.clone(),
         );
@@ -110,7 +94,119 @@ pub fn capture_replay(
         winner_model: hop0.capability.model.to_string(),
         winner,
         top_alternatives,
+        quota_excluded: capture_quota_excluded(ctx, ctx.pool),
     }
+}
+
+#[must_use]
+pub fn capture_quota_excluded(
+    ctx: &PlanContext<'_>,
+    pool: &[BudgetCandidate],
+) -> Vec<ReplayQuotaExcluded> {
+    let mut seen = HashSet::new();
+    let mut excluded = Vec::new();
+    for candidate in pool {
+        if excluded.len() >= MAX_QUOTA_EXCLUDED {
+            break;
+        }
+        if !is_quota_plan_exclusion(ctx, candidate) {
+            continue;
+        }
+        let model = candidate.capability.model.to_string();
+        let key = (candidate.credential_id.to_string(), model.clone());
+        if !seen.insert(key) {
+            continue;
+        }
+        let credential = candidate.credential_id.as_str();
+        let blocked_reason = ctx.snapshot.blocked_reason(credential, &model);
+        if blocked_reason == BlockedReason::None {
+            continue;
+        }
+        excluded.push(ReplayQuotaExcluded {
+            credential: candidate.credential_id.to_string(),
+            model: model.clone(),
+            blocked_reason,
+            next_available_at: ctx
+                .snapshot
+                .next_available_at(credential, &model)
+                .map(|instant| instant.to_rfc3339()),
+            quota_capacity: 0.0,
+        });
+    }
+    excluded
+}
+
+fn is_quota_plan_exclusion(
+    ctx: &PlanContext<'_>,
+    candidate: &BudgetCandidate,
+) -> bool {
+    let model = candidate.capability.model.to_string();
+    if ctx.health.is_circuit_open(
+        &candidate.capability.provider,
+        &candidate.credential_id,
+        ctx.now,
+    ) {
+        return false;
+    }
+    if ctx.health.credential_zero_success_dead(
+        &candidate.capability.provider,
+        &candidate.credential_id,
+        ctx.now,
+    ) {
+        return false;
+    }
+    ctx.snapshot
+        .headroom_score(candidate.credential_id.as_str(), &model)
+        <= 0.0
+}
+
+fn score_input_for_candidate<'a>(
+    router: &BudgetAwareRouter,
+    ctx: &'a PlanContext<'_>,
+    candidate: &'a BudgetCandidate,
+    memory_binding: Option<&RouteBinding>,
+) -> ScoreInput<'a> {
+    let model = candidate.capability.model.to_string();
+    let credential = candidate.credential_id.as_str();
+    let headroom = ctx.snapshot.headroom_score(credential, &model);
+    let (quota_blocked_reason, quota_next_available_at) =
+        quota_block_fields(ctx, credential, &model, headroom);
+    let affinity = memory_binding
+        .is_some_and(|binding| binding_matches(candidate, binding));
+    let hash = ctx.caller.work_unit_id.as_deref().map_or(0.0, |work_unit| {
+        hash_bias(&ctx.caller.agent_name, work_unit, credential)
+    });
+    ScoreInput {
+        candidate,
+        health: ctx.health,
+        headroom,
+        affinity,
+        hash_bias: hash,
+        cooldown_secs: planner_cooldown_secs(router, ctx, candidate),
+        quota_blocked_reason,
+        quota_next_available_at,
+    }
+}
+
+fn quota_block_fields(
+    ctx: &PlanContext<'_>,
+    credential_id: &str,
+    model: &str,
+    headroom: f64,
+) -> (Option<BlockedReason>, Option<String>) {
+    if headroom > 0.0 {
+        return (None, None);
+    }
+    let reason = ctx.snapshot.blocked_reason(credential_id, model);
+    if reason == BlockedReason::None {
+        return (None, None);
+    }
+    (
+        Some(reason),
+        ctx.snapshot
+            .next_available_at(credential_id, model)
+            .map(|instant| instant.to_rfc3339()),
+    )
 }
 
 fn planner_cooldown_secs(
