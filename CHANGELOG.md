@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.5.7] - 2026-06-23
+
+**Provider usage response header** — platform badges read `X-Gateway-Provider-Usage`
+from HTTP headers; cache rebuilds responses from stored headers only, so usage JSON
+must be materialized before the cache layer stores the response.
+
+### Fixed
+
+- **`X-Gateway-Provider-Usage` on cache HIT/MISS:** write the header on
+  `response.headers` at dispatch time (not only in extensions) so cached responses
+  return the same usage snapshot
+- **`latency_ms.ttft` for non-streaming:** measure time-to-first-byte while
+  buffering upstream bodies and include `ttft` in the usage header JSON (previously
+  filtered to streaming-only and never populated before attach)
+
+### Quality
+
+- Unit tests: usage header materialization, cache round-trip preserves usage header,
+  non-stream ttft in usage JSON, TTFB collection helper
+
 ## [0.5.6] - 2026-06-22
 
 **Replay quota block metadata** — plan-time `QuotaSnapshot` now feeds incident replay so
