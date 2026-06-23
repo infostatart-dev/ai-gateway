@@ -1,7 +1,6 @@
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use http::{HeaderMap, StatusCode};
-use http_body_util::BodyExt;
 use tokio::{sync::oneshot, time::Instant};
 use url::Url;
 use uuid::Uuid;
@@ -63,18 +62,17 @@ pub fn outcome_from_bytes(
 
 async fn buffer_non_stream_response(
     response: http::Response<Body>,
+    start_instant: Instant,
 ) -> (
     http::Response<Body>,
     BodyReader,
     oneshot::Receiver<()>,
     TokenUsage,
+    Option<f64>,
 ) {
     let (parts, body) = response.into_parts();
-    let collected = body
-        .collect()
-        .await
-        .expect("response body is infallible")
-        .to_bytes();
+    let (collected, tfft_ms) =
+        collect_body_with_tfft(body, start_instant).await;
     let reported_usage = crate::metrics::llm::extract_usage_from_response_body(
         &collected, false,
     );
@@ -86,7 +84,28 @@ async fn buffer_non_stream_response(
         body_reader,
         tfft_rx,
         reported_usage,
+        tfft_ms,
     )
+}
+
+async fn collect_body_with_tfft(
+    body: Body,
+    start_instant: Instant,
+) -> (Bytes, Option<f64>) {
+    use bytes::BytesMut;
+    use futures::StreamExt;
+
+    let mut buf = BytesMut::new();
+    let mut tfft_ms = None;
+    let mut stream = body.into_data_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.expect("response body is infallible");
+        if tfft_ms.is_none() {
+            tfft_ms = Some(start_instant.elapsed().as_secs_f64() * 1000.0);
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    (buf.freeze(), tfft_ms)
 }
 
 pub struct FinalizeDispatchContext<'a> {
@@ -201,14 +220,21 @@ impl Dispatcher {
         )
         .await?;
 
-        let (body_reader, tfft_rx, reported_usage) = if mapper_ctx.is_stream {
-            (outcome.body_reader, outcome.tfft_rx, TokenUsage::default())
-        } else {
-            let (response, body_reader, tfft_rx, reported_usage) =
-                buffer_non_stream_response(outcome.response).await;
-            outcome.response = response;
-            (body_reader, tfft_rx, reported_usage)
-        };
+        let (body_reader, tfft_rx, reported_usage, tfft_ms) =
+            if mapper_ctx.is_stream {
+                (
+                    outcome.body_reader,
+                    outcome.tfft_rx,
+                    TokenUsage::default(),
+                    None,
+                )
+            } else {
+                let (response, body_reader, tfft_rx, reported_usage, tfft_ms) =
+                    buffer_non_stream_response(outcome.response, start_instant)
+                        .await;
+                outcome.response = response;
+                (body_reader, tfft_rx, reported_usage, tfft_ms)
+            };
 
         let usage_input = crate::metrics::provider::DispatchMetricsInput {
             app_state: &self.app_state,
@@ -221,7 +247,7 @@ impl Dispatcher {
             stream: mapper_ctx.is_stream,
             request_kind,
             duration_ms: start_instant.elapsed().as_secs_f64() * 1000.0,
-            tfft_ms: None,
+            tfft_ms,
             reported_usage,
             request_body: Some(&outcome.req_body_bytes),
             failover_class: None,
@@ -229,7 +255,7 @@ impl Dispatcher {
         };
         crate::metrics::provider::attach_usage_header(
             &self.app_state,
-            outcome.response.extensions_mut(),
+            &mut outcome.response,
             &usage_input,
         );
 
@@ -262,9 +288,37 @@ mod tests {
     use bytes::Bytes;
     use http::{HeaderMap, StatusCode};
     use http_body_util::BodyExt;
+    use tokio::time::Instant;
     use url::Url;
 
-    use super::outcome_from_bytes;
+    use super::{collect_body_with_tfft, outcome_from_bytes};
+    use crate::{error::api::ApiError, types::body::Body};
+
+    #[tokio::test]
+    async fn collect_body_with_tfft_records_first_byte_latency() {
+        use std::time::Duration;
+
+        use futures::stream;
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            let _ = tx.send(Bytes::from_static(b"hello"));
+        });
+        let body = Body::from_stream(stream::once(async {
+            rx.await.map_err(|_| {
+                ApiError::Internal(
+                    crate::error::internal::InternalError::Internal,
+                )
+            })
+        }));
+        let start = Instant::now();
+        let (bytes, tfft_ms) = collect_body_with_tfft(body, start).await;
+        assert_eq!(bytes, Bytes::from_static(b"hello"));
+        let tfft = tfft_ms.expect("ttft should be measured");
+        assert!(tfft >= 15.0, "expected at least 15ms, got {tfft}");
+        assert!(tfft <= start.elapsed().as_secs_f64() * 1000.0);
+    }
 
     #[tokio::test]
     async fn outcome_from_bytes_wraps_body_for_logging_pipeline() {

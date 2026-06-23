@@ -728,7 +728,7 @@ pub fn build_usage_header(
         },
         latency_ms: LatencyBlock {
             total: record.duration_ms,
-            ttft: record.tfft_ms.filter(|_| record.stream),
+            ttft: record.tfft_ms,
             generation_per_output_token: generation_ms,
         },
         routing: RoutingBlock {
@@ -739,3 +739,48 @@ pub fn build_usage_header(
 }
 
 use super::usage_json::{LatencyBlock, RoutingBlock, UsageBlock};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_record(stream: bool, tfft_ms: Option<f64>) -> AttemptRecord {
+        AttemptRecord {
+            provider: "gemini".to_string(),
+            credential: "gemini-free".to_string(),
+            model: "gemini/gemini-3.1-flash-lite".to_string(),
+            router_id: "autodefault".to_string(),
+            attempt_index: 1,
+            upstream_attempts: 2,
+            status_code: 200,
+            stream,
+            request_kind: "router",
+            duration_ms: 2283.0,
+            tfft_ms,
+            usage: TokenUsage {
+                input: Some(904),
+                output: Some(43),
+                total: Some(947),
+                ..TokenUsage::default()
+            },
+            usage_source: UsageSource::Reported,
+            outcome: CallOutcome::Success,
+            overload: false,
+            agent_name: None,
+        }
+    }
+
+    #[test]
+    fn usage_header_includes_ttft_for_non_stream() {
+        let usage =
+            build_usage_header(&sample_record(false, Some(400.0)), None);
+        assert_eq!(usage.latency_ms.ttft, Some(400.0));
+        assert_eq!(usage.latency_ms.total, 2283.0);
+    }
+
+    #[test]
+    fn usage_header_includes_ttft_for_stream_when_present() {
+        let usage = build_usage_header(&sample_record(true, Some(120.0)), None);
+        assert_eq!(usage.latency_ms.ttft, Some(120.0));
+    }
+}

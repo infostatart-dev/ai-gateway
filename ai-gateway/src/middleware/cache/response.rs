@@ -158,3 +158,113 @@ impl ResponseLike for CacheableResponse {
         &self.resp_headers
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::SystemTime;
+
+    use bytes::Bytes;
+    use chrono::Utc;
+    use http::{Method, StatusCode};
+    use http_cache::MokaManager;
+
+    use super::*;
+    use crate::{
+        app_state::AppState,
+        cache::CacheClient,
+        metrics::provider::usage_json::GATEWAY_PROVIDER_USAGE_HEADER,
+        middleware::cache::{
+            check::{CacheCheckResult, check_cache},
+            context::CacheContext,
+            utils::{CACHE_HIT_HEADER, CACHE_HIT_HEADER_VALUE},
+        },
+        types::body::Body,
+    };
+
+    fn cache_request(body: Bytes) -> Request {
+        http::Request::builder()
+            .method(Method::POST)
+            .uri("http://localhost/router/my-router/chat/completions")
+            .header("content-type", "application/json")
+            .body(Body::from(body))
+            .unwrap()
+    }
+
+    fn usage_header_value() -> HeaderValue {
+        HeaderValue::from_str(
+            r#"{"provider":"openai","model":"gpt-4o-mini","usage":{"input":10,"output":5,"total":15,"source":"reported"},"latency_ms":{"total":100.0},"routing":{"attempts":1,"failover":false}}"#,
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn cache_hit_returns_cached_x_gateway_provider_usage() {
+        let app_state = AppState::test_default().await;
+        let cache = CacheClient::Moka(MokaManager::new(
+            moka::future::Cache::builder().build(),
+        ));
+        let ctx = CacheContext {
+            enabled: Some(true),
+            directive: Some("max-age=3600".to_string()),
+            buckets: None,
+            seed: None,
+            options: None,
+        };
+        let body = Bytes::from_static(br#"{"model":"gpt-4o-mini"}"#);
+        let usage = usage_header_value();
+        let key = "usage-header-round-trip".to_string();
+        let now = SystemTime::now();
+
+        let miss_response = http::Response::builder()
+            .status(StatusCode::OK)
+            .header(GATEWAY_PROVIDER_USAGE_HEADER, usage.clone())
+            .header("cache-control", "max-age=3600")
+            .body(Body::from(Bytes::from_static(br#"{"cached":true}"#)))
+            .unwrap();
+
+        let miss = handle_response_for_cache_miss(
+            &cache,
+            &ctx,
+            key.clone(),
+            cache_request(body.clone()),
+            miss_response,
+            0,
+            now,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            miss.headers().get(&CACHE_HIT_HEADER),
+            Some(&CACHE_MISS_HEADER_VALUE)
+        );
+        assert_eq!(
+            miss.headers().get(GATEWAY_PROVIDER_USAGE_HEADER),
+            Some(&usage)
+        );
+
+        let mut hit_request = cache_request(body);
+        hit_request
+            .extensions_mut()
+            .insert(tokio::time::Instant::now());
+        hit_request.extensions_mut().insert(Utc::now());
+
+        let hit =
+            check_cache(app_state, &cache, &key, hit_request, 0, now, &ctx)
+                .await
+                .unwrap();
+
+        let CacheCheckResult::Fresh(response) = hit else {
+            panic!("expected fresh cache hit");
+        };
+        assert_eq!(
+            response.headers().get(&CACHE_HIT_HEADER),
+            Some(&CACHE_HIT_HEADER_VALUE)
+        );
+        assert_eq!(
+            response.headers().get(GATEWAY_PROVIDER_USAGE_HEADER),
+            Some(&usage),
+            "cache hit must return the stored x-gateway-provider-usage header"
+        );
+    }
+}

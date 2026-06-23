@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use http::StatusCode;
+use http::{HeaderName, StatusCode};
 
 use super::{
     RecordAttemptInput, build_attempt_record, build_usage_header,
@@ -67,7 +67,7 @@ pub fn record_upstream_attempt(input: &DispatchMetricsInput<'_>) {
 
 pub fn attach_usage_header(
     app_state: &AppState,
-    extensions: &mut http::Extensions,
+    response: &mut http::Response<crate::types::body::Body>,
     input: &DispatchMetricsInput<'_>,
 ) {
     if !app_state.config().observability.response_headers.enabled {
@@ -96,10 +96,85 @@ pub fn attach_usage_header(
         agent_name: input.agent_name,
     });
     let generation_ms = generation_ms_per_output_token(&record);
-    extensions.insert(GatewayProviderUsageExtension(build_usage_header(
-        &record,
-        generation_ms,
-    )));
+    let usage = build_usage_header(&record, generation_ms);
+    response
+        .extensions_mut()
+        .insert(GatewayProviderUsageExtension(usage.clone()));
+    if let Some(value) = usage.to_header_value() {
+        response.headers_mut().insert(
+            HeaderName::from_static(
+                super::usage_json::GATEWAY_PROVIDER_USAGE_HEADER,
+            ),
+            value,
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        metrics::llm::TokenUsage,
+        types::{
+            body::Body, extensions::GatewayProviderUsageExtension,
+            provider::InferenceProvider,
+        },
+    };
+
+    #[tokio::test]
+    async fn attach_usage_header_materializes_x_gateway_provider_usage() {
+        let app_state = AppState::test_default().await;
+        let input = DispatchMetricsInput {
+            app_state: &app_state,
+            provider: &InferenceProvider::OpenAI,
+            credential: None,
+            model: None,
+            router_id: None,
+            attempt: None,
+            status: StatusCode::OK,
+            stream: false,
+            request_kind: RequestKind::Router,
+            duration_ms: 120.0,
+            tfft_ms: None,
+            reported_usage: TokenUsage {
+                input: Some(10),
+                output: Some(5),
+                total: Some(15),
+                ..TokenUsage::default()
+            },
+            request_body: None,
+            failover_class: None,
+            agent_name: None,
+        };
+
+        let mut response = http::Response::builder()
+            .status(StatusCode::OK)
+            .body(Body::empty())
+            .unwrap();
+        attach_usage_header(&app_state, &mut response, &input);
+
+        let header_name = HeaderName::from_static(
+            crate::metrics::provider::usage_json::GATEWAY_PROVIDER_USAGE_HEADER,
+        );
+        let header = response
+            .headers()
+            .get(&header_name)
+            .expect("x-gateway-provider-usage must be on response headers");
+        let extension = response
+            .extensions()
+            .get::<GatewayProviderUsageExtension>()
+            .expect("usage extension must be attached");
+        assert_eq!(
+            header.to_str().unwrap(),
+            extension.0.to_header_value().unwrap().to_str().unwrap()
+        );
+        let usage: serde_json::Value =
+            serde_json::from_str(header.to_str().unwrap()).unwrap();
+        assert_eq!(
+            usage.get("provider").and_then(serde_json::Value::as_str),
+            Some("openai")
+        );
+    }
 }
 
 pub fn emit_pending_route_trace(

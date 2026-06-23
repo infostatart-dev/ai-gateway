@@ -148,9 +148,15 @@ where
         if let Some(usage) =
             response.extensions().get::<crate::types::extensions::GatewayProviderUsageExtension>()
         && let Some(header_value) = usage.0.to_header_value()
-        {
+        && !response.headers().contains_key(
+            http::HeaderName::from_static(
+                crate::metrics::provider::usage_json::GATEWAY_PROVIDER_USAGE_HEADER,
+            ),
+        ) {
             response.headers_mut().insert(
-                http::HeaderName::from_static("x-gateway-provider-usage"),
+                http::HeaderName::from_static(
+                    crate::metrics::provider::usage_json::GATEWAY_PROVIDER_USAGE_HEADER,
+                ),
                 header_value,
             );
         }

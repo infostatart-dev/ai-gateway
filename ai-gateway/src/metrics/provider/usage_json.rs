@@ -1,6 +1,8 @@
 use http::HeaderValue;
 use serde::Serialize;
 
+pub const GATEWAY_PROVIDER_USAGE_HEADER: &str = "x-gateway-provider-usage";
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct GatewayProviderUsage {
     pub provider: String,
