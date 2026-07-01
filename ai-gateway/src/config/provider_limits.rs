@@ -687,6 +687,24 @@ mod tests {
     }
 
     #[test]
+    fn vllm_catalog_exposes_single_slot_pacing() {
+        let catalog = ProviderLimitCatalog::default();
+        let provider_id = InferenceProvider::Named("vllm".into());
+        let provider = catalog.provider(&provider_id).expect("vllm limits");
+        let limits = &provider.tier("free").unwrap().endpoints
+            ["chat-completions"]
+            .models["all"]
+            .limits;
+
+        assert_eq!(
+            catalog.quota_profile(&provider_id),
+            ProviderQuotaProfile::PerSlot
+        );
+        assert_eq!(limits.rpm, QuotaValue::Limited(60));
+        assert_eq!(limits.concurrent, Some(1));
+    }
+
+    #[test]
     fn autodefault_free_stack_cooldown_overrides_load_from_yaml() {
         let catalog = ProviderLimitCatalog::default();
         let defaults = catalog.cooldown_defaults;

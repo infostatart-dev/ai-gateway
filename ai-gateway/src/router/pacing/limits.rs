@@ -140,6 +140,16 @@ mod tests {
     }
 
     #[test]
+    fn vllm_catalog_exposes_single_concurrency_pacing() {
+        let catalog = ProviderLimitCatalog::default();
+        let provider = InferenceProvider::Named("vllm".into());
+        let limits = catalog.pacing_limits_for(&provider).expect("vllm pacing");
+        assert_eq!(limits.concurrent, 1);
+        assert_eq!(limits.rpm, 60);
+        assert_eq!(limits.min_interval, Duration::ZERO);
+    }
+
+    #[test]
     fn gemini_per_model_limits_differ_by_slug() {
         let catalog = ProviderLimitCatalog::default();
         let provider = InferenceProvider::GoogleGemini;

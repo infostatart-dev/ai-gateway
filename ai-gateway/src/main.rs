@@ -287,6 +287,19 @@ async fn run_app(config: Config) -> Result<(), RuntimeError> {
     let config = app.state.config();
     let health_monitor = HealthMonitor::new(app.state.clone());
     let rate_limit_monitor = RateLimitMonitor::new(app.state.clone());
+    let client_access_reloader = config
+        .client_access
+        .enabled
+        .then(|| {
+            config.client_access.file.as_ref().map(|path| {
+                ai_gateway::client_access::reload::ClientAccessReloader::new(
+                    app.state.clone(),
+                    path.clone(),
+                    config.client_access.reload_interval,
+                )
+            })
+        })
+        .flatten();
 
     let rate_limiting_cleanup_service =
         config.global.rate_limit.as_ref().map(|_| {
@@ -332,6 +345,13 @@ async fn run_app(config: Config) -> Result<(), RuntimeError> {
         meltdown = meltdown.register(TaggedService::new(
             "rate-limiting-cleanup",
             rate_limiting_cleanup_service,
+        ));
+    }
+
+    if let Some(client_access_reloader) = client_access_reloader {
+        meltdown = meltdown.register(TaggedService::new(
+            "client-access-reloader",
+            client_access_reloader,
         ));
     }
 

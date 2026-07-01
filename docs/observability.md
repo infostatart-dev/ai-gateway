@@ -39,7 +39,7 @@ the response header use `usage.source=estimated` and classify the attempt as
 | `gateway_provider_tokens_total` | Counter | `token_type`, `usage_source` |
 | `gateway_provider_request_duration_ms` | Histogram | wall time |
 | `gateway_provider_tfft_ms` | Histogram | streaming only |
-| `gateway_provider_generation_ms_per_output_token` | Histogram | `(duration_ms - tfft_ms) / max(output_tokens, 1)` |
+| `gateway_provider_generation_ms_per_output_token` | Histogram | streaming: `(duration_ms - tfft_ms) / max(output_tokens, 1)`; non-streaming: `duration_ms / max(output_tokens, 1)` |
 | `gateway_repeat_429_violations_total` | Counter | 429 on scopes infeasible at hop admit time |
 
 Shared attributes: `provider`, `credential`, `model`, `router_id`, `attempt_index`,
@@ -149,6 +149,7 @@ Counters reset on process restart.
   },
   "latency_ms": {
     "total": 1200,
+    "ttfb": 250,
     "ttft": 250,
     "generation_per_output_token": 23.8
   },
@@ -162,7 +163,8 @@ Counters reset on process restart.
 | Field | Notes |
 |-------|-------|
 | `usage.source` | `reported` or `estimated` |
-| `latency_ms.ttft` | omitted for non-streaming |
+| `latency_ms.ttfb` | time to first upstream response body byte |
+| `latency_ms.ttft` | time to first generated token; omitted for non-streaming |
 | `routing.failover` | `true` when `attempts > 1` |
 
 Omit the header entirely when `observability.response_headers.enabled=false`.

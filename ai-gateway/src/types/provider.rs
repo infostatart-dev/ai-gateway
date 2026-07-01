@@ -87,6 +87,7 @@ impl InferenceProvider {
     #[must_use]
     pub fn is_keyless(&self) -> bool {
         matches!(self, Self::Ollama)
+            || matches!(self, Self::Named(name) if name == "vllm")
     }
 
     #[must_use]
@@ -390,6 +391,12 @@ mod tests {
     fn opencode_is_not_keyless() {
         let provider = InferenceProvider::Named("opencode".into());
         assert!(!provider.is_keyless());
+    }
+
+    #[test]
+    fn vllm_is_keyless() {
+        let provider = InferenceProvider::Named("vllm".into());
+        assert!(provider.is_keyless());
     }
 
     #[test]

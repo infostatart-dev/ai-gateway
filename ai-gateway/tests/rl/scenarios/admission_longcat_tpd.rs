@@ -7,7 +7,7 @@ use ai_gateway::{
     types::provider::InferenceProvider,
 };
 
-const MODEL: &str = "LongCat-Flash-Chat";
+const MODEL: &str = "LongCat-2.0";
 
 pub async fn run() {
     let catalog = ProviderLimitCatalog::default();

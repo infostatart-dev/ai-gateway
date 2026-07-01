@@ -34,6 +34,8 @@ pub struct UsageBlock {
 pub struct LatencyBlock {
     pub total: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub ttfb: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ttft: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub generation_per_output_token: Option<f64>,
@@ -75,6 +77,7 @@ mod tests {
             },
             latency_ms: LatencyBlock {
                 total: 120.0,
+                ttfb: Some(35.0),
                 ttft: None,
                 generation_per_output_token: Some(8.5),
             },

@@ -86,4 +86,6 @@ pub enum InitError {
     DistributedStateStoreRequired,
     /// Invalid decision engine config: {0}
     InvalidDecisionConfig(&'static str),
+    /// Invalid client access config: {0}
+    InvalidClientAccessConfig(String),
 }

@@ -54,6 +54,18 @@ pub struct AuthContext {
     pub org_id: OrgId,
 }
 
+#[derive(Debug, Clone)]
+pub struct ClientAccessContext {
+    pub key_id: String,
+    pub subject_id: String,
+    pub user_id: UserId,
+    pub org_id: OrgId,
+    pub plan_id: String,
+    pub max_output_tokens: u32,
+    pub scopes: Vec<crate::client_access::ClientAccessScope>,
+    pub quota_limits: crate::config::client_access::ClientAccessLimitsConfig,
+}
+
 #[derive(Debug)]
 pub struct RequestContext {
     /// If `None`, the request was for a direct proxy.

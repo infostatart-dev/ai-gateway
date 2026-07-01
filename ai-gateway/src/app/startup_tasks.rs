@@ -25,6 +25,10 @@ pub fn meltdown_service_names(config: &Config) -> Vec<&'static str> {
         tasks.push("rate-limiting-cleanup");
     }
 
+    if config.client_access.enabled {
+        tasks.push("client-access-reloader");
+    }
+
     tasks
 }
 

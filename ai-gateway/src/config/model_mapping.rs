@@ -74,7 +74,7 @@ gpt-5-mini:
     }
 
     #[test]
-    fn gpt_5_mini_default_mapping_prefers_curated_free_providers_first() {
+    fn gpt_5_mini_default_mapping_prefers_vllm_then_curated_free_providers() {
         let config = ModelMappingConfig::default();
         let mappings = config
             .as_ref()
@@ -84,7 +84,33 @@ gpt-5-mini:
         let first = mappings.first();
         assert_eq!(
             first.inference_provider(),
-            Some(InferenceProvider::Named("bazaarlink".into()))
+            Some(InferenceProvider::Named("vllm".into()))
+        );
+        assert_eq!(first.to_string(), "am-thinking-awq");
+
+        let longcat_pos = mappings
+            .iter()
+            .position(|model| {
+                model.inference_provider()
+                    == Some(InferenceProvider::Named("longcat".into()))
+            })
+            .expect("longcat entry");
+        assert_eq!(
+            longcat_pos, 1,
+            "longcat must be the first fallback after local vllm"
+        );
+
+        let bazaarlink_pos = mappings
+            .iter()
+            .position(|model| {
+                model.inference_provider()
+                    == Some(InferenceProvider::Named("bazaarlink".into()))
+            })
+            .expect("bazaarlink entry");
+        assert_eq!(
+            bazaarlink_pos, 2,
+            "bazaarlink must remain the first curated free fallback after \
+             longcat"
         );
 
         let openrouter_models: Vec<_> = mappings
@@ -105,7 +131,8 @@ gpt-5-mini:
     }
 
     #[test]
-    fn gpt_5_4_nano_default_mapping_prefers_curated_free_before_paid() {
+    fn gpt_5_4_nano_default_mapping_prefers_vllm_then_curated_free_before_paid()
+    {
         let config = ModelMappingConfig::default();
         let mappings = config
             .as_ref()
@@ -118,8 +145,12 @@ gpt-5-mini:
             .collect();
 
         let first = providers.first().expect("first mapping");
-        assert_eq!(*first, InferenceProvider::Named("bazaarlink".into()));
+        assert_eq!(*first, InferenceProvider::Named("vllm".into()));
 
+        let longcat_pos = providers
+            .iter()
+            .position(|p| *p == InferenceProvider::Named("longcat".into()))
+            .expect("longcat fallback");
         let anthropic_pos = providers
             .iter()
             .position(|p| *p == InferenceProvider::Anthropic)
@@ -128,13 +159,21 @@ gpt-5-mini:
             .iter()
             .position(|p| *p == InferenceProvider::Named("bazaarlink".into()))
             .expect("bazaarlink entry");
+        assert_eq!(
+            longcat_pos, 1,
+            "longcat must be the first fallback after local vllm"
+        );
+        assert_eq!(
+            bazaarlink_pos, 2,
+            "bazaarlink must remain the first curated free fallback after \
+             longcat"
+        );
         assert!(bazaarlink_pos < anthropic_pos);
 
         let first_model = mappings.first().to_string();
         assert!(
-            first_model.contains("auto:free"),
-            "first nano mapping must be bazaarlink free router, got \
-             {first_model}"
+            first_model.contains("am-thinking-awq"),
+            "first nano mapping must be local vllm, got {first_model}"
         );
     }
 }

@@ -48,6 +48,8 @@ impl TestDefault for Config {
             helicone: crate::config::helicone::HeliconeConfig::test_default(),
             deployment_target:
                 crate::config::deployment_target::DeploymentTarget::Sidecar,
+            client_access:
+                crate::config::client_access::ClientAccessConfig::default(),
             discover: crate::config::discover::DiscoverConfig::test_default(),
             cache_store: Some(crate::config::cache::CacheStore::default()),
             rate_limit_store: Some(

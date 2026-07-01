@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock as StdRwLock};
 
 use opentelemetry::global;
 use rustc_hash::FxHashMap as HashMap;
@@ -57,6 +57,14 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
         .await?;
 
     let provider_keys = ProviderKeys::new(&config, &metrics);
+    let client_access_snapshot = load_initial_client_access_snapshot(&config)?;
+    let client_access_quota_store = if config.client_access.enabled {
+        Some(crate::client_access::quota::build_quota_store(
+            &config.client_access.quota_store,
+        )?)
+    } else {
+        None
+    };
 
     let decision_state = super::decision_state::build_decision_state(&config)?;
     let upstream_pacing = Arc::new(crate::router::pacing::PacingRegistry::new(
@@ -78,6 +86,8 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
             RwLock::new(StateWithMetadata::default()),
         ),
         provider_keys,
+        client_access_snapshot,
+        client_access_quota_store,
         global_rate_limit,
         router_rate_limits: RwLock::new(HashMap::default()),
         metrics,
@@ -97,4 +107,40 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
         budget_probe,
         route_memory,
     })))
+}
+
+fn load_initial_client_access_snapshot(
+    config: &Config,
+) -> Result<
+    Option<Arc<StdRwLock<Arc<crate::client_access::ClientAccessSnapshot>>>>,
+    InitError,
+> {
+    if !config.client_access.enabled {
+        return Ok(None);
+    }
+    if config.deployment_target.is_cloud()
+        && matches!(
+            config.client_access.quota_store,
+            crate::config::client_access::ClientAccessQuotaStoreConfig::Memory
+        )
+    {
+        tracing::warn!(
+            "client access memory quota store is process-local and not \
+             suitable for cloud deployments",
+        );
+    }
+    let path = config.client_access.file.as_ref().ok_or_else(|| {
+        InitError::InvalidClientAccessConfig(
+            "`client-access.file` is required when client access is enabled"
+                .to_string(),
+        )
+    })?;
+    let snapshot = crate::client_access::loader::load_snapshot_from_file(path)
+        .map_err(|err| InitError::InvalidClientAccessConfig(err.to_string()))?;
+    tracing::info!(
+        path = %path.display(),
+        keys = snapshot.len(),
+        "loaded client access snapshot",
+    );
+    Ok(Some(Arc::new(StdRwLock::new(snapshot))))
 }

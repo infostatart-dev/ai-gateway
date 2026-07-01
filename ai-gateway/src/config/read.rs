@@ -137,6 +137,7 @@ fn build_autodefault_router(config: &Config) -> Option<RouterConfig> {
 
 fn autodefault_provider_order() -> Vec<InferenceProvider> {
     let mut order = vec![
+        InferenceProvider::Named("vllm".into()),
         InferenceProvider::Named("opencode".into()),
         InferenceProvider::OpenRouter,
         InferenceProvider::Named("github-models".into()),
@@ -413,6 +414,39 @@ credentials:
             .copied()
             .expect("openrouter in autodefault");
         assert!(openrouter_rank < longcat_rank);
+    }
+
+    #[test]
+    fn autodefault_with_empty_secrets_includes_only_keyless_vllm() {
+        let providers = ProvidersConfig::default();
+        let credentials = registry_from_secrets("credentials: {}\n");
+        let vllm = InferenceProvider::Named("vllm".into());
+        assert!(is_available_for_autodefault(
+            &vllm,
+            &providers,
+            &credentials,
+        ));
+
+        let config = Config {
+            providers,
+            credentials,
+            ..Config::default()
+        };
+        let router =
+            build_autodefault_router(&config).expect("autodefault router");
+        let strategy = router.load_balance.0.get(&EndpointType::Chat).unwrap();
+        let BalanceConfigInner::BudgetAwareCapabilityAfter {
+            providers,
+            provider_priorities,
+            ..
+        } = strategy
+        else {
+            panic!("expected BudgetAwareCapabilityAfter");
+        };
+
+        let actual: Vec<_> = providers.iter().cloned().collect();
+        assert_eq!(actual, vec![vllm.clone()]);
+        assert_eq!(provider_priorities.get(&vllm), Some(&0));
     }
 
     #[test]

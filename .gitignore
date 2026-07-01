@@ -2,6 +2,7 @@ target
 node_modules
 .wrangler
 .env
+ai-gateway/dev/logs
 dev/session.json
 dev/perplexity-session.json
 dev/deepseek-session*.json

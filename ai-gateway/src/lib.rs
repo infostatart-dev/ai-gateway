@@ -2,6 +2,7 @@ pub mod app;
 pub mod app_state;
 pub mod cache;
 pub mod cli;
+pub mod client_access;
 pub mod config;
 pub mod control_plane;
 pub mod discover;

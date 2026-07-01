@@ -1,4 +1,8 @@
-use std::{collections::HashSet, fmt, sync::Arc};
+use std::{
+    collections::HashSet,
+    fmt,
+    sync::{Arc, RwLock as StdRwLock},
+};
 
 use opentelemetry::KeyValue;
 use rustc_hash::FxHashMap as HashMap;
@@ -113,6 +117,37 @@ impl AppState {
     ) -> &Arc<crate::router::budget_aware::CredentialHealthRegistry> {
         &self.0.metrics.provider.health
     }
+
+    #[must_use]
+    pub fn client_access_snapshot(
+        &self,
+    ) -> Option<Arc<crate::client_access::ClientAccessSnapshot>> {
+        let holder = self.0.client_access_snapshot.as_ref()?;
+        holder.read().ok().map(|snapshot| Arc::clone(&snapshot))
+    }
+
+    pub fn set_client_access_snapshot(
+        &self,
+        snapshot: Arc<crate::client_access::ClientAccessSnapshot>,
+    ) -> bool {
+        let Some(holder) = self.0.client_access_snapshot.as_ref() else {
+            return false;
+        };
+        let Ok(mut guard) = holder.write() else {
+            tracing::error!("client access snapshot lock poisoned");
+            return false;
+        };
+        *guard = snapshot;
+        true
+    }
+
+    #[must_use]
+    pub fn client_access_quota_store(
+        &self,
+    ) -> Option<Arc<dyn crate::client_access::quota::ClientAccessQuotaStore>>
+    {
+        self.0.client_access_quota_store.clone()
+    }
 }
 
 pub struct InnerAppState {
@@ -138,6 +173,10 @@ pub struct InnerAppState {
     pub control_plane_state: Arc<RwLock<StateWithMetadata>>,
 
     pub provider_keys: ProviderKeys,
+    pub client_access_snapshot:
+        Option<Arc<StdRwLock<Arc<crate::client_access::ClientAccessSnapshot>>>>,
+    pub client_access_quota_store:
+        Option<Arc<dyn crate::client_access::quota::ClientAccessQuotaStore>>,
     pub helicone_api_keys: RwLock<Option<HashSet<Key>>>,
     pub router_organization_map: RwLock<HashMap<RouterId, OrgId>>,
 

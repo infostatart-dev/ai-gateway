@@ -248,6 +248,7 @@ mod tests {
         for name in [
             "longcat",
             "doubao",
+            "vllm",
             "ollama-cloud",
             "inclusionai",
             "sambanova",
@@ -286,11 +287,29 @@ mod tests {
     }
 
     #[test]
+    fn default_catalog_includes_local_vllm() {
+        let config = ProvidersConfig::default();
+        let vllm = InferenceProvider::Named("vllm".into());
+        let cfg = config.get(&vllm).expect("vllm in catalog");
+        assert_eq!(cfg.base_url.as_str(), "http://10.30.50.1:8000/");
+        assert!(
+            cfg.models
+                .iter()
+                .any(|m| m.to_string() == "am-thinking-awq")
+        );
+        let model =
+            ModelId::from_str_and_provider(vllm.clone(), "am-thinking-awq")
+                .unwrap();
+        assert_eq!(model.to_string(), "am-thinking-awq");
+        assert_eq!(model.inference_provider(), Some(vllm));
+    }
+
+    #[test]
     fn longcat_model_id_strips_gateway_prefix() {
         use std::str::FromStr;
 
-        let model = ModelId::from_str("longcat/LongCat-2.0-Preview").unwrap();
-        assert_eq!(model.to_string(), "LongCat-2.0-preview");
+        let model = ModelId::from_str("longcat/LongCat-2.0").unwrap();
+        assert_eq!(model.to_string(), "LongCat-2.0");
     }
 
     #[test]

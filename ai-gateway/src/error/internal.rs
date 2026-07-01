@@ -85,6 +85,8 @@ pub enum InternalError {
     DatabaseError(#[from] sqlx::Error),
     /// Decision engine error: {0}
     DecisionEngineError(String),
+    /// Client access quota store unavailable: {0}
+    ClientAccessQuotaUnavailable(String),
 }
 
 impl IntoResponse for InternalError {
@@ -109,6 +111,10 @@ impl IntoResponse for InternalError {
                     )
                 }
             }
+            InternalError::ClientAccessQuotaUnavailable(_) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Some(SERVER_ERROR_TYPE.to_string()),
+            ),
             _ => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Some(SERVER_ERROR_TYPE.to_string()),
@@ -195,6 +201,8 @@ pub enum InternalErrorMetric {
     DatabaseError,
     /// Decision engine error
     DecisionEngineError,
+    /// Client access quota store unavailable
+    ClientAccessQuotaUnavailable,
 }
 
 impl From<&InternalError> for InternalErrorMetric {
@@ -240,6 +248,9 @@ impl From<&InternalError> for InternalErrorMetric {
             InternalError::AuthDataNotReady => Self::AuthDataNotReady,
             InternalError::DatabaseError(_) => Self::DatabaseError,
             InternalError::DecisionEngineError(_) => Self::DecisionEngineError,
+            InternalError::ClientAccessQuotaUnavailable(_) => {
+                Self::ClientAccessQuotaUnavailable
+            }
         }
     }
 }

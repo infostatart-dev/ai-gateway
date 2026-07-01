@@ -4,7 +4,6 @@ description: >-
   Agent playbook: scope-aware pre-deploy (rust clippy/tests OR tooling/openspec
   only), stage safely, English Conventional Commit, push fork, watch CI. Use on
   /smart-conventional-commit-with-predeploy or when user asks to commit/push.
-disable-model-invocation: true
 ---
 
 # Smart conventional commit with pre-deploy

@@ -96,6 +96,45 @@ active.
 etc.) applied across routes. See upstream Helicone config shape for field names;
 this fork preserves YAML compatibility.
 
+## Client Access
+
+`client-access` is the first-party inbound API key and quota boundary for
+serving the gateway as a service. It is independent of upstream provider
+credentials and legacy Helicone/control-plane auth.
+
+```yaml
+client-access:
+  enabled: true
+  file: ./dev/client-access.local.yaml
+  reload-interval: 1s
+  max-body-bytes: 4MiB
+  quota-store:
+    type: memory
+```
+
+For multi-replica or cloud deployment use Redis:
+
+```yaml
+client-access:
+  enabled: true
+  file: /etc/ai-gateway/client-access.yaml
+  quota-store:
+    type: redis
+    host-url: redis://redis:6379
+    connection-timeout: 1s
+```
+
+The registry file contains only hashed inbound keys:
+`sha256:<hex>`. A key references a subject, plan, status, and explicit scopes
+such as `unified-api`, `router:autodefault`, `direct:openai`, or `*`.
+
+The file is loaded at startup and then polled on `reload-interval`. Invalid
+reloads keep the last valid snapshot. When enabled, missing or invalid initial
+registry files fail startup closed.
+
+See [client-access.md](client-access.md) and
+[`dev/client-access.local.example.yaml`](../dev/client-access.local.example.yaml).
+
 ## Helicone Cloud block (optional)
 
 ```yaml

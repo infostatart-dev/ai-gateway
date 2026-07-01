@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.6.0] - 2026-07-01
+
+**Client access and quota enforcement** — the gateway can authenticate inbound
+service clients with hash-only key registries, route scopes, and request/token
+quota windows backed by process-local memory or Redis.
+
+### Features
+
+- **Client access registry:** YAML subjects, plans, keys, key status, expiry,
+  hash-only secrets, startup validation, live reload, and last-good snapshot
+  behavior
+- **Scoped inbound access:** unified API, named router, direct provider, and
+  wildcard scopes are enforced before upstream dispatch
+- **Request and token quotas:** per-key minute/day/week windows, protected body
+  limits, token estimation, output-token reservation, usage reconciliation, and
+  streaming settlement
+- **Quota backends:** in-memory counters for single-process deployments and
+  Redis-backed counters/reservations for shared enforcement across replicas
+- **Provider catalog updates:** OpenAI-compatible local vLLM defaults and
+  refreshed LongCat model, capability, mapping, and quota metadata
+- **Codex skills:** repository commit/pre-deploy playbook is available through
+  the Codex skills directory while keeping the shared agent playbook canonical
+
+### Fixed
+
+- **Auth boundary:** public health and provider-stats endpoints stay accessible
+  when first-party client access is enabled
+- **Quota accounting:** token reservations are refunded or settled across
+  rejected requests, upstream errors, non-streaming responses, and streaming
+  completion paths
+- **Redis quota admission:** rejected admissions avoid partial counter updates
+  and unavailable Redis backends fail protected traffic closed
+- **Middleware readiness:** quota enforcement preserves Tower readiness
+  reservations when wrapping buffered downstream services
+
+### Quality
+
+- Unit and middleware coverage for registry parsing, reload behavior, key
+  status, scopes, quota windows, reservation settlement, Redis state, and
+  response headers
+- Documentation and examples for client access configuration, registry files,
+  scopes, limits, reload behavior, and quota backends
+- OpenSpec change artifacts for inbound API key access and quotas
+
 ## [0.5.7] - 2026-06-23
 
 **Provider usage response header** — platform badges read `X-Gateway-Provider-Usage`

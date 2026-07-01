@@ -417,6 +417,7 @@ mod tests {
                         },
                         latency_ms: LatencyBlock {
                             total: 50.0,
+                            ttfb: None,
                             ttft: None,
                             generation_per_output_token: None,
                         },

@@ -253,7 +253,9 @@ impl GatewayProviderMetrics {
 
         self.request_duration_ms
             .record(record.duration_ms, &base_attrs(record));
-        if let Some(ttft) = record.tfft_ms {
+        if record.stream
+            && let Some(ttft) = record.tfft_ms
+        {
             self.tfft_ms.record(ttft, &base_attrs(record));
         }
         if let Some(generation_ms) = generation_ms_per_output_token(record) {
@@ -386,7 +388,9 @@ impl ProviderRuntimeRegistry {
             .duration_sum_ms
             .saturating_add(record.duration_ms as u64);
         entry.duration_count = entry.duration_count.saturating_add(1);
-        if let Some(ttft) = record.tfft_ms {
+        if record.stream
+            && let Some(ttft) = record.tfft_ms
+        {
             entry.tfft_sum_ms = entry.tfft_sum_ms.saturating_add(ttft as u64);
             entry.tfft_count = entry.tfft_count.saturating_add(1);
         }
@@ -654,7 +658,11 @@ pub fn generation_ms_per_output_token(record: &AttemptRecord) -> Option<f64> {
     if output == 0 {
         return None;
     }
-    let tfft = record.tfft_ms.unwrap_or(0.0);
+    let tfft = if record.stream {
+        record.tfft_ms.unwrap_or(0.0)
+    } else {
+        0.0
+    };
     let gen_ms = record.duration_ms - tfft;
     if gen_ms <= 0.0 {
         return None;
@@ -728,7 +736,8 @@ pub fn build_usage_header(
         },
         latency_ms: LatencyBlock {
             total: record.duration_ms,
-            ttft: record.tfft_ms,
+            ttfb: record.tfft_ms,
+            ttft: record.stream.then_some(record.tfft_ms).flatten(),
             generation_per_output_token: generation_ms,
         },
         routing: RoutingBlock {
@@ -771,16 +780,33 @@ mod tests {
     }
 
     #[test]
-    fn usage_header_includes_ttft_for_non_stream() {
-        let usage =
-            build_usage_header(&sample_record(false, Some(400.0)), None);
-        assert_eq!(usage.latency_ms.ttft, Some(400.0));
+    fn usage_header_reports_ttfb_not_ttft_for_non_stream() {
+        let record = sample_record(false, Some(400.0));
+        let usage = build_usage_header(
+            &record,
+            generation_ms_per_output_token(&record),
+        );
+        assert_eq!(usage.latency_ms.ttfb, Some(400.0));
+        assert_eq!(usage.latency_ms.ttft, None);
         assert_eq!(usage.latency_ms.total, 2283.0);
+        assert_eq!(
+            usage.latency_ms.generation_per_output_token,
+            Some(2283.0 / 43.0)
+        );
     }
 
     #[test]
     fn usage_header_includes_ttft_for_stream_when_present() {
-        let usage = build_usage_header(&sample_record(true, Some(120.0)), None);
+        let record = sample_record(true, Some(120.0));
+        let usage = build_usage_header(
+            &record,
+            generation_ms_per_output_token(&record),
+        );
+        assert_eq!(usage.latency_ms.ttfb, Some(120.0));
         assert_eq!(usage.latency_ms.ttft, Some(120.0));
+        assert_eq!(
+            usage.latency_ms.generation_per_output_token,
+            Some((2283.0 - 120.0) / 43.0)
+        );
     }
 }

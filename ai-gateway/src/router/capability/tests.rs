@@ -201,11 +201,8 @@ fn longcat_2_preview_supports_json_schema() {
     let provider = InferenceProvider::Named("longcat".into());
     let mut cap = ModelCapability {
         provider: provider.clone(),
-        model: ModelId::from_str_and_provider(
-            provider.clone(),
-            "LongCat-2.0-Preview",
-        )
-        .unwrap(),
+        model: ModelId::from_str_and_provider(provider.clone(), "LongCat-2.0")
+            .unwrap(),
         context_window: None,
         supports_tools: false,
         supports_json_schema: false,
@@ -214,7 +211,7 @@ fn longcat_2_preview_supports_json_schema() {
         json_schema_rank: 0,
         intent_tier: IntentTier::Standard,
     };
-    apply_provider_capabilities(&mut cap, &provider, "LongCat-2.0-Preview");
+    apply_provider_capabilities(&mut cap, &provider, "LongCat-2.0");
     assert!(cap.supports_json_schema);
     assert_eq!(cap.context_window, Some(1_048_576));
 }

@@ -24,6 +24,7 @@ pub struct Metrics {
     pub tfft_duration: Histogram<f64>,
     pub llm: llm::LlmMetrics,
     pub cache: CacheMetrics,
+    pub client_access: ClientAccessMetrics,
     pub routers: RouterMetrics,
     pub runtime: router::RouterRuntimeMetrics,
     pub provider: provider::GatewayProviderMetrics,
@@ -63,6 +64,7 @@ impl Metrics {
             .build();
         let llm = llm::LlmMetrics::new(meter);
         let cache = CacheMetrics::new(meter);
+        let client_access = ClientAccessMetrics::new(meter);
         let routers = RouterMetrics::new(meter);
         let runtime = router::RouterRuntimeMetrics::new(meter);
         let provider = provider::GatewayProviderMetrics::new(meter);
@@ -76,9 +78,74 @@ impl Metrics {
             tfft_duration,
             llm,
             cache,
+            client_access,
             routers,
             runtime,
             provider,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ClientAccessMetrics {
+    pub reload_successes: Counter<u64>,
+    pub reload_failures: Counter<u64>,
+    pub auth_attempts: Counter<u64>,
+    pub auth_rejections: Counter<u64>,
+    pub scope_denials: Counter<u64>,
+    pub quota_admissions: Counter<u64>,
+    pub quota_rejections: Counter<u64>,
+    pub quota_store_errors: Counter<u64>,
+}
+
+impl ClientAccessMetrics {
+    #[must_use]
+    pub fn new(meter: &Meter) -> Self {
+        let reload_successes = meter
+            .u64_counter("client_access_reload_successes")
+            .with_description(
+                "Number of successful client access registry reloads",
+            )
+            .build();
+        let reload_failures = meter
+            .u64_counter("client_access_reload_failures")
+            .with_description("Number of failed client access registry reloads")
+            .build();
+        let auth_attempts = meter
+            .u64_counter("client_access_auth_attempts")
+            .with_description("Number of client access authentication attempts")
+            .build();
+        let auth_rejections = meter
+            .u64_counter("client_access_auth_rejections")
+            .with_description(
+                "Number of rejected client access authentications",
+            )
+            .build();
+        let scope_denials = meter
+            .u64_counter("client_access_scope_denials")
+            .with_description("Number of client access route scope denials")
+            .build();
+        let quota_admissions = meter
+            .u64_counter("client_access_quota_admissions")
+            .with_description("Number of admitted client access quota checks")
+            .build();
+        let quota_rejections = meter
+            .u64_counter("client_access_quota_rejections")
+            .with_description("Number of rejected client access quota checks")
+            .build();
+        let quota_store_errors = meter
+            .u64_counter("client_access_quota_store_errors")
+            .with_description("Number of client access quota store errors")
+            .build();
+        Self {
+            reload_successes,
+            reload_failures,
+            auth_attempts,
+            auth_rejections,
+            scope_denials,
+            quota_admissions,
+            quota_rejections,
+            quota_store_errors,
         }
     }
 }

@@ -59,6 +59,7 @@ pub struct Config {
         crate::config::response_headers::ResponseHeadersConfig,
     pub observability: crate::config::observability::ObservabilityConfig,
     pub deployment_target: crate::config::deployment_target::DeploymentTarget,
+    pub client_access: crate::config::client_access::ClientAccessConfig,
     pub control_plane: crate::config::control_plane::ControlPlaneConfig,
     pub default_model_mapping: crate::config::model_mapping::ModelMappingConfig,
     pub helicone: crate::config::helicone::HeliconeConfig,
@@ -101,6 +102,8 @@ impl Default for Config {
                 crate::config::observability::ObservabilityConfig::default(),
             deployment_target:
                 crate::config::deployment_target::DeploymentTarget::default(),
+            client_access:
+                crate::config::client_access::ClientAccessConfig::default(),
             control_plane:
                 crate::config::control_plane::ControlPlaneConfig::default(),
             default_model_mapping:

@@ -1,0 +1,30 @@
+version: 1
+
+subjects:
+  local-dev:
+    org-id: "00000000-0000-0000-0000-000000000001"
+    user-id: "00000000-0000-0000-0000-000000000002"
+
+plans:
+  starter:
+    max-output-tokens: 4000
+    limits:
+      requests:
+        per-minute: 60
+        per-day: 1000
+        per-week: 5000
+      tokens:
+        per-minute: 120000
+        per-day: 1000000
+        per-week: 5000000
+
+keys:
+  local-dev-main:
+    # Store only sha256:<hex>. Never store the raw inbound API key here.
+    hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    subject: local-dev
+    status: active
+    plan: starter
+    scopes:
+      - unified-api
+      - router:autodefault

@@ -2,6 +2,7 @@ pub mod balance;
 pub mod cache;
 pub mod catalog_limit_resolve;
 pub mod chatgpt_web;
+pub mod client_access;
 pub mod cloudflare;
 pub mod control_plane;
 pub mod cost_class;

@@ -71,6 +71,11 @@ impl MetaRouter {
             .layer(AsyncRequireAuthorizationLayer::new(
                 crate::middleware::auth::AuthService::new(app_state.clone()),
             ))
+            .layer(
+                crate::middleware::client_access_quota::ClientAccessQuotaLayer::new(
+                    app_state.clone(),
+                ),
+            )
             .layer(RateLimitLayer::global(&app_state)?)
             .layer(CacheLayer::global(&app_state)?)
             .layer(ErrorHandlerLayer::new(app_state.clone()))

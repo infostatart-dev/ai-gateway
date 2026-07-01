@@ -9,11 +9,16 @@ regardless of `helicone.features` or websocket reachability.
 Helicone Cloud **sidecar** mode (dynamic router push over websocket) is
 [legacy](../SIDECAR.md) and not supported in this fork.
 
+Inbound service authentication is handled by first-party
+[`client-access`](client-access.md) when enabled. Helicone/control-plane auth is
+kept only as a legacy compatibility path when `client-access.enabled` is false.
+
 ## What still works without a control plane
 
 - Named routers from config YAML (`/router/{name}/…`)
 - Sidecar **autodefault** router (built from credential slots)
 - Budget-aware routing, pacing, failover, provider-stats
+- First-party inbound client API keys and quotas via `client-access`
 - Caller context headers (`Helicone-Session-Id`, etc.) — compatibility only
 
 ## Helicone block in config

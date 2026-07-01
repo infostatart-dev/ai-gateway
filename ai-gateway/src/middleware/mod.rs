@@ -2,6 +2,7 @@ pub mod add_extension;
 pub mod auth;
 pub mod cache;
 pub mod caller_context;
+pub mod client_access_quota;
 pub mod decision;
 pub mod mapper;
 pub mod prompts;

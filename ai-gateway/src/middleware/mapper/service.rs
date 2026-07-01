@@ -192,7 +192,7 @@ async fn map_response(
         .get::<MapperContext>()
         .ok_or(InternalError::ExtensionNotFound("MapperContext"))?;
     let is_stream = mapper_ctx.is_stream;
-    let (parts, body) = resp.into_parts();
+    let (mut parts, body) = resp.into_parts();
 
     let converter = converter_registry
         .get_converter(&target_endpoint, &source_endpoint)
@@ -256,6 +256,7 @@ async fn map_response(
         let final_body = axum_core::body::Body::new(
             reqwest::Body::wrap_stream(mapped_stream),
         );
+        parts.headers.remove(http::header::CONTENT_LENGTH);
         let new_resp = Response::from_parts(parts, final_body);
         Ok(new_resp)
     } else {
@@ -271,6 +272,7 @@ async fn map_response(
             .ok_or(MapperError::EmptyResponseBody)
             .map_err(InternalError::MapperError)?;
         let final_body = axum_core::body::Body::from(mapped_body_bytes);
+        parts.headers.remove(http::header::CONTENT_LENGTH);
         let new_resp = Response::from_parts(parts, final_body);
         tracing::trace!(
             source_endpoint = ?target_endpoint,

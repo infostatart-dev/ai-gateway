@@ -3,6 +3,7 @@ use std::{convert::Infallible, hash::Hash};
 use futures::{StreamExt, stream::FuturesUnordered};
 use http::HeaderValue;
 use http_body_util::BodyExt;
+use tower::ServiceExt;
 
 use super::{
     check::{CacheCheckResult, check_cache},
@@ -33,6 +34,9 @@ where
 {
     if ctx.enabled.is_none_or(|enabled| !enabled) {
         return inner
+            .ready()
+            .await
+            .map_err(|_| ApiError::Internal(InternalError::Internal))?
             .call(req)
             .await
             .map_err(|_| ApiError::Internal(InternalError::Internal));
@@ -120,6 +124,9 @@ where
 
     if let Some((bucket, key)) = stale_hits.into_iter().next() {
         let resp = inner
+            .ready()
+            .await
+            .map_err(|_| ApiError::Internal(InternalError::Internal))?
             .call(Request::from_parts(
                 parts.clone(),
                 body_bytes.clone().into(),
@@ -148,6 +155,9 @@ where
     record_cache_miss(app_state, &parts.uri, bucket);
 
     let resp = inner
+        .ready()
+        .await
+        .map_err(|_| ApiError::Internal(InternalError::Internal))?
         .call(Request::from_parts(
             parts.clone(),
             body_bytes.clone().into(),

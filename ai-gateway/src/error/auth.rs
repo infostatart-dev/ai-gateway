@@ -15,6 +15,8 @@ pub enum AuthError {
     MissingAuthorizationHeader,
     /// Invalid credentials
     InvalidCredentials,
+    /// Client key is not allowed for this route
+    ScopeDenied,
     /// Provider key not found
     ProviderKeyNotFound,
 }
@@ -46,6 +48,18 @@ impl IntoResponse for AuthError {
                 }),
             )
                 .into_response(),
+            Self::ScopeDenied => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    error: ErrorDetails {
+                        message: Self::ScopeDenied.to_string(),
+                        r#type: Some(INVALID_REQUEST_ERROR_TYPE.to_string()),
+                        param: None,
+                        code: Some("insufficient_scope".to_string()),
+                    },
+                }),
+            )
+                .into_response(),
             Self::ProviderKeyNotFound => (
                 StatusCode::UNAUTHORIZED,
                 Json(ErrorResponse {
@@ -71,6 +85,8 @@ pub enum AuthErrorMetric {
     MissingAuthorizationHeader,
     /// Invalid credentials
     InvalidCredentials,
+    /// Client key is not allowed for this route
+    ScopeDenied,
     /// Provider key not found
     ProviderKeyNotFound,
 }
@@ -82,6 +98,7 @@ impl From<&AuthError> for AuthErrorMetric {
                 Self::MissingAuthorizationHeader
             }
             AuthError::InvalidCredentials => Self::InvalidCredentials,
+            AuthError::ScopeDenied => Self::ScopeDenied,
             AuthError::ProviderKeyNotFound => Self::ProviderKeyNotFound,
         }
     }

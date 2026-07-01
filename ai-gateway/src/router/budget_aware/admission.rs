@@ -120,7 +120,6 @@ fn pacing_block_reason(
 mod tests {
     use std::time::{Duration, Instant};
 
-    use super::*;
     use crate::tests::routing::{PacingGate, PacingLimits};
 
     #[tokio::test]

@@ -1,5 +1,7 @@
 # OpenAI Models
 gpt-4:
+  - "vllm/am-thinking-awq"
+  - "longcat/LongCat-2.0"
   - "anthropic/claude-3-7-sonnet"
   - "gemini/gemini-2.5-pro"
   - "ollama/deepseek-r1"
@@ -10,6 +12,8 @@ gpt-4:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 gpt-4-turbo:
+  - "vllm/am-thinking-awq"
+  - "longcat/LongCat-2.0"
   - "anthropic/claude-3-7-sonnet"
   - "gemini/gemini-2.5-pro"
   - "ollama/llama4"
@@ -20,6 +24,8 @@ gpt-4-turbo:
   - "bedrock/amazon.nova-sonic-v1:0"
   - "deepseek/deepseek-chat"
 gpt-4o:
+  - "vllm/am-thinking-awq"
+  - "longcat/LongCat-2.0"
   - "anthropic/claude-3-7-sonnet"
   - "gemini/gemini-2.5-pro"
   - "ollama/llama4"
@@ -30,6 +36,8 @@ gpt-4o:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 gpt-4o-mini:
+  - "vllm/am-thinking-awq"
+  - "longcat/LongCat-2.0"
   - "openrouter/google/gemini-2.0-flash-lite-001"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-2.5-flash"
@@ -41,6 +49,8 @@ gpt-4o-mini:
   - "bedrock/us.anthropic.claude-3-5-haiku-20241022-v1:0"
   - "deepseek/deepseek-chat"
 gpt-5-mini:
+  - "vllm/am-thinking-awq"
+  - "longcat/LongCat-2.0"
   - "bazaarlink/auto:free"
   - "openrouter/openrouter/free"
   - "openrouter/nvidia/nemotron-3-nano-30b-a3b:free"
@@ -68,6 +78,8 @@ gpt-5-mini:
   - "bedrock/deepseek.r1-v1:0"
   - "deepseek/deepseek-reasoner"
 gpt-5:
+  - "vllm/am-thinking-awq"
+  - "longcat/LongCat-2.0"
   - "openrouter/openai/gpt-oss-120b:free"
   - "openrouter/qwen/qwen3-next-80b-a3b-instruct:free"
   - "anthropic/claude-opus-4-0"
@@ -80,6 +92,8 @@ gpt-5:
   - "bedrock/deepseek.r1-v1:0"
   - "deepseek/deepseek-reasoner"
 gpt-4.1:
+  - "vllm/am-thinking-awq"
+  - "longcat/LongCat-2.0"
   - "anthropic/claude-3-7-sonnet"
   - "gemini/gemini-2.5-pro"
   - "ollama/llama4"
@@ -90,6 +104,8 @@ gpt-4.1:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 gpt-4.1-mini:
+  - "vllm/am-thinking-awq"
+  - "longcat/LongCat-2.0"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-2.0-flash"
   - "ollama/llama3.3"
@@ -100,6 +116,8 @@ gpt-4.1-mini:
   - "bedrock/us.anthropic.claude-3-5-haiku-20241022-v1:0"
   - "deepseek/deepseek-chat"
 gpt-4.1-nano:
+  - "vllm/am-thinking-awq"
+  - "longcat/LongCat-2.0"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-1.5-flash-8b"
   - "groq/meta-llama/llama-prompt-guard-2-22m"
@@ -110,6 +128,8 @@ gpt-4.1-nano:
   - "bedrock/amazon.nova-micro-v1:0"
   - "deepseek/deepseek-chat"
 gpt-4.5:
+  - "vllm/am-thinking-awq"
+  - "longcat/LongCat-2.0"
   - "anthropic/claude-opus-4-0"
   - "gemini/gemini-2.5-pro"
   - "ollama/deepseek-r1"
@@ -120,6 +140,8 @@ gpt-4.5:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 gpt-5.4-nano:
+  - vllm/am-thinking-awq
+  - longcat/LongCat-2.0
   - bazaarlink/auto:free
   - openrouter/openrouter/free
   - openrouter/nvidia/nemotron-3-nano-30b-a3b:free
@@ -140,6 +162,8 @@ gpt-5.4-nano:
   - anthropic/claude-3-5-haiku
   - deepseek/deepseek-chat
 gpt-5.4-mini:
+  - vllm/am-thinking-awq
+  - longcat/LongCat-2.0
   - bazaarlink/auto:free
   - openrouter/openrouter/free
   - openrouter/nvidia/nemotron-3-nano-30b-a3b:free
@@ -231,6 +255,8 @@ codex-mini:
   - "bedrock/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
   - "deepseek/deepseek-chat"
 gpt-4o-mini-search:
+  - "vllm/am-thinking-awq"
+  - "longcat/LongCat-2.0"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-1.5-flash"
   - "ollama/llama3"
@@ -241,6 +267,8 @@ gpt-4o-mini-search:
   - "bedrock/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
   - "deepseek/deepseek-chat"
 gpt-4o-search:
+  - "vllm/am-thinking-awq"
+  - "longcat/LongCat-2.0"
   - "anthropic/claude-3-7-sonnet"
   - "gemini/gemini-2.5-pro"
   - "ollama/llama4"

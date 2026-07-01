@@ -584,6 +584,17 @@ ollama:
     - "llava"
   base-url: http://localhost:11434/
 
+vllm:
+  models:
+    - "am-thinking-awq"
+  base-url: http://10.30.50.1:8000/
+  model-capabilities:
+    am-thinking-awq:
+      supports-tools: false
+      supports-json-schema: true
+      context-window: 131072
+      reasoning: true
+
 chatgpt-web:
   models:
     - "gpt-5.5-instant"
@@ -688,10 +699,10 @@ github-models:
 
 longcat:
   models:
-    - "LongCat-2.0-Preview"
+    - "LongCat-2.0"
   base-url: https://api.longcat.chat/openai/
   model-capabilities:
-    LongCat-2.0-Preview:
+    LongCat-2.0:
       supports-tools: true
       supports-json-schema: true
       context-window: 1048576

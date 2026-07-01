@@ -56,7 +56,7 @@ OpenAI-compatible providers gated on secrets-file credentials. Autodefault prior
 
 | Provider | Base URL | Example model |
 |----------|----------|---------------|
-| `longcat` | `https://api.longcat.chat/openai/` | `longcat/LongCat-2.0-Preview` |
+| `longcat` | `https://api.longcat.chat/openai/` | `longcat/LongCat-2.0` |
 | `bazaarlink` | `https://bazaarlink.ai/api/v1/` | `bazaarlink/auto:free` |
 | `bluesminds` | `https://api.bluesminds.com/v1/` | `bluesminds/gpt-4.1-nano` |
 | `sambanova` | `https://api.sambanova.ai/v1/` | `sambanova/gpt-oss-120b` |
@@ -68,7 +68,7 @@ OpenAI-compatible providers gated on secrets-file credentials. Autodefault prior
 ```bash
 curl http://localhost:8080/ai/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"longcat/LongCat-2.0-Preview","messages":[{"role":"user","content":"hi"}]}'
+  -d '{"model":"longcat/LongCat-2.0","messages":[{"role":"user","content":"hi"}]}'
 ```
 
 ### Cloudflare Workers AI

@@ -910,14 +910,30 @@ deepseek-web:
         concurrent: 1
         min-interval-ms: 10000
 
+vllm:
+  observed-at: "2026-07-01"
+  quota-profile: per-slot
+  scope: local-upstream-account
+  notes:
+    - Local vLLM/OpenAI-compatible upstream; serialize each anonymous/account slot
+      when the upstream reports max concurrency 1.
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                rpm: 60
+                concurrent: 1
+
 longcat:
-  observed-at: "2026-06-17"
+  observed-at: "2026-07-01"
   scope: api-key
   source: longcat-platform-docs
   notes:
-    - Public beta; no paid quota. Flash-Lite ~50M tokens/day; Flash-Chat ~500K/day
-      (up to 5M/day after quota request).
-    - Exclude from autodefault until API access and model slug are confirmed.
+    - LongCat docs list the OpenAI-compatible endpoint at https://api.longcat.chat/openai.
+    - Fuel pack shows 50M tokens for LongCat-2.0 expiring 2026-07-30.
   cooldown:
     auth-error: 24h
   tiers:
@@ -925,18 +941,9 @@ longcat:
       endpoints:
         chat-completions:
           models:
-            LongCat-Flash-Lite:
+            LongCat-2.0:
               limits:
                 tpd: 50000000
-            LongCat-Flash-Chat:
-              limits:
-                tpd: 5000000
-            LongCat-Flash-Thinking:
-              limits:
-                tpd: 5000000
-            LongCat-Flash-Omni-2603:
-              limits:
-                tpd: 5000000
 
 doubao:
   observed-at: "2026-06-17"
