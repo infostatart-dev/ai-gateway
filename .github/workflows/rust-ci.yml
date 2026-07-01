@@ -82,6 +82,11 @@ jobs:
     continue-on-error: true
     env:
       CARGO_INCREMENTAL: "0"
+    services:
+      redis:
+        image: redis:8.0.2-alpine
+        ports:
+          - 6340:6379
     steps:
       - uses: actions/checkout@v5
       - uses: Swatinem/rust-cache@v2
