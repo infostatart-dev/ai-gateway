@@ -1,12 +1,13 @@
-use std::str::FromStr;
-
 use anthropic_ai_sdk::types::message as anthropic;
 use async_openai::types::chat as openai;
 
 use crate::{
     error::mapper::MapperError,
-    middleware::mapper::{TryConvert, model::ModelMapper},
-    types::{model_id::ModelId, provider::InferenceProvider},
+    middleware::mapper::{
+        TryConvert, model::ModelMapper, parse_openai_source_model,
+        parse_source_model,
+    },
+    types::provider::InferenceProvider,
 };
 
 pub struct OpenAIConverter {
@@ -33,7 +34,8 @@ impl
         &self,
         value: anthropic::CreateMessageParams,
     ) -> Result<openai::CreateChatCompletionRequest, Self::Error> {
-        let source_model = ModelId::from_str(&value.model)?;
+        let source_model =
+            parse_source_model(&value.model, InferenceProvider::Anthropic)?;
         let target_model = self
             .model_mapper
             .map_model(&source_model, &InferenceProvider::OpenAI)?;
@@ -226,7 +228,7 @@ impl
         &self,
         mut value: openai::CreateChatCompletionRequest,
     ) -> Result<openai::CreateChatCompletionRequest, Self::Error> {
-        let source_model = ModelId::from_str(&value.model)?;
+        let source_model = parse_openai_source_model(&value.model)?;
         let target_model = self
             .model_mapper
             .map_model(&source_model, &InferenceProvider::OpenAI)?;

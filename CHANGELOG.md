@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.6.6] - 2026-07-03
+
+**Trace diagnostics alignment** — routing traces now keep cost and failure
+classification signals aligned with provider usage metadata while preserving
+backend-neutral observability fields.
+
+### Fixed
+
+- **Estimated usage in final traces:** route and terminal attempt spans use the
+  same estimated token fallback as provider usage headers when response bodies
+  do not report usage
+- **Failure source attribution:** failed attempt spans and failover events
+  distinguish upstream-provider failures from local gateway dispatch, mapping,
+  configuration, and transport failures
+
+### Quality
+
+- Finalized trace events expose normalized usage and failure classification
+  fields without attaching prompts, credentials, cookies, or upstream response
+  bodies to span attributes
+- Focused tests cover estimated fallback behavior and normalized local failure
+  classification
+
 ## [0.6.5] - 2026-07-03
 
 **Route tracing and upstream latency observability** — router execution now

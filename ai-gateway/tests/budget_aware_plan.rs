@@ -1,13 +1,23 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, str::FromStr};
 
 use ai_gateway::{
     app_state::AppState,
-    tests::budget_aware::{
-        CallOutcome, CredentialHealthRegistry, MAX_PLAN_HOPS,
-        RequestRequirements, empty_router, gemini_model_candidate, hash_bias,
-        openrouter_model_candidate, plan_route_chain,
+    tests::{
+        budget_aware::{
+            CallOutcome, CredentialHealthRegistry, MAX_PLAN_HOPS,
+            RequestRequirements, chatgpt_candidate, deepseek_model_candidate,
+            empty_router, gemini_model_candidate, hash_bias,
+            intent_autodefault_router, named_model_candidate,
+            openrouter_model_candidate, ordered_candidates_for_source,
+            plan_route_chain,
+        },
+        routing::extract_routing_intent_from_name,
     },
-    types::extensions::{CallerRequestContext, WorkUnitSource},
+    types::{
+        extensions::{CallerRequestContext, WorkUnitSource},
+        model_id::ModelId,
+        provider::InferenceProvider,
+    },
 };
 
 #[tokio::test]
@@ -416,6 +426,109 @@ async fn eight_gemini_accounts_plan_includes_openrouter_within_hop_cap() {
             .map(|c| format!("{}/{}", c.credential_id, c.capability.model))
             .collect::<Vec<_>>()
     );
+}
+
+#[tokio::test]
+async fn strategic_fallbacks_try_browser_sessions_before_local_vllm() {
+    let app_state = AppState::test_default().await;
+    let router = empty_router(&app_state);
+    let pool = vec![
+        named_model_candidate(
+            &app_state,
+            "vllm",
+            "vllm-anonymous",
+            "am-thinking-awq",
+            131_072,
+        )
+        .await,
+        named_model_candidate(
+            &app_state,
+            "longcat",
+            "longcat-default",
+            "LongCat-2.0",
+            1_048_576,
+        )
+        .await,
+        deepseek_model_candidate(
+            &app_state,
+            "deepseek-web-default",
+            "deepseek-chat",
+        )
+        .await,
+        deepseek_model_candidate(&app_state, "deepseek-web-2", "deepseek-chat")
+            .await,
+        chatgpt_candidate(&app_state).await,
+    ];
+    let caller = CallerRequestContext {
+        agent_name: "strict-json-dev-chain".to_string(),
+        work_unit_id: Some("unit-1".to_string()),
+        work_unit_source: WorkUnitSource::Explicit,
+    };
+    let requirements = RequestRequirements {
+        json_schema_required: true,
+        ..RequestRequirements::default()
+    };
+
+    let plan = plan_route_chain(
+        &router,
+        pool,
+        &requirements,
+        Some(extract_routing_intent_from_name("gpt-5-mini")),
+        &caller,
+        &CredentialHealthRegistry::new(),
+        app_state.route_memory(),
+        100,
+        &HashSet::new(),
+    )
+    .await;
+    let providers: Vec<_> = plan
+        .chain
+        .iter()
+        .take(5)
+        .map(|candidate| candidate.capability.provider.to_string())
+        .collect();
+
+    assert_eq!(
+        providers,
+        vec![
+            "deepseek-web",
+            "deepseek-web",
+            "chatgpt-web",
+            "longcat",
+            "vllm",
+        ]
+    );
+}
+
+#[tokio::test]
+async fn intent_ordering_keeps_chatgpt_web_fallback_for_fast_thinking() {
+    let app_state = AppState::test_default().await;
+    let pool = vec![
+        named_model_candidate(
+            &app_state,
+            "vllm",
+            "vllm-anonymous",
+            "am-thinking-awq",
+            131_072,
+        )
+        .await,
+        chatgpt_candidate(&app_state).await,
+    ];
+    let router = intent_autodefault_router(&app_state, pool);
+    let source = ModelId::from_str("openai/gpt-5-mini").expect("source model");
+    let requirements = RequestRequirements {
+        json_schema_required: true,
+        ..RequestRequirements::default()
+    };
+
+    let ordered =
+        ordered_candidates_for_source(&router, &requirements, &source)
+            .expect("ordered candidates");
+
+    assert!(ordered.iter().any(|candidate| {
+        candidate.capability.provider
+            == InferenceProvider::Named("chatgpt-web".into())
+    }));
 }
 
 #[tokio::test]

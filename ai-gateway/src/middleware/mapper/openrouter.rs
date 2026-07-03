@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use async_openai::types::chat::{
     CreateChatCompletionRequest, CreateChatCompletionResponse,
     CreateChatCompletionStreamResponse,
@@ -13,9 +11,9 @@ use crate::{
     error::mapper::MapperError,
     middleware::mapper::{
         TryConvertError, model::ModelMapper, openai_chat_response,
-        openai_error_from_value,
+        openai_error_from_value, parse_openai_source_model,
     },
-    types::{model_id::ModelId, provider::InferenceProvider},
+    types::provider::InferenceProvider,
 };
 
 pub struct OpenRouterConverter {
@@ -40,7 +38,7 @@ impl
         &self,
         value: CreateChatCompletionRequest,
     ) -> Result<CreateChatCompletionRequestOpenRouter, Self::Error> {
-        let source_model = ModelId::from_str(&value.model)?;
+        let source_model = parse_openai_source_model(&value.model)?;
         let target_model = self
             .model_mapper
             .map_model(&source_model, &InferenceProvider::OpenRouter)?;

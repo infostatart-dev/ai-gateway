@@ -134,6 +134,58 @@ pub struct UpstreamFailureContext {
     pub restricted_until: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+/// Normalized gateway-local failure metadata attached by error handling before
+/// a response is returned to route failover logic.
+#[derive(Debug, Clone)]
+pub struct GatewayFailureContext {
+    pub failure_stage: &'static str,
+    pub error_source: &'static str,
+    pub error_class: String,
+}
+
+impl GatewayFailureContext {
+    #[must_use]
+    pub fn invalid_structured_json() -> Self {
+        Self {
+            failure_stage: "structured_output",
+            error_source: "gateway",
+            error_class: "invalid_structured_json".to_string(),
+        }
+    }
+
+    #[must_use]
+    pub fn from_error_metric(error_class: String) -> Self {
+        let failure_stage = if error_class.contains("MapperError") {
+            "mapper"
+        } else if error_class.contains("ProviderNotConfigured")
+            || error_class.contains("ProviderNotFound")
+            || error_class.contains("InvalidConverter")
+            || error_class.contains("MetricsNotConfigured")
+        {
+            "configuration"
+        } else if error_class.contains("ReqwestError")
+            || error_class.contains("Provider5xxError")
+        {
+            "transport"
+        } else if error_class.starts_with("InvalidRequest") {
+            "request"
+        } else {
+            "dispatch"
+        };
+        let error_source = if failure_stage == "transport" {
+            "upstream_transport"
+        } else {
+            "gateway"
+        };
+
+        Self {
+            failure_stage,
+            error_source,
+            error_class,
+        }
+    }
+}
+
 /// Deferred routing trace emission after response body metrics are collected.
 #[derive(Debug, Clone)]
 pub struct PendingRouteTrace {
@@ -156,6 +208,9 @@ pub struct PendingRouteTrace {
     pub upstream_failure_kind: Option<String>,
     pub restricted_until: Option<String>,
     pub failover_class: Option<String>,
+    pub failure_stage: Option<String>,
+    pub error_source: Option<String>,
+    pub error_class: Option<String>,
     pub agent_name: Option<String>,
     pub work_unit_id: Option<String>,
     pub work_unit_source: Option<WorkUnitSource>,
@@ -165,6 +220,7 @@ pub struct PendingRouteTrace {
     pub route_memory_invalidated: Option<bool>,
     pub source_model: Option<String>,
     pub json_schema_required: bool,
+    pub estimated_usage: crate::metrics::llm::TokenUsage,
     pub replay: Option<PlanReplaySnapshot>,
     pub finalize: Option<RouteTraceFinalizeContext>,
 }

@@ -113,6 +113,26 @@ gpt-5-mini:
              longcat"
         );
 
+        let deepseek_web_pos = mappings
+            .iter()
+            .position(|model| {
+                model.inference_provider()
+                    == Some(InferenceProvider::Named("deepseek-web".into()))
+            })
+            .expect("deepseek-web entry");
+        let chatgpt_web_pos = mappings
+            .iter()
+            .position(|model| {
+                model.inference_provider()
+                    == Some(InferenceProvider::Named("chatgpt-web".into()))
+            })
+            .expect("chatgpt-web entry");
+        assert!(
+            deepseek_web_pos < chatgpt_web_pos,
+            "chatgpt-web must follow deepseek-web in the browser-session \
+             fallback segment"
+        );
+
         let openrouter_models: Vec<_> = mappings
             .iter()
             .filter(|model| {
@@ -163,6 +183,10 @@ gpt-5-mini:
             .iter()
             .position(|p| *p == InferenceProvider::Named("deepseek-web".into()))
             .expect("deepseek-web fallback");
+        let chatgpt_web_pos = providers
+            .iter()
+            .position(|p| *p == InferenceProvider::Named("chatgpt-web".into()))
+            .expect("chatgpt-web fallback");
         assert_eq!(
             longcat_pos, 1,
             "longcat must be the first fallback after local vllm"
@@ -175,6 +199,11 @@ gpt-5-mini:
         assert!(
             bazaarlink_pos < deepseek_web_pos,
             "deepseek-web must follow the curated free fallback"
+        );
+        assert!(
+            deepseek_web_pos < chatgpt_web_pos,
+            "chatgpt-web must follow deepseek-web in the browser-session \
+             fallback segment"
         );
         assert!(bazaarlink_pos < anthropic_pos);
 

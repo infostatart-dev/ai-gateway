@@ -1,13 +1,13 @@
-use std::str::FromStr;
-
 use async_openai::types::chat as openai;
 
 use super::{config, message, tool};
 use crate::{
     endpoints::bedrock::converse::{BedrockConverseRequest, ToolConfig},
     error::mapper::MapperError,
-    middleware::mapper::{TryConvert, model::ModelMapper},
-    types::{model_id::ModelId, provider::InferenceProvider},
+    middleware::mapper::{
+        TryConvert, model::ModelMapper, parse_openai_source_model,
+    },
+    types::provider::InferenceProvider,
 };
 
 pub struct BedrockConverter {
@@ -29,7 +29,7 @@ impl TryConvert<openai::CreateChatCompletionRequest, BedrockConverseRequest>
         &self,
         value: openai::CreateChatCompletionRequest,
     ) -> Result<BedrockConverseRequest, Self::Error> {
-        let source_model = ModelId::from_str(&value.model)?;
+        let source_model = parse_openai_source_model(&value.model)?;
         let target_model = self
             .model_mapper
             .map_model(&source_model, &InferenceProvider::Bedrock)?;

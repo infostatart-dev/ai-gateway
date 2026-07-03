@@ -6,7 +6,10 @@ pub use crate::{
     router::{
         budget_aware::{
             CredentialHealthRegistry, RouteBinding, WorkUnitRouteMemory,
-            empty_router, gemini_model_candidate, openrouter_model_candidate,
+            chatgpt_candidate, deepseek_model_candidate, empty_router,
+            gemini_model_candidate, intent_autodefault_router,
+            named_model_candidate, openrouter_model_candidate,
+            ordered_candidates_for_source,
             plan::{
                 build::MAX_PLAN_HOPS, plan_route_chain, score::hash_bias,
                 snapshot::QuotaSnapshot,

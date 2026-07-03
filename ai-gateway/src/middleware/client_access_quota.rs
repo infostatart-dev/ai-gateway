@@ -377,7 +377,8 @@ fn wrap_streaming_settlement(
                 None
             }
         }
-    });
+    })
+    .fuse();
     Response::from_parts(parts, Body::from_stream(stream))
 }
 

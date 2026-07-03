@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use async_openai::types::chat::{
     CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
 };
@@ -11,8 +9,9 @@ use crate::{
     error::mapper::MapperError,
     middleware::mapper::{
         TryConvertError, model::ModelMapper, openai_error_from_value,
+        parse_openai_source_model,
     },
-    types::{model_id::ModelId, provider::InferenceProvider},
+    types::provider::InferenceProvider,
 };
 
 pub struct OllamaConverter {
@@ -37,7 +36,7 @@ impl
         &self,
         mut value: async_openai::types::chat::CreateChatCompletionRequest,
     ) -> Result<CreateChatCompletionRequestOllama, Self::Error> {
-        let source_model = ModelId::from_str(&value.model)?;
+        let source_model = parse_openai_source_model(&value.model)?;
         let target_model = self
             .model_mapper
             .map_model(&source_model, &InferenceProvider::Ollama)?;

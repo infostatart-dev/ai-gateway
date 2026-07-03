@@ -240,6 +240,25 @@ pub async fn openrouter_model_candidate(
     .await
 }
 
+pub async fn named_model_candidate(
+    app_state: &AppState,
+    provider_name: &str,
+    credential_id: &str,
+    model: &str,
+    context_window: u32,
+) -> BudgetCandidate {
+    build_candidate(
+        app_state,
+        InferenceProvider::Named(provider_name.into()),
+        credential_id,
+        0,
+        "named-provider-key",
+        model,
+        context_window,
+    )
+    .await
+}
+
 pub async fn deepseek_model_candidate(
     app_state: &AppState,
     credential_id: &str,

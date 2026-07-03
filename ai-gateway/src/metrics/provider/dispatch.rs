@@ -224,6 +224,9 @@ pub fn emit_pending_route_trace(
             pending.upstream_failure_kind.as_deref().unwrap_or("none"),
         restricted_until = pending.restricted_until.as_deref().unwrap_or("none"),
         failover_class = pending.failover_class.as_deref().unwrap_or("none"),
+        failure_stage = pending.failure_stage.as_deref().unwrap_or("none"),
+        error_source = pending.error_source.as_deref().unwrap_or("none"),
+        error_class = pending.error_class.as_deref().unwrap_or("none"),
         agent_name = pending.agent_name.as_deref().unwrap_or("none"),
         work_unit_id = pending.work_unit_id.as_deref().unwrap_or("none"),
         work_unit_source = pending

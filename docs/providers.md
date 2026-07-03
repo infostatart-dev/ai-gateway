@@ -71,6 +71,22 @@ curl http://localhost:8080/ai/chat/completions \
   -d '{"model":"longcat/LongCat-2.0","messages":[{"role":"user","content":"hi"}]}'
 ```
 
+#### LongCat structured-output compatibility
+
+LongCat currently has a provider-specific quirk for OpenAI-compatible
+`response_format.type = json_schema` requests with `strict: true` and
+`thinking.type = enabled`: the upstream API returns the schema-compliant JSON in
+`message.reasoning_content` while omitting `message.content`. In other words,
+the upstream response puts the final JSON message content in the wrong field for
+the OpenAI Chat Completions shape.
+
+The gateway handles this only in the LongCat adapter: when a LongCat response
+has `reasoning_content` and `content` is missing, null, or empty, the adapter
+promotes `reasoning_content` to `message.content` before the regular
+OpenAI-compatible response normalization and structured-output validation. This
+is not a generic OpenAI-compatible behavior and is not applied to other
+providers.
+
 ### Cloudflare Workers AI
 
 - Models prefixed with `@cf/` (for example `@cf/meta/llama-3.1-70b-instruct`)

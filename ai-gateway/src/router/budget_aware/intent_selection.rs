@@ -54,6 +54,7 @@ pub(super) fn order_intent_bands(
 ) -> Vec<BudgetCandidate> {
     let mut preferred = Vec::new();
     let mut escalation = Vec::new();
+    let mut fallback = Vec::new();
 
     for candidate in candidates.drain(..) {
         if in_preferred_band(&candidate, intent, requirements) {
@@ -62,14 +63,20 @@ pub(super) fn order_intent_bands(
             && candidate.capability.intent_tier <= intent.escalation_ceiling
         {
             escalation.push(candidate);
+        } else if is_chatgpt_web(&candidate.capability.provider)
+            || is_deepseek_web(&candidate.capability.provider)
+        {
+            fallback.push(candidate);
         }
     }
 
     router.rank_candidates(&mut preferred, requirements, Some(intent));
     escalation.sort_by_key(|c| c.capability.intent_tier);
     router.rank_candidates(&mut escalation, requirements, Some(intent));
+    router.rank_candidates(&mut fallback, requirements, Some(intent));
 
     preferred.append(&mut escalation);
+    preferred.append(&mut fallback);
     preferred
 }
 

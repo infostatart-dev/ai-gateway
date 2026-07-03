@@ -74,6 +74,9 @@ pub async fn run_failover_candidates(
         input_tokens = tracing::field::Empty,
         output_tokens = tracing::field::Empty,
         usage_source = tracing::field::Empty,
+        failure_stage = tracing::field::Empty,
+        error_source = tracing::field::Empty,
+        error_class = tracing::field::Empty,
         response_body_bytes = tracing::field::Empty,
     );
     run_failover_candidates_inner(
@@ -103,10 +106,15 @@ async fn run_failover_candidates_inner(
 ) -> Result<Response, ApiError> {
     let mut exclude = std::collections::HashSet::<(String, String)>::new();
     let mut plan_rebuild_count = 0u32;
+    let estimated_usage = trace::estimated_usage_from_request(
+        &body_bytes,
+        this.app_state.config().observability.estimate_tokens,
+    );
     let mut route_trace = trace::RouteTrace::new_with_plan(
         candidates.len(),
         plan_ctx.as_ref(),
         route_span.clone(),
+        estimated_usage,
     );
 
     'walk: loop {
@@ -225,6 +233,9 @@ async fn run_failover_candidates_inner(
                 upstream_failure_kind = tracing::field::Empty,
                 exhaustion_scope = tracing::field::Empty,
                 restricted_until = tracing::field::Empty,
+                failure_stage = tracing::field::Empty,
+                error_source = tracing::field::Empty,
+                error_class = tracing::field::Empty,
                 duration_ms = tracing::field::Empty,
                 tfft_ms = tracing::field::Empty,
                 generation_ms_per_output_token = tracing::field::Empty,
@@ -325,6 +336,11 @@ async fn run_failover_candidates_inner(
                 continue;
             }
 
+            if let Some(fields) =
+                record_attempt_failure_fields(status, &response, &attempt_span)
+            {
+                route_trace.record_failure_trace_fields(&fields);
+            }
             route_trace.record_terminal_attempt(
                 candidate,
                 attempt_span,
@@ -498,6 +514,27 @@ async fn finish_terminal(
     trace::wrap_response_with_route_trace(response, pending)
 }
 
+fn record_attempt_failure_fields(
+    status: http::StatusCode,
+    response: &Response,
+    attempt_span: &tracing::Span,
+) -> Option<trace::FailureTraceFields> {
+    let upstream = response
+        .extensions()
+        .get::<crate::types::extensions::UpstreamFailureContext>();
+    let gateway = response
+        .extensions()
+        .get::<crate::types::extensions::GatewayFailureContext>();
+    if let Some(fields) = trace::failure_trace_fields(status, upstream, gateway)
+    {
+        attempt_span.record("failure_stage", fields.failure_stage);
+        attempt_span.record("error_source", fields.error_source);
+        attempt_span.record("error_class", fields.error_class.as_str());
+        return Some(fields);
+    }
+    None
+}
+
 struct SuccessCandidateContext<'a> {
     this: &'a BudgetAwareRouter,
     candidate: &'a BudgetCandidate,
@@ -544,7 +581,7 @@ async fn handle_successful_candidate(
             .await
             .map_err(InternalError::CollectBodyError)?
             .to_bytes();
-        let response = Response::from_parts(
+        let mut response = Response::from_parts(
             response_parts,
             Body::from(response_bytes.clone()),
         );
@@ -555,6 +592,7 @@ async fn handle_successful_candidate(
             body_bytes,
             &response_bytes,
         ) {
+            mark_invalid_structured_output(&mut response);
             if has_next {
                 let skipped = fail_over_candidate(
                     this,
@@ -574,6 +612,11 @@ async fn handle_successful_candidate(
                 .await;
                 route_trace.record_skipped(skipped);
             } else {
+                let failure_fields = record_attempt_failure_fields(
+                    response.status(),
+                    &response,
+                    attempt_span,
+                );
                 let _ = this
                     .record_failure(
                         &candidate.credential_id,
@@ -583,6 +626,9 @@ async fn handle_successful_candidate(
                         elapsed,
                     )
                     .await;
+                if let Some(fields) = failure_fields {
+                    route_trace.record_failure_trace_fields(&fields);
+                }
                 ctx.failed_credentials
                     .insert(candidate.credential_id.clone());
                 tracing::warn!(
@@ -610,6 +656,12 @@ async fn handle_successful_candidate(
         route_trace.record_chatgpt_web(*cg);
     }
     Ok(Some(response))
+}
+
+fn mark_invalid_structured_output(response: &mut Response) {
+    response.extensions_mut().insert(
+        crate::types::extensions::GatewayFailureContext::invalid_structured_json(),
+    );
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -643,6 +695,15 @@ async fn fail_over_candidate(
         .extensions()
         .get::<crate::types::extensions::UpstreamFailureContext>()
         .cloned();
+    let gateway_failure_ctx = response
+        .extensions()
+        .get::<crate::types::extensions::GatewayFailureContext>()
+        .cloned();
+    let failure_trace = trace::failure_trace_fields(
+        status,
+        failure_ctx.as_ref(),
+        gateway_failure_ctx.as_ref(),
+    );
     let (response, class, scope) = failure::record_classified_failure(
         this,
         &candidate.credential_id,
@@ -687,6 +748,12 @@ async fn fail_over_candidate(
         .record("upstream_failure_kind", upstream_failure_kind.as_str());
     attempt_span.record("exhaustion_scope", exhaustion_scope.as_str());
     attempt_span.record("restricted_until", restricted_until.as_str());
+    if let Some(fields) = failure_trace.as_ref() {
+        route_trace.record_failure_trace_fields(fields);
+        attempt_span.record("failure_stage", fields.failure_stage);
+        attempt_span.record("error_source", fields.error_source);
+        attempt_span.record("error_class", fields.error_class.as_str());
+    }
     let quota_profile = this
         .app_state
         .config()
@@ -744,6 +811,7 @@ async fn fail_over_candidate(
         &upstream_failure_kind,
         &exhaustion_scope,
         &restricted_until,
+        failure_trace.as_ref(),
     );
     failure::record_failover_metric(
         this,

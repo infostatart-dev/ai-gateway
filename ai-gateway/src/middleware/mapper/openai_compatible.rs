@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use async_openai::types::chat::{
     CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
 };
@@ -12,9 +10,9 @@ use crate::{
     error::mapper::MapperError,
     middleware::mapper::{
         TryConvert, TryConvertError, openai_chat_response,
-        openai_error_from_value,
+        openai_error_from_value, parse_openai_source_model,
     },
-    types::{model_id::ModelId, provider::InferenceProvider},
+    types::provider::InferenceProvider,
 };
 
 pub struct OpenAICompatibleConverter {
@@ -43,7 +41,7 @@ impl
         &self,
         mut value: async_openai::types::chat::CreateChatCompletionRequest,
     ) -> Result<OpenAICompatibleChatCompletionRequest, Self::Error> {
-        let source_model = ModelId::from_str(&value.model)?;
+        let source_model = parse_openai_source_model(&value.model)?;
         let target_model =
             self.model_mapper.map_model(&source_model, &self.provider)?;
         tracing::trace!(source_model = ?source_model, target_model = ?target_model, "mapped model");
@@ -76,6 +74,9 @@ impl TryConvert<Value, CreateChatCompletionResponse>
         &self,
         mut value: Value,
     ) -> Result<CreateChatCompletionResponse, Self::Error> {
+        if is_longcat_provider(&self.provider) {
+            promote_longcat_reasoning_content(&mut value);
+        }
         openai_chat_response::normalize_chat_completion(&mut value);
         openai_chat_response::ensure_non_empty_choices(&value)?;
         serde_json::from_value(value).map_err(MapperError::SerdeError)
@@ -107,10 +108,53 @@ impl TryConvertStreamData<Value, CreateChatCompletionStreamResponse>
         &self,
         mut value: Value,
     ) -> Result<Option<CreateChatCompletionStreamResponse>, Self::Error> {
+        if is_longcat_provider(&self.provider) {
+            promote_longcat_reasoning_content(&mut value);
+        }
         openai_chat_response::normalize_stream_chunk(&mut value);
         let chunk: CreateChatCompletionStreamResponse =
             serde_json::from_value(value).map_err(MapperError::SerdeError)?;
         Ok(Some(chunk))
+    }
+}
+
+fn is_longcat_provider(provider: &InferenceProvider) -> bool {
+    matches!(provider, InferenceProvider::Named(name) if name == "longcat")
+}
+
+fn promote_longcat_reasoning_content(value: &mut Value) {
+    let Some(choices) = value.get_mut("choices").and_then(Value::as_array_mut)
+    else {
+        return;
+    };
+    for choice in choices {
+        if let Some(message) = choice.get_mut("message") {
+            promote_message_reasoning_content(message);
+        }
+        if let Some(delta) = choice.get_mut("delta") {
+            promote_message_reasoning_content(delta);
+        }
+    }
+}
+
+fn promote_message_reasoning_content(message: &mut Value) {
+    let Some(obj) = message.as_object_mut() else {
+        return;
+    };
+    let Some(reasoning) = obj.get("reasoning_content").cloned() else {
+        return;
+    };
+    if !reasoning.is_string() || !content_missing_or_empty(obj.get("content")) {
+        return;
+    }
+    obj.insert("content".to_string(), reasoning);
+}
+
+fn content_missing_or_empty(content: Option<&Value>) -> bool {
+    match content {
+        None | Some(Value::Null) => true,
+        Some(Value::String(text)) => text.is_empty(),
+        Some(_) => false,
     }
 }
 
@@ -131,7 +175,69 @@ impl TryConvertError<Value, async_openai::error::WrappedError>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::middleware::mapper::openai_chat_response;
+    use crate::{
+        app_state::AppState, middleware::mapper::openai_chat_response,
+    };
+
+    fn chat_request(
+        model: &str,
+    ) -> async_openai::types::chat::CreateChatCompletionRequest {
+        serde_json::from_value(serde_json::json!({
+            "model": model,
+            "messages": [{"role": "user", "content": "ping"}]
+        }))
+        .expect("valid openai chat request")
+    }
+
+    #[tokio::test]
+    async fn maps_bare_openai_model_for_named_compatible_provider() {
+        let app_state = AppState::test_default().await;
+        let converter = OpenAICompatibleConverter::new(
+            InferenceProvider::Named("longcat".into()),
+            ModelMapper::new(app_state),
+        );
+
+        let mapped = converter
+            .try_convert(chat_request("gpt-5-mini"))
+            .expect("bare openai model should map");
+
+        assert_eq!(mapped.inner.model, "LongCat-2.0");
+    }
+
+    #[test]
+    fn longcat_promotes_missing_content_from_reasoning_content() {
+        let mut value = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "reasoning_content": "{\"ok\":true}"
+                },
+                "finish_reason": "stop"
+            }]
+        });
+
+        promote_longcat_reasoning_content(&mut value);
+
+        assert_eq!(value["choices"][0]["message"]["content"], "{\"ok\":true}");
+    }
+
+    #[test]
+    fn longcat_keeps_existing_content_over_reasoning_content() {
+        let mut value = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": "{\"ok\":true}",
+                    "reasoning_content": "hidden"
+                },
+                "finish_reason": "stop"
+            }]
+        });
+
+        promote_longcat_reasoning_content(&mut value);
+
+        assert_eq!(value["choices"][0]["message"]["content"], "{\"ok\":true}");
+    }
 
     #[test]
     fn normalizes_array_content_before_deserialize() {

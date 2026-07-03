@@ -95,8 +95,13 @@ where
                     .0
                     .metrics
                     .error_count
-                    .add(1, &[KeyValue::new("type", error_str)]);
-                let response = svc_err.into_response();
+                    .add(1, &[KeyValue::new("type", error_str.clone())]);
+                let mut response = svc_err.into_response();
+                response.extensions_mut().insert(
+                    crate::types::extensions::GatewayFailureContext::from_error_metric(
+                        error_str,
+                    ),
+                );
                 Poll::Ready(Ok(response))
             }
         }

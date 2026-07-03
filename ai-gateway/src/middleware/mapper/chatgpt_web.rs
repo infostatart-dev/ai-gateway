@@ -9,7 +9,8 @@ use crate::{
     error::mapper::MapperError,
     middleware::mapper::{
         TryConvert, TryConvertError, TryConvertStreamData, chatgpt_json_schema,
-        openai_chat_response, openai_error_from_value,
+        model::ModelMapper, openai_chat_response, openai_error_from_value,
+        parse_openai_source_model,
     },
     types::provider::InferenceProvider,
 };
@@ -25,8 +26,17 @@ impl Endpoint for ChatGptWebChatCompletions {
     type ErrorResponseBody = Value;
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ChatGptWebConverter;
+#[derive(Debug, Clone)]
+pub struct ChatGptWebConverter {
+    model_mapper: ModelMapper,
+}
+
+impl ChatGptWebConverter {
+    #[must_use]
+    pub fn new(model_mapper: ModelMapper) -> Self {
+        Self { model_mapper }
+    }
+}
 
 impl
     TryConvert<
@@ -39,9 +49,15 @@ impl
         &self,
         mut value: async_openai::types::chat::CreateChatCompletionRequest,
     ) -> Result<OpenAICompatibleChatCompletionRequest, Self::Error> {
+        let provider = InferenceProvider::Named("chatgpt-web".into());
+        let source_model = parse_openai_source_model(&value.model)?;
+        let target_model =
+            self.model_mapper.map_model(&source_model, &provider)?;
+        tracing::trace!(source_model = ?source_model, target_model = ?target_model, "mapped model");
+        value.model = target_model.to_string();
         chatgpt_json_schema::inject_json_schema(&mut value);
         Ok(OpenAICompatibleChatCompletionRequest {
-            provider: InferenceProvider::Named("chatgpt-web".into()),
+            provider,
             inner: value,
         })
     }
@@ -83,5 +99,33 @@ impl TryConvertError<Value, async_openai::error::WrappedError>
         value: Value,
     ) -> Result<async_openai::error::WrappedError, Self::Error> {
         Ok(openai_error_from_value(parts.status, &value))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{app_state::AppState, middleware::mapper::model::ModelMapper};
+
+    fn chat_request(
+        model: &str,
+    ) -> async_openai::types::chat::CreateChatCompletionRequest {
+        serde_json::from_value(serde_json::json!({
+            "model": model,
+            "messages": [{"role": "user", "content": "ping"}]
+        }))
+        .expect("valid openai chat request")
+    }
+
+    #[tokio::test]
+    async fn maps_bare_openai_model_to_chatgpt_web_binding() {
+        let app_state = AppState::test_default().await;
+        let converter = ChatGptWebConverter::new(ModelMapper::new(app_state));
+
+        let mapped = converter
+            .try_convert(chat_request("gpt-5-mini"))
+            .expect("bare openai model should map");
+
+        assert_eq!(mapped.inner.model, "gpt-5.5-instant");
     }
 }

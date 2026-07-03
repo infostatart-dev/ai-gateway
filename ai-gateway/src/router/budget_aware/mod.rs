@@ -59,7 +59,8 @@ pub use test_support::{
     balance_ranked, chatgpt_candidate, deep_paid_candidate,
     deepseek_model_candidate, deepseek_slots, empty_router, gemini_candidate,
     gemini_model_candidate, gemini_slots, groq_candidate,
-    intent_autodefault_router, openrouter_model_candidate, ordered_candidates,
+    intent_autodefault_router, named_model_candidate,
+    openrouter_model_candidate, ordered_candidates,
     ordered_candidates_for_source, request_parts, router_app_state,
     router_with_candidates, scout_candidate,
 };

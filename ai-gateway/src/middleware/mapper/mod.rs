@@ -15,6 +15,8 @@ pub mod openrouter_upstream;
 pub mod registry;
 pub mod service;
 
+use std::str::FromStr;
+
 use async_openai::error::WrappedError;
 use base64::Engine;
 use bytes::Bytes;
@@ -28,10 +30,27 @@ use crate::{
         api::ApiError, internal::InternalError,
         invalid_req::InvalidRequestError, mapper::MapperError,
     },
-    types::extensions::MapperContext,
+    types::{
+        extensions::MapperContext, model_id::ModelId,
+        provider::InferenceProvider,
+    },
 };
 
 pub(crate) const DEFAULT_MAX_TOKENS: u32 = 2000;
+
+pub(crate) fn parse_source_model(
+    model: &str,
+    default_provider: InferenceProvider,
+) -> Result<ModelId, MapperError> {
+    ModelId::from_str(model)
+        .or_else(|_| ModelId::from_str_and_provider(default_provider, model))
+}
+
+pub(crate) fn parse_openai_source_model(
+    model: &str,
+) -> Result<ModelId, MapperError> {
+    parse_source_model(model, InferenceProvider::OpenAI)
+}
 
 /// `TryFrom` but allows us to implement it for foreign types, so we can
 /// maintain boundaries between our business logic and the provider types.

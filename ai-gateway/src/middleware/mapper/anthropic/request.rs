@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
 
 use anthropic_ai_sdk::types::message as anthropic;
 use async_openai::types::chat as openai;
@@ -7,7 +7,10 @@ use super::{message, tool};
 use crate::{
     endpoints::openai::chat_completions::system_prompt,
     error::mapper::MapperError,
-    middleware::mapper::{DEFAULT_MAX_TOKENS, TryConvert, model::ModelMapper},
+    middleware::mapper::{
+        DEFAULT_MAX_TOKENS, TryConvert, model::ModelMapper,
+        parse_openai_source_model, parse_source_model,
+    },
     types::{
         model_id::{ModelId, Version},
         provider::InferenceProvider,
@@ -37,7 +40,7 @@ impl
         &self,
         value: openai::CreateChatCompletionRequest,
     ) -> Result<anthropic::CreateMessageParams, Self::Error> {
-        let source_model = ModelId::from_str(&value.model)?;
+        let source_model = parse_openai_source_model(&value.model)?;
         let mut target_model = self
             .model_mapper
             .map_model(&source_model, &InferenceProvider::Anthropic)?;
@@ -139,7 +142,8 @@ impl TryConvert<anthropic::CreateMessageParams, anthropic::CreateMessageParams>
         &self,
         mut value: anthropic::CreateMessageParams,
     ) -> Result<anthropic::CreateMessageParams, Self::Error> {
-        let source_model = ModelId::from_str(&value.model)?;
+        let source_model =
+            parse_source_model(&value.model, InferenceProvider::Anthropic)?;
         let target_model = self
             .model_mapper
             .map_model(&source_model, &InferenceProvider::Anthropic)?;

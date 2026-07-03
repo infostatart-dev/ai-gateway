@@ -79,13 +79,6 @@ fn flatten_message_content_field(message: &mut Value) {
     }
     if let Some(text) = json_content_to_string(&content) {
         obj.insert("content".to_string(), Value::String(text));
-        return;
-    }
-    if content.is_null()
-        && let Some(reasoning) =
-            obj.get("reasoning_content").and_then(Value::as_str)
-    {
-        obj.insert("content".to_string(), Value::String(reasoning.to_string()));
     }
 }
 
@@ -147,24 +140,6 @@ mod tests {
         });
         normalize_chat_completion(&mut value);
         assert_eq!(value["choices"][0]["message"]["content"], "part-apart-b");
-    }
-
-    #[test]
-    fn uses_reasoning_content_when_content_is_null() {
-        let mut value = serde_json::json!({
-            "choices": [{
-                "message": {
-                    "role": "assistant",
-                    "content": null,
-                    "reasoning_content": "think then answer"
-                }
-            }]
-        });
-        normalize_chat_completion(&mut value);
-        assert_eq!(
-            value["choices"][0]["message"]["content"],
-            "think then answer"
-        );
     }
 
     #[test]

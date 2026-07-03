@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use async_openai::types::chat::{
     self, CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
 };
@@ -11,9 +9,9 @@ use crate::{
     error::mapper::MapperError,
     middleware::mapper::{
         TryConvert, TryConvertError, TryConvertStreamData, model::ModelMapper,
-        openai_error_from_value,
+        openai_error_from_value, parse_openai_source_model,
     },
-    types::{model_id::ModelId, provider::InferenceProvider},
+    types::provider::InferenceProvider,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -49,7 +47,7 @@ impl
         &self,
         mut value: async_openai::types::chat::CreateChatCompletionRequest,
     ) -> Result<OpenAICompatibleChatCompletionRequest, Self::Error> {
-        let source_model = ModelId::from_str(&value.model)?;
+        let source_model = parse_openai_source_model(&value.model)?;
         let target_model = self.model_mapper.map_model(
             &source_model,
             &InferenceProvider::Named("groq".into()),

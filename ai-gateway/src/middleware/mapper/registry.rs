@@ -304,7 +304,9 @@ impl EndpointConverterRegistryInner {
             endpoints::openai::ChatCompletions,
             super::chatgpt_web::ChatGptWebChatCompletions,
             super::chatgpt_web::ChatGptWebConverter,
-        >::new(super::chatgpt_web::ChatGptWebConverter);
+        >::new(
+            super::chatgpt_web::ChatGptWebConverter::new(model_mapper.clone()),
+        );
         registry.register_converter(key, converter);
 
         let key = RegistryKey::new(
@@ -319,7 +321,9 @@ impl EndpointConverterRegistryInner {
                 endpoints::openai::ChatCompletions,
                 super::deepseek_web::DeepSeekWebChatCompletions,
                 super::deepseek_web::DeepSeekWebConverter,
-            >::new(super::deepseek_web::DeepSeekWebConverter);
+            >::new(super::deepseek_web::DeepSeekWebConverter::new(
+                model_mapper.clone(),
+            ));
         registry.register_converter(key, converter);
 
         let key = RegistryKey::new(

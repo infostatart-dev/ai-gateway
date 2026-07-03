@@ -15,7 +15,11 @@ use crate::{
         credentials::ProviderCredentialId,
         provider_limits::ProviderLimitCatalog,
     },
-    router::budget_aware::types::BudgetCandidate,
+    metrics::llm::TokenUsage,
+    router::{
+        budget_aware::types::BudgetCandidate,
+        token_estimate::{PayloadBudgetConfig, estimate_from_value},
+    },
     types::{
         body::Body,
         extensions::{PendingRouteTrace, RouteTraceFinalizeContext},
@@ -49,6 +53,41 @@ pub(super) struct RouteOutcome<'a> {
     pub status: Option<u16>,
 }
 
+pub(super) struct FailureTraceFields {
+    pub failure_stage: &'static str,
+    pub error_source: &'static str,
+    pub error_class: String,
+}
+
+pub(super) fn failure_trace_fields(
+    status: http::StatusCode,
+    upstream: Option<&crate::types::extensions::UpstreamFailureContext>,
+    gateway: Option<&crate::types::extensions::GatewayFailureContext>,
+) -> Option<FailureTraceFields> {
+    if let Some(ctx) = upstream {
+        return Some(FailureTraceFields {
+            failure_stage: "upstream",
+            error_source: "upstream_provider",
+            error_class: format!("{:?}", ctx.kind),
+        });
+    }
+    if let Some(ctx) = gateway {
+        return Some(FailureTraceFields {
+            failure_stage: ctx.failure_stage,
+            error_source: ctx.error_source,
+            error_class: ctx.error_class.clone(),
+        });
+    }
+    if status.is_client_error() || status.is_server_error() {
+        return Some(FailureTraceFields {
+            failure_stage: "upstream",
+            error_source: "upstream_provider",
+            error_class: format!("http_{}", status.as_u16()),
+        });
+    }
+    None
+}
+
 pub(super) struct RouteTrace {
     started: Instant,
     route_span: Span,
@@ -60,6 +99,9 @@ pub(super) struct RouteTrace {
     upstream_failure_kind: Option<String>,
     restricted_until: Option<String>,
     failover_class: Option<String>,
+    failure_stage: Option<String>,
+    error_source: Option<String>,
+    error_class: Option<String>,
     terminal: TerminalRouteContext,
     agent_name: Option<String>,
     work_unit_id: Option<String>,
@@ -76,6 +118,7 @@ pub(super) struct RouteTrace {
     terminal_attempt_started: Option<Instant>,
     terminal_model: Option<String>,
     terminal_stream: bool,
+    estimated_usage: TokenUsage,
 }
 
 impl RouteTrace {
@@ -83,6 +126,7 @@ impl RouteTrace {
         candidates: usize,
         plan: Option<&crate::types::extensions::RoutePlanContext>,
         route_span: Span,
+        estimated_usage: TokenUsage,
     ) -> Self {
         Self {
             started: Instant::now(),
@@ -95,6 +139,9 @@ impl RouteTrace {
             upstream_failure_kind: None,
             restricted_until: None,
             failover_class: None,
+            failure_stage: None,
+            error_source: None,
+            error_class: None,
             terminal: TerminalRouteContext::default(),
             agent_name: plan.map(|p| p.caller.agent_name.clone()),
             work_unit_id: plan.and_then(|p| p.caller.work_unit_id.clone()),
@@ -111,6 +158,7 @@ impl RouteTrace {
             terminal_attempt_started: None,
             terminal_model: None,
             terminal_stream: false,
+            estimated_usage,
         }
     }
 
@@ -175,6 +223,20 @@ impl RouteTrace {
             self.restricted_until =
                 ctx.restricted_until.map(|dt| dt.to_rfc3339());
         }
+    }
+
+    pub(super) fn record_failure_trace_fields(
+        &mut self,
+        fields: &FailureTraceFields,
+    ) {
+        self.failure_stage = Some(fields.failure_stage.to_string());
+        self.error_source = Some(fields.error_source.to_string());
+        self.error_class = Some(fields.error_class.clone());
+        self.route_span
+            .record("failure_stage", fields.failure_stage);
+        self.route_span.record("error_source", fields.error_source);
+        self.route_span
+            .record("error_class", fields.error_class.as_str());
     }
 
     pub(super) fn record_attempt(&mut self) {
@@ -250,6 +312,7 @@ impl RouteTrace {
         upstream_failure_kind: &str,
         exhaustion_scope: &str,
         restricted_until: &str,
+        failure: Option<&FailureTraceFields>,
     ) {
         tracing::event!(
             parent: &self.route_span,
@@ -261,6 +324,9 @@ impl RouteTrace {
             upstream_failure_kind,
             exhaustion_scope,
             restricted_until,
+            failure_stage = failure.map_or("none", |f| f.failure_stage),
+            error_source = failure.map_or("none", |f| f.error_source),
+            error_class = failure.map_or("none", |f| f.error_class.as_str()),
             "gateway.failover"
         );
     }
@@ -294,6 +360,9 @@ impl RouteTrace {
             upstream_failure_kind: self.upstream_failure_kind.clone(),
             restricted_until: self.restricted_until.clone(),
             failover_class: self.failover_class.clone(),
+            failure_stage: self.failure_stage.clone(),
+            error_source: self.error_source.clone(),
+            error_class: self.error_class.clone(),
             agent_name: self.agent_name.clone(),
             work_unit_id: self.work_unit_id.clone(),
             work_unit_source: self.work_unit_source,
@@ -303,6 +372,7 @@ impl RouteTrace {
             route_memory_invalidated: Some(self.route_memory_invalidated),
             source_model: self.source_model.clone(),
             json_schema_required: self.json_schema_required,
+            estimated_usage: self.estimated_usage,
             replay: self.replay.clone(),
             finalize: Some(RouteTraceFinalizeContext {
                 route_span: self.route_span.clone(),
@@ -326,12 +396,38 @@ impl RouteTrace {
             "duration_ms",
             self.started.elapsed().as_secs_f64() * 1000.0,
         );
+        let usage_source =
+            (!self.estimated_usage.is_empty()).then_some("estimated");
         crate::metrics::provider::emit_pending_route_trace(
             &self.attach_pending(router_id, strategy, outcome, intent_context),
             None,
-            None,
+            usage_source,
         );
     }
+}
+
+pub(super) fn estimated_usage_from_request(
+    body: &Bytes,
+    estimate_tokens: bool,
+) -> TokenUsage {
+    if !estimate_tokens {
+        return TokenUsage::default();
+    }
+    serde_json::from_slice::<serde_json::Value>(body)
+        .ok()
+        .and_then(|value| {
+            estimate_from_value(&value, PayloadBudgetConfig::default())
+        })
+        .map_or_else(TokenUsage::default, |estimate| {
+            let input = u64::from(estimate.input_tokens);
+            let output = u64::from(estimate.reserved_output);
+            TokenUsage {
+                input: Some(input),
+                output: Some(output),
+                total: Some(input.saturating_add(output)),
+                ..TokenUsage::default()
+            }
+        })
 }
 
 pub(super) fn wrap_response_with_route_trace(
@@ -462,16 +558,18 @@ impl RouteTraceBodyState {
             .map_or(route_duration_ms, |started| {
                 started.elapsed().as_secs_f64() * 1000.0
             });
-        let usage = if self.finalize.stream || !self.usage_buffer_truncated {
-            let body = self.usage_buffer.clone().freeze();
-            crate::metrics::llm::extract_usage_from_response_body(
-                &body,
-                self.finalize.stream,
-            )
-        } else {
-            crate::metrics::llm::TokenUsage::default()
-        };
-        let usage_source = if usage.is_empty() { "none" } else { "reported" };
+        let reported_usage =
+            if self.finalize.stream || !self.usage_buffer_truncated {
+                let body = self.usage_buffer.clone().freeze();
+                crate::metrics::llm::extract_usage_from_response_body(
+                    &body,
+                    self.finalize.stream,
+                )
+            } else {
+                TokenUsage::default()
+            };
+        let (usage, usage_source) =
+            resolve_final_usage(reported_usage, self.pending.estimated_usage);
         let generation_ms = generation_ms_per_output_token(
             duration_ms,
             self.tfft_ms,
@@ -506,6 +604,21 @@ impl RouteTraceBodyState {
                 input_tokens = usage.input.unwrap_or(0),
                 output_tokens = usage.output.unwrap_or(0),
                 usage_source,
+                failure_stage = self
+                    .pending
+                    .failure_stage
+                    .as_deref()
+                    .unwrap_or("none"),
+                error_source = self
+                    .pending
+                    .error_source
+                    .as_deref()
+                    .unwrap_or("none"),
+                error_class = self
+                    .pending
+                    .error_class
+                    .as_deref()
+                    .unwrap_or("none"),
                 response_body_bytes = self.response_body_bytes,
                 stream = self.finalize.stream,
                 model = self.finalize.terminal_model.as_deref().unwrap_or("none"),
@@ -518,6 +631,19 @@ impl RouteTraceBodyState {
             generation_ms,
             Some(usage_source),
         );
+    }
+}
+
+fn resolve_final_usage(
+    reported: TokenUsage,
+    estimated: TokenUsage,
+) -> (TokenUsage, &'static str) {
+    if !reported.is_empty() {
+        (reported, "reported")
+    } else if !estimated.is_empty() {
+        (estimated, "estimated")
+    } else {
+        (TokenUsage::default(), "none")
     }
 }
 
@@ -546,6 +672,7 @@ fn route_trace_body_stream(
             }
         }
     })
+    .fuse()
 }
 
 #[derive(Clone, Copy)]
@@ -646,6 +773,9 @@ mod tests {
             upstream_failure_kind: None,
             restricted_until: None,
             failover_class: None,
+            failure_stage: None,
+            error_source: None,
+            error_class: None,
             agent_name: None,
             work_unit_id: None,
             work_unit_source: None,
@@ -655,6 +785,7 @@ mod tests {
             route_memory_invalidated: Some(false),
             source_model: None,
             json_schema_required: false,
+            estimated_usage: TokenUsage::default(),
             replay: None,
             finalize: Some(RouteTraceFinalizeContext {
                 route_span,
@@ -691,7 +822,12 @@ mod tests {
 
     #[test]
     fn route_trace_replan_preserves_accumulated_attempts_and_skips() {
-        let mut trace = RouteTrace::new_with_plan(1, None, Span::none());
+        let mut trace = RouteTrace::new_with_plan(
+            1,
+            None,
+            Span::none(),
+            TokenUsage::default(),
+        );
         trace.record_attempt();
         trace.record_skipped(2);
         trace.record_replan(1, 2, 1, 1, "applied");
@@ -733,5 +869,55 @@ mod tests {
         );
         assert_eq!(state.usage_buffer.len(), ROUTE_TRACE_USAGE_BUFFER_LIMIT);
         assert!(state.usage_buffer_truncated);
+    }
+
+    #[test]
+    fn final_usage_falls_back_to_estimated_tokens() {
+        let estimated = TokenUsage {
+            input: Some(8),
+            output: Some(3),
+            total: Some(11),
+            ..TokenUsage::default()
+        };
+
+        let (usage, source) =
+            resolve_final_usage(TokenUsage::default(), estimated);
+
+        assert_eq!(source, "estimated");
+        assert_eq!(usage.input, Some(8));
+        assert_eq!(usage.output, Some(3));
+    }
+
+    #[test]
+    fn gateway_failure_context_marks_local_mapper_failures() {
+        let gateway =
+            crate::types::extensions::GatewayFailureContext::from_error_metric(
+                "InternalError:MapperError:NoModelMapping".to_string(),
+            );
+        let fields = failure_trace_fields(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            None,
+            Some(&gateway),
+        )
+        .expect("failure fields");
+
+        assert_eq!(fields.failure_stage, "mapper");
+        assert_eq!(fields.error_source, "gateway");
+        assert_eq!(
+            fields.error_class,
+            "InternalError:MapperError:NoModelMapping"
+        );
+    }
+
+    #[test]
+    fn structured_output_gateway_failure_marks_invalid_json() {
+        let gateway =
+            crate::types::extensions::GatewayFailureContext::invalid_structured_json();
+        let fields = failure_trace_fields(StatusCode::OK, None, Some(&gateway))
+            .expect("failure fields");
+
+        assert_eq!(fields.failure_stage, "structured_output");
+        assert_eq!(fields.error_source, "gateway");
+        assert_eq!(fields.error_class, "invalid_structured_json");
     }
 }

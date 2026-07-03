@@ -20,6 +20,12 @@ use crate::{
 };
 
 pub const MAX_PLAN_HOPS: usize = 7;
+const STRATEGIC_FALLBACKS: [(&str, usize); 4] = [
+    ("deepseek-web", 2),
+    ("chatgpt-web", 1),
+    ("longcat", 1),
+    ("vllm", 1),
+];
 
 pub fn build_chain(
     router: &BudgetAwareRouter,
@@ -48,11 +54,42 @@ pub fn build_chain(
         }
     }
 
+    append_strategic_fallback_hops(&scored, &mut plan, &mut used);
     append_intra_slot_ladder(router, ctx, &scored, &mut plan, &mut used);
     append_scored_hops(&scored, &mut plan, &mut used);
     plan.truncate(MAX_PLAN_HOPS);
     apply_spread(&mut plan, ctx.caller, &scored);
     plan
+}
+
+fn append_strategic_fallback_hops(
+    scored: &[(f64, BudgetCandidate)],
+    plan: &mut Vec<BudgetCandidate>,
+    used: &mut HashSet<(ProviderCredentialId, String)>,
+) {
+    for (provider_name, max_slots) in STRATEGIC_FALLBACKS {
+        let mut added = 0;
+        for (_, candidate) in scored {
+            if plan.len() >= MAX_PLAN_HOPS || added >= max_slots {
+                break;
+            }
+            if !is_named_provider(candidate, provider_name) {
+                continue;
+            }
+            let key = plan_key(candidate);
+            if used.insert(key) {
+                plan.push(candidate.clone());
+                added += 1;
+            }
+        }
+    }
+}
+
+fn is_named_provider(candidate: &BudgetCandidate, provider_name: &str) -> bool {
+    matches!(
+        &candidate.capability.provider,
+        InferenceProvider::Named(name) if name == provider_name
+    )
 }
 
 fn append_scored_hops(
@@ -210,7 +247,9 @@ pub fn feasible_for_plan(
     }
     if let Some(intent) = intent {
         let floor = intent.effective_floor(ctx.requirements);
-        if candidate.capability.intent_tier < floor {
+        if candidate.capability.intent_tier < floor
+            && !is_strategic_fallback_provider(candidate)
+        {
             return false;
         }
     }
@@ -248,6 +287,12 @@ fn deprioritized_while_gemini_stability_available(
                         > 0.0
             })
     })
+}
+
+fn is_strategic_fallback_provider(candidate: &BudgetCandidate) -> bool {
+    STRATEGIC_FALLBACKS
+        .iter()
+        .any(|(provider_name, _)| is_named_provider(candidate, provider_name))
 }
 
 fn apply_spread(
