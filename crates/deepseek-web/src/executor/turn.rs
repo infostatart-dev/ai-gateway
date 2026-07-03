@@ -1,13 +1,16 @@
 use serde_json::Value;
+use tracing::Instrument;
 
 use crate::{
     Error,
-    api::create_pow_challenge,
+    api::create_pow_challenge_with_browser,
     completion::{
-        build_completion_from_prompt, completion_headers, completion_json,
+        build_completion_from_prompt, completion_headers_for_session,
+        completion_json,
     },
     constants::COMPLETION_URL,
     pow::{cache::PowCache, solve_challenge},
+    session::file::BrowserSession,
     tls::fetch::{FetchRequest, HttpFetch},
 };
 
@@ -18,28 +21,47 @@ pub struct TurnContext<'a> {
     pub model: &'a str,
     pub body: &'a Value,
     pub pow_cache: &'a PowCache,
+    pub browser_session: Option<&'a BrowserSession>,
 }
 
 pub async fn run_completion_turn(
     ctx: &TurnContext<'_>,
     prompt: String,
 ) -> Result<String, Error> {
-    let challenge = create_pow_challenge(ctx.fetch, ctx.access_token).await?;
-    let pow_answer = if let Some(cached) =
-        ctx.pow_cache
-            .get(ctx.access_token, ctx.session_id, &challenge)
-    {
-        cached
-    } else {
-        let solved = solve_challenge(&challenge)?;
-        ctx.pow_cache.store(
+    let pow_span = tracing::info_span!(
+        "gateway.web.deepseek.pow",
+        pow_cache_hit = tracing::field::Empty,
+        pow_cache_hits = tracing::field::Empty,
+    );
+    let pow_answer = async {
+        let challenge = create_pow_challenge_with_browser(
+            ctx.fetch,
             ctx.access_token,
-            ctx.session_id,
-            challenge,
-            solved.clone(),
-        );
-        solved
-    };
+            ctx.browser_session,
+        )
+        .await?;
+        if let Some(cached) =
+            ctx.pow_cache
+                .get(ctx.access_token, ctx.session_id, &challenge)
+        {
+            pow_span.record("pow_cache_hit", true);
+            pow_span.record("pow_cache_hits", ctx.pow_cache.cache_hits());
+            Ok::<_, Error>(cached)
+        } else {
+            let solved = solve_challenge(&challenge)?;
+            ctx.pow_cache.store(
+                ctx.access_token,
+                ctx.session_id,
+                challenge,
+                solved.clone(),
+            );
+            pow_span.record("pow_cache_hit", false);
+            pow_span.record("pow_cache_hits", ctx.pow_cache.cache_hits());
+            Ok::<_, Error>(solved)
+        }
+    }
+    .instrument(pow_span.clone())
+    .await?;
 
     let completion = build_completion_from_prompt(
         ctx.body,
@@ -47,7 +69,11 @@ pub async fn run_completion_turn(
         ctx.session_id,
         prompt,
     );
-    let headers = completion_headers(ctx.access_token, &pow_answer);
+    let headers = completion_headers_for_session(
+        ctx.access_token,
+        &pow_answer,
+        ctx.browser_session,
+    );
     let payload = completion_json(&completion);
 
     let resp = ctx
@@ -178,6 +204,7 @@ mod tests {
             model: "deepseek-chat",
             body: &body,
             pow_cache: &pow_cache,
+            browser_session: None,
         };
 
         let err = run_completion_turn(&ctx, "hello".into()).await.unwrap_err();

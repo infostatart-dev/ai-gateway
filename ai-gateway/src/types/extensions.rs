@@ -166,6 +166,19 @@ pub struct PendingRouteTrace {
     pub source_model: Option<String>,
     pub json_schema_required: bool,
     pub replay: Option<PlanReplaySnapshot>,
+    pub finalize: Option<RouteTraceFinalizeContext>,
+}
+
+/// Span handles and timing anchors kept until the final response body is
+/// consumed, so route/attempt spans can include real generation latency.
+#[derive(Debug, Clone)]
+pub struct RouteTraceFinalizeContext {
+    pub route_span: tracing::Span,
+    pub attempt_span: Option<tracing::Span>,
+    pub route_started: std::time::Instant,
+    pub attempt_started: Option<std::time::Instant>,
+    pub terminal_model: Option<String>,
+    pub stream: bool,
 }
 
 /// Inputs for route-chain replanning during failover.

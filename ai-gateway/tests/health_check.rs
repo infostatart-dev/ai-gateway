@@ -5,6 +5,8 @@ use ai_gateway::{
     tests::{TestDefault, harness::Harness, mock::MockArgs},
 };
 use http::{Method, Request, StatusCode};
+use http_body_util::BodyExt;
+use serde_json::Value;
 use tower::Service;
 
 #[tokio::test]
@@ -35,6 +37,21 @@ async fn health_check() {
 
     let response = harness.call(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap();
+    let health: Value = serde_json::from_slice(&body.to_bytes()).unwrap();
+    assert!(health.get("version").and_then(Value::as_str).is_some());
+    assert!(
+        health
+            .get("started_at_utc")
+            .and_then(Value::as_str)
+            .is_some()
+    );
+    assert!(
+        health
+            .get("started_at_server_time")
+            .and_then(Value::as_str)
+            .is_some()
+    );
 
     let request = Request::builder()
         .method(Method::GET)

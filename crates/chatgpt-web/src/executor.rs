@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use tracing::Instrument;
 
 use crate::{
     Error,
@@ -45,6 +46,7 @@ pub struct ExecuteRequest {
 pub struct ExecuteStats {
     pub turns: u32,
     pub upload_parts: u32,
+    pub pow_cache_hits: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -172,72 +174,96 @@ impl Executor {
         retry_suffix: Option<&'static str>,
         reserved_output_tokens: u32,
     ) -> Result<(String, Value, ExecuteStats), Error> {
-        let token = exchange_session(self.fetch.as_ref(), cookie).await?;
-        let cookie = token
-            .refreshed_cookie
-            .clone()
-            .unwrap_or_else(|| cookie.to_string());
+        let (token, cookie, dpl, script_src, session_id, device_id, reqs) =
+            async {
+                let token =
+                    exchange_session(self.fetch.as_ref(), cookie).await?;
+                let cookie = token
+                    .refreshed_cookie
+                    .clone()
+                    .unwrap_or_else(|| cookie.to_string());
 
-        let (dpl, script_src) =
-            match fetch_dpl(self.fetch.as_ref(), &cookie).await {
-                Ok(v) => v,
-                Err(_) => fallback_dpl(),
-            };
+                let (dpl, script_src) =
+                    match fetch_dpl(self.fetch.as_ref(), &cookie).await {
+                        Ok(v) => v,
+                        Err(_) => fallback_dpl(),
+                    };
 
-        let session_id = uuid::Uuid::new_v4().to_string();
-        let device_id = device_id_for(&cookie);
+                let session_id = uuid::Uuid::new_v4().to_string();
+                let device_id = device_id_for(&cookie);
 
-        run_session_warmup(
-            self.fetch.as_ref(),
-            &token.access_token,
-            token.account_id.as_deref(),
-            &session_id,
-            &device_id,
-            &cookie,
-        )
-        .await;
-
-        let reqs = prepare_chat_requirements(
-            self.fetch.as_ref(),
-            PrepareChatInput {
-                access_token: &token.access_token,
-                account_id: token.account_id.as_deref(),
-                session_id: &session_id,
-                device_id: &device_id,
-                cookie: &cookie,
-                dpl: &dpl,
-                script_src: &script_src,
-            },
-        )
-        .await?;
-
-        let proof_token = if reqs
-            .proofofwork
-            .as_ref()
-            .is_some_and(|p| p.required.unwrap_or(false))
-        {
-            let pow = reqs.proofofwork.as_ref().unwrap();
-            if let (Some(seed), Some(diff)) = (&pow.seed, &pow.difficulty) {
-                let config = build_prekey_config(
-                    crate::constants::CHATGPT_USER_AGENT,
-                    &dpl,
-                    &script_src,
-                );
-                Some(
-                    tokio::task::spawn_blocking({
-                        let seed = seed.clone();
-                        let diff = diff.clone();
-                        move || solve_proof_of_work(&seed, &diff, config)
-                    })
-                    .await
-                    .map_err(|e| Error::Other(e.to_string()))?,
+                run_session_warmup(
+                    self.fetch.as_ref(),
+                    &token.access_token,
+                    token.account_id.as_deref(),
+                    &session_id,
+                    &device_id,
+                    &cookie,
                 )
+                .await;
+
+                let reqs = prepare_chat_requirements(
+                    self.fetch.as_ref(),
+                    PrepareChatInput {
+                        access_token: &token.access_token,
+                        account_id: token.account_id.as_deref(),
+                        session_id: &session_id,
+                        device_id: &device_id,
+                        cookie: &cookie,
+                        dpl: &dpl,
+                        script_src: &script_src,
+                    },
+                )
+                .await?;
+
+                Ok::<_, Error>((
+                    token, cookie, dpl, script_src, session_id, device_id, reqs,
+                ))
+            }
+            .instrument(tracing::info_span!(
+                "gateway.web.chatgpt.session_prepare"
+            ))
+            .await?;
+
+        let proof_token = async {
+            let proof_token = if reqs
+                .proofofwork
+                .as_ref()
+                .is_some_and(|p| p.required.unwrap_or(false))
+            {
+                let pow = reqs.proofofwork.as_ref().unwrap();
+                if let (Some(seed), Some(diff)) = (&pow.seed, &pow.difficulty) {
+                    let config = build_prekey_config(
+                        crate::constants::CHATGPT_USER_AGENT,
+                        &dpl,
+                        &script_src,
+                    );
+                    Some(
+                        tokio::task::spawn_blocking({
+                            let seed = seed.clone();
+                            let diff = diff.clone();
+                            move || solve_proof_of_work(&seed, &diff, config)
+                        })
+                        .await
+                        .map_err(|e| Error::Other(e.to_string()))?,
+                    )
+                } else {
+                    None
+                }
             } else {
                 None
-            }
-        } else {
-            None
-        };
+            };
+            Ok::<_, Error>(proof_token)
+        }
+        .instrument(tracing::info_span!(
+            "gateway.web.chatgpt.pow",
+            pow_required = reqs
+                .proofofwork
+                .as_ref()
+                .is_some_and(|p| p.required.unwrap_or(false)),
+            pow_cache_hit = false,
+        ))
+        .await?;
 
         let parsed = parse_openai_messages(messages);
         let schema_spec = parse_json_schema_spec(body);
@@ -290,6 +316,17 @@ impl Executor {
         for (idx, turn) in plan.turns.iter().enumerate() {
             stats.turns += 1;
             let is_final = idx + 1 == turn_count;
+            let is_upload = matches!(
+                turn.kind,
+                web_message_budget::WebTurnKind::ContextUpload { .. }
+            );
+            let turn_kind = if is_upload {
+                "upload"
+            } else if is_final {
+                "final"
+            } else {
+                "turn"
+            };
             let mut system_msg = turn.system_msg.clone();
             if is_final && let Some(suffix) = retry_suffix {
                 system_msg.push_str(suffix);
@@ -306,24 +343,43 @@ impl Executor {
                 conversation_id.as_deref(),
             );
 
-            let resp = self
-                .fetch
-                .as_ref()
-                .fetch(FetchRequest {
-                    url: CONV_URL.into(),
-                    method: "POST".into(),
-                    headers: conv_headers(
-                        &token,
-                        &session_id,
-                        &device_id,
-                        &cookie,
-                        &reqs,
-                        proof_token.as_deref(),
-                    ),
-                    body: Some(serde_json::to_vec(&cgpt_body)?),
-                    timeout_ms: 120_000,
-                })
-                .await?;
+            let turn_span = tracing::info_span!(
+                "gateway.web.chatgpt.turn",
+                turn_index = idx,
+                turns = turn_count,
+                final = is_final,
+                kind = turn_kind,
+            );
+            let fetch_turn = async {
+                self.fetch
+                    .as_ref()
+                    .fetch(FetchRequest {
+                        url: CONV_URL.into(),
+                        method: "POST".into(),
+                        headers: conv_headers(
+                            &token,
+                            &session_id,
+                            &device_id,
+                            &cookie,
+                            &reqs,
+                            proof_token.as_deref(),
+                        ),
+                        body: Some(serde_json::to_vec(&cgpt_body)?),
+                        timeout_ms: 120_000,
+                    })
+                    .await
+            };
+            let resp = if is_upload {
+                fetch_turn
+                    .instrument(tracing::info_span!(
+                        "gateway.web.chatgpt.upload",
+                        turn_index = idx,
+                    ))
+                    .instrument(turn_span)
+                    .await?
+            } else {
+                fetch_turn.instrument(turn_span).await?
+            };
 
             if resp.status == 401 || resp.status == 403 {
                 invalidate_token_cache(&cookie);
@@ -356,7 +412,12 @@ impl Executor {
                 }
                 return Ok((
                     cookie,
-                    build_non_streaming_response(model, &meta.content),
+                    tracing::info_span!(
+                        "gateway.web.chatgpt.response_finalize"
+                    )
+                    .in_scope(|| {
+                        build_non_streaming_response(model, &meta.content)
+                    }),
                     stats,
                 ));
             }

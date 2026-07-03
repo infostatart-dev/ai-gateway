@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, Utc};
 use opentelemetry::metrics::{Counter, Histogram, Meter};
 
 use super::{
@@ -79,7 +79,10 @@ struct TokenTotals {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ProviderStatsSnapshot {
+    pub version: &'static str,
     pub started_at: DateTime<Utc>,
+    pub started_at_utc: DateTime<Utc>,
+    pub started_at_server_time: String,
     pub uptime_seconds: u64,
     pub providers: Vec<ProviderStatsRow>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -437,7 +440,12 @@ impl ProviderRuntimeRegistry {
         rows.sort_by(|a, b| a.provider.cmp(&b.provider));
 
         ProviderStatsSnapshot {
+            version: env!("CARGO_PKG_VERSION"),
             started_at,
+            started_at_utc: started_at,
+            started_at_server_time: started_at
+                .with_timezone(&Local)
+                .to_rfc3339(),
             uptime_seconds,
             providers: rows,
             quota: Vec::new(),

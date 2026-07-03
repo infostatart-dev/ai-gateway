@@ -45,14 +45,33 @@ pub async fn acquire_upstream_pacing(
     });
     match gate.acquire(estimated_tokens).await {
         Ok(permit) => Ok(Some(permit)),
-        Err(retry_after) => Err(ApiError::InvalidRequest(
-            InvalidRequestError::TooManyRequests(
-                crate::error::invalid_req::TooManyRequestsError {
-                    ratelimit_limit,
-                    ratelimit_remaining: 0,
-                    retry_after: retry_after.as_secs().max(1),
-                },
-            ),
-        )),
+        Err(retry_after) => {
+            tracing::event!(
+                tracing::Level::INFO,
+                blocked_reason = "pacing",
+                wait_ms = u64::try_from(retry_after.as_millis())
+                    .unwrap_or(u64::MAX),
+                retry_after_ms = u64::try_from(retry_after.as_millis())
+                    .unwrap_or(u64::MAX),
+                provider = %provider,
+                credential = credential_id.map_or(
+                    "none",
+                    ProviderCredentialId::as_str,
+                ),
+                model = model.unwrap_or("none"),
+                tier = tier.unwrap_or("none"),
+                estimated_tokens,
+                "gateway.pacing.wait"
+            );
+            Err(ApiError::InvalidRequest(
+                InvalidRequestError::TooManyRequests(
+                    crate::error::invalid_req::TooManyRequestsError {
+                        ratelimit_limit,
+                        ratelimit_remaining: 0,
+                        retry_after: retry_after.as_secs().max(1),
+                    },
+                ),
+            ))
+        }
     }
 }

@@ -17,11 +17,13 @@ pub const COMPLETION_URL: &str =
 
 pub const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
                               AppleWebKit/537.36 (KHTML, like Gecko) \
-                              Chrome/134.0.0.0 Safari/537.36";
-pub const APP_VERSION: &str = "20241129.1";
-pub const CLIENT_LOCALE: &str = "en-US";
+                              Chrome/149.0.0.0 Safari/537.36";
+pub const APP_VERSION: &str = "2.0.0";
+pub const CLIENT_BUNDLE_ID: &str = "com.deepseek.chat";
+pub const CLIENT_LOCALE: &str = "ru";
 pub const CLIENT_PLATFORM: &str = "web";
-pub const CLIENT_VERSION: &str = "1.8.0";
+pub const CLIENT_TIMEZONE_OFFSET: &str = "10800";
+pub const CLIENT_VERSION: &str = "2.0.0";
 
 pub const TOKEN_TTL_SECS: u64 = 3600;
 pub const POW_TARGET_PATH: &str = "/api/v0/chat/completion";

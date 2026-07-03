@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.6.5] - 2026-07-03
+
+**Route tracing and upstream latency observability** — router execution now
+emits backend-neutral spans and events suitable for waterfall inspection across
+route planning, upstream attempts, failover, retry, pacing, and web-provider
+execution stages.
+
+### Features
+
+- **Route waterfall spans:** budget-aware routing creates route-level and
+  attempt-level spans with planning, candidate, admission, provider, model,
+  credential, tier, streaming, and token-estimate attributes
+- **Failover and skip events:** skipped candidates, classified upstream
+  failures, failover hops, pacing waits, and retry waits are represented as
+  span events with normalized reason and timing fields
+- **Body-finalized latency fields:** route and terminal attempt spans record
+  final duration, time-to-first-token, generation latency per output token,
+  token usage, usage source, and response byte counts after the response body
+  is consumed
+- **Web-provider stages:** ChatGPT Web and DeepSeek Web execution exposes
+  prepare, executor, turn, upload, proof-of-work, and finalize stages with
+  turn, upload, and proof-of-work cache counters
+
+### Fixed
+
+- **Route latency attribution:** terminal route spans include response-body
+  generation time instead of stopping at upstream header selection
+- **Attempt classification visibility:** failed attempts retain failover
+  class, upstream failure kind, exhaustion scope, status, and restriction
+  metadata on the attempt span
+
+### Quality
+
+- Route trace body wrapping preserves response bytes while recording final
+  observability fields without attaching prompts, secrets, cookies, or full
+  upstream bodies to span attributes
+- Tests cover route trace finalization behavior and replay trace fixtures
+
 ## [0.6.0] - 2026-07-01
 
 **Client access and quota enforcement** — the gateway can authenticate inbound

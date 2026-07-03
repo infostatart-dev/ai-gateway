@@ -1,11 +1,13 @@
 //! Executor restriction behavior (structured-output guard + mute path).
 
+use std::collections::BTreeMap;
+
 use serde_json::json;
 
 use crate::{
     Error,
     executor::{ExecuteRequest, Executor},
-    session::exchange::clear_token_cache,
+    session::{exchange::clear_token_cache, file::BrowserSession},
     tls::fetch::{FetchResponse, MockFetch},
 };
 
@@ -69,6 +71,16 @@ fn mute_json_response() -> FetchResponse {
     }))
 }
 
+fn header_value<'a>(
+    headers: &'a [(String, String)],
+    name: &str,
+) -> Option<&'a str> {
+    headers
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(name))
+        .map(|(_, value)| value.as_str())
+}
+
 #[tokio::test]
 async fn credential_restricted_skips_further_structured_retries() {
     clear_token_cache();
@@ -102,6 +114,7 @@ async fn credential_restricted_skips_further_structured_retries() {
     let err = executor
         .execute(ExecuteRequest {
             user_token: "user-token-12345678".into(),
+            browser_session: None,
             body,
             stream: false,
             turn_hook: None,
@@ -119,4 +132,68 @@ async fn credential_restricted_skips_further_structured_retries() {
         "exchange + session + 2×(pow+completion) + delete — no third \
          structured retry"
     );
+}
+
+#[tokio::test]
+async fn browser_session_cookie_and_headers_reach_all_deepseek_calls() {
+    clear_token_cache();
+    let fetch = MockFetch::new(vec![
+        exchange_response(),
+        session_response(),
+        pow_challenge_response(),
+        answer_sse("ok"),
+        json_response(json!({ "code": 0 })),
+    ]);
+    let executor = Executor::new(fetch.clone());
+    let cookie = "cf_clearance=clear; ds_session_id=session; aws-waf-token=waf";
+    let browser_session = BrowserSession {
+        token: "browser-session-user-token-12345678".into(),
+        cookie: Some(cookie.into()),
+        headers: BTreeMap::from([
+            ("user-agent".into(), "Mozilla/5.0 Chrome/149".into()),
+            ("x-app-version".into(), "2.0.0".into()),
+            ("x-client-bundle-id".into(), "com.deepseek.chat".into()),
+            ("x-client-locale".into(), "ru".into()),
+            ("x-client-platform".into(), "web".into()),
+            ("x-client-timezone-offset".into(), "10800".into()),
+            ("x-client-version".into(), "2.0.0".into()),
+        ]),
+    };
+
+    let result = executor
+        .execute(ExecuteRequest {
+            user_token: browser_session.token.clone(),
+            browser_session: Some(browser_session),
+            body: json!({
+                "model": "deepseek-chat",
+                "messages": [{ "role": "user", "content": "hi" }]
+            }),
+            stream: false,
+            turn_hook: None,
+        })
+        .await
+        .expect("deepseek execution");
+    assert_eq!(result.status, 200);
+
+    let requests = fetch.requests();
+    assert_eq!(
+        requests.len(),
+        5,
+        "exchange + session + pow + completion + delete"
+    );
+    for request in &requests {
+        assert_eq!(header_value(&request.headers, "Cookie"), Some(cookie));
+        assert_eq!(
+            header_value(&request.headers, "X-Client-Version"),
+            Some("2.0.0")
+        );
+        assert_eq!(
+            header_value(&request.headers, "X-Client-Bundle-Id"),
+            Some("com.deepseek.chat")
+        );
+        assert_eq!(
+            header_value(&request.headers, "User-Agent"),
+            Some("Mozilla/5.0 Chrome/149")
+        );
+    }
 }

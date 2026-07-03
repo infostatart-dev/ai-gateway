@@ -67,6 +67,7 @@ fn replay_record_serializes_winner_breakdown() {
         source_model: Some("gpt-5-nano".to_string()),
         json_schema_required: true,
         replay: Some(sample_snapshot()),
+        finalize: None,
     };
 
     let replay = build_replay_record(&pending).expect("replay");
@@ -137,6 +138,7 @@ fn replay_record_serializes_quota_block_metadata() {
                 quota_capacity: 0.0,
             }],
         }),
+        finalize: None,
     };
 
     let replay = build_replay_record(&pending).expect("replay");
@@ -183,6 +185,7 @@ fn replay_record_absent_without_plan_snapshot() {
         source_model: None,
         json_schema_required: false,
         replay: None,
+        finalize: None,
     };
     assert!(build_replay_record(&pending).is_none());
 }

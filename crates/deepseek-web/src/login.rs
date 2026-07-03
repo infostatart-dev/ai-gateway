@@ -51,6 +51,8 @@ pub async fn save_session_from_token(
         path,
         &SessionFile {
             token: raw_token.to_string(),
+            cookie: None,
+            headers: Default::default(),
             saved_at: Utc::now(),
         },
     )

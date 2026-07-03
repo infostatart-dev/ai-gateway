@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 
 use super::prompt::messages_to_prompt;
+use crate::session::file::BrowserSession;
 
 #[derive(Debug, Clone)]
 pub struct CompletionRequest {
@@ -80,14 +81,20 @@ pub fn completion_headers(
     access_token: &str,
     pow_response: &str,
 ) -> Vec<(String, String)> {
-    let mut headers = crate::headers::json_headers(access_token);
-    headers.push(("X-Ds-Pow-Response".into(), pow_response.to_string()));
-    headers.push(("X-Client-Timezone-Offset".into(), client_timezone_offset()));
-    headers.push(("Cookie".into(), crate::cookie::generate_fake_cookie()));
-    headers.push(("Accept".into(), "text/event-stream".into()));
-    headers
+    completion_headers_for_session(access_token, pow_response, None)
 }
 
-fn client_timezone_offset() -> String {
-    chrono::Local::now().offset().local_minus_utc().to_string()
+pub fn completion_headers_for_session(
+    access_token: &str,
+    pow_response: &str,
+    session: Option<&BrowserSession>,
+) -> Vec<(String, String)> {
+    let mut headers =
+        crate::headers::json_headers_for_session(access_token, session);
+    headers.push(("X-Ds-Pow-Response".into(), pow_response.to_string()));
+    if session.and_then(|s| s.cookie.as_deref()).is_none() {
+        headers.push(("Cookie".into(), crate::cookie::generate_fake_cookie()));
+    }
+    headers.push(("Accept".into(), "text/event-stream".into()));
+    headers
 }

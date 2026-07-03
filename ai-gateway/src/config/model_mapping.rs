@@ -159,6 +159,10 @@ gpt-5-mini:
             .iter()
             .position(|p| *p == InferenceProvider::Named("bazaarlink".into()))
             .expect("bazaarlink entry");
+        let deepseek_web_pos = providers
+            .iter()
+            .position(|p| *p == InferenceProvider::Named("deepseek-web".into()))
+            .expect("deepseek-web fallback");
         assert_eq!(
             longcat_pos, 1,
             "longcat must be the first fallback after local vllm"
@@ -167,6 +171,10 @@ gpt-5-mini:
             bazaarlink_pos, 2,
             "bazaarlink must remain the first curated free fallback after \
              longcat"
+        );
+        assert!(
+            bazaarlink_pos < deepseek_web_pos,
+            "deepseek-web must follow the curated free fallback"
         );
         assert!(bazaarlink_pos < anthropic_pos);
 

@@ -110,6 +110,7 @@ pub fn default_fetch() -> Arc<dyn HttpFetch> {
 pub struct MockFetch {
     responses: Mutex<Vec<FetchResponse>>,
     calls: Mutex<usize>,
+    requests: Mutex<Vec<FetchRequest>>,
 }
 
 impl MockFetch {
@@ -117,11 +118,16 @@ impl MockFetch {
         Arc::new(Self {
             responses: Mutex::new(responses),
             calls: Mutex::new(0),
+            requests: Mutex::new(Vec::new()),
         })
     }
 
     pub fn call_count(&self) -> usize {
         *self.calls.lock().unwrap()
+    }
+
+    pub fn requests(&self) -> Vec<FetchRequest> {
+        self.requests.lock().unwrap().clone()
     }
 }
 
@@ -137,7 +143,7 @@ impl HttpFetch for MockFetch {
         >,
     > {
         Box::pin(async move {
-            let _ = req;
+            self.requests.lock().unwrap().push(req);
             let mut calls = self.calls.lock().unwrap();
             *calls += 1;
             let idx = *calls - 1;

@@ -120,7 +120,20 @@ async fn provider_stats_public_and_aggregates_two_providers() {
 
     let snapshot =
         fetch_stats(&mut harness, "/v1/observability/provider-stats").await;
+    assert!(snapshot.get("version").and_then(Value::as_str).is_some());
     assert!(snapshot.get("started_at").is_some());
+    assert!(
+        snapshot
+            .get("started_at_utc")
+            .and_then(Value::as_str)
+            .is_some()
+    );
+    assert!(
+        snapshot
+            .get("started_at_server_time")
+            .and_then(Value::as_str)
+            .is_some()
+    );
     assert!(snapshot.get("uptime_seconds").is_some());
     assert!(
         attempts(&snapshot, "openai") >= 1,

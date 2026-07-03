@@ -5,7 +5,7 @@ mod prompt;
 
 pub use body::{
     CompletionRequest, build_completion_from_prompt, build_completion_request,
-    completion_headers, completion_json,
+    completion_headers, completion_headers_for_session, completion_json,
 };
 pub use model::{ModelOptions, resolve_model_options};
 pub use plan::{parse_openai_messages, plan_completion_turns};

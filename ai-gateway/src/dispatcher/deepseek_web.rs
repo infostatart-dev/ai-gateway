@@ -28,6 +28,7 @@ use crate::{
 
 struct DeepSeekPreparedRequest {
     user_token: String,
+    browser_session: deepseek_web::BrowserSession,
     openai_body: Value,
     stream: bool,
     req_body_bytes: Bytes,
@@ -35,7 +36,10 @@ struct DeepSeekPreparedRequest {
 }
 
 impl Dispatcher {
-    #[tracing::instrument(name = "deepseek_web_execute", skip(self, req))]
+    #[tracing::instrument(
+        name = "gateway.web.deepseek.execute",
+        skip(self, req)
+    )]
     pub(super) async fn dispatch_deepseek_web(
         &self,
         req: Request,
@@ -47,38 +51,58 @@ impl Dispatcher {
             req,
             credential_id,
         )
+        .instrument(tracing::info_span!("gateway.web.deepseek.request_prepare"))
         .await?;
         let turn_hook = turn_pacing_hook(
             self.app_state.clone(),
             self.provider.clone(),
             credential_id.cloned(),
         );
+        let executor_span = tracing::info_span!(
+            "gateway.web.deepseek.executor",
+            turns = tracing::field::Empty,
+            upload_parts = tracing::field::Empty,
+            pow_cache_hits = tracing::field::Empty,
+        );
 
         match Executor::default()
             .execute(ExecuteRequest {
                 user_token: prepared.user_token,
+                browser_session: Some(prepared.browser_session),
                 body: prepared.openai_body,
                 stream: prepared.stream,
                 turn_hook: Some(turn_hook),
             })
-            .instrument(tracing::info_span!("deepseek_web_executor"))
+            .instrument(executor_span.clone())
             .await
         {
-            Ok(result) => build_deepseek_success_outcome(
-                result,
-                prepared.stream,
-                prepared.target_url,
-                prepared.req_body_bytes,
-                request_headers,
-            ),
+            Ok(result) => {
+                executor_span.record("turns", result.stats.turns);
+                executor_span.record("upload_parts", result.stats.upload_parts);
+                executor_span
+                    .record("pow_cache_hits", result.stats.pow_cache_hits);
+                tracing::info_span!("gateway.web.deepseek.request_finalize")
+                    .in_scope(|| {
+                        build_deepseek_success_outcome(
+                            result,
+                            prepared.stream,
+                            prepared.target_url,
+                            prepared.req_body_bytes,
+                            request_headers,
+                        )
+                    })
+            }
             Err(error) => {
                 tracing::warn!(error = %error, "deepseek-web executor failed");
-                build_deepseek_error_outcome(
-                    error,
-                    prepared.target_url,
-                    prepared.req_body_bytes,
-                    request_headers,
-                )
+                tracing::info_span!("gateway.web.deepseek.request_finalize")
+                    .in_scope(|| {
+                        build_deepseek_error_outcome(
+                            error,
+                            prepared.target_url,
+                            prepared.req_body_bytes,
+                            request_headers,
+                        )
+                    })
             }
         }
     }
@@ -95,8 +119,9 @@ async fn prepare_deepseek_request(
         deepseek_cfg::DEFAULT_CREDENTIAL_ID,
     )
     .ok_or_else(|| ApiError::Internal(InternalError::ProviderNotFound))?;
-    let user_token = deepseek_cfg::load_session_token(&session_path)
+    let browser_session = deepseek_cfg::load_browser_session(&session_path)
         .ok_or_else(|| ApiError::Internal(InternalError::ProviderNotFound))?;
+    let user_token = browser_session.token.clone();
 
     let body_bytes = req
         .into_body()
@@ -120,6 +145,7 @@ async fn prepare_deepseek_request(
 
     Ok(DeepSeekPreparedRequest {
         user_token,
+        browser_session,
         openai_body,
         stream,
         req_body_bytes: body_bytes,
@@ -156,13 +182,6 @@ fn build_deepseek_success_outcome(
     req_body_bytes: Bytes,
     request_headers: HeaderMap,
 ) -> Result<DispatchOutcome, ApiError> {
-    tracing::info!(
-        deepseek_web_turns = result.stats.turns,
-        deepseek_web_upload_parts = result.stats.upload_parts,
-        deepseek_web_pow_cache_hits = result.stats.pow_cache_hits,
-        "deepseek-web executor stats"
-    );
-
     let status =
         StatusCode::from_u16(result.status).unwrap_or(StatusCode::BAD_GATEWAY);
     let mut headers = HeaderMap::new();

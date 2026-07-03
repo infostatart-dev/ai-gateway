@@ -6,6 +6,7 @@ pub mod token;
 pub use exchange::clear_token_cache;
 pub use exchange::{AccessToken, exchange_session, invalidate_token_cache};
 pub use file::{
-    SessionFile, load_session, save_session, session_path_from_env,
+    BrowserSession, SessionFile, load_session, save_session,
+    session_path_from_env,
 };
 pub use token::normalize_user_token;

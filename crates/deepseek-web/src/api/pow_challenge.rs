@@ -4,7 +4,8 @@ use serde_json::Value;
 use crate::{
     Error,
     constants::{POW_CHALLENGE_URL, POW_TARGET_PATH},
-    headers::json_headers,
+    headers::json_headers_for_session,
+    session::file::BrowserSession,
     tls::fetch::{FetchRequest, HttpFetch},
 };
 
@@ -25,13 +26,21 @@ pub async fn create_pow_challenge(
     fetch: &dyn HttpFetch,
     access_token: &str,
 ) -> Result<PowChallenge, Error> {
+    create_pow_challenge_with_browser(fetch, access_token, None).await
+}
+
+pub async fn create_pow_challenge_with_browser(
+    fetch: &dyn HttpFetch,
+    access_token: &str,
+    session: Option<&BrowserSession>,
+) -> Result<PowChallenge, Error> {
     let body =
         serde_json::json!({ "target_path": POW_TARGET_PATH }).to_string();
     let resp = fetch
         .fetch(FetchRequest {
             url: POW_CHALLENGE_URL.into(),
             method: "POST".into(),
-            headers: json_headers(access_token),
+            headers: json_headers_for_session(access_token, session),
             body: Some(body.into_bytes()),
             timeout_ms: 30_000,
         })

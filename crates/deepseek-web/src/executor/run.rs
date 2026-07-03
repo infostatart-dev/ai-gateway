@@ -1,6 +1,7 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use serde_json::Value;
+use tracing::Instrument;
 use web_message_budget::WebTurnKind;
 use web_structured_output::{
     StructuredOutputIssue, StructuredOutputMode, base_system_without_schema,
@@ -12,12 +13,15 @@ use web_structured_output::{
 use super::turn::{TurnContext, run_completion_turn};
 use crate::{
     Error,
-    api::{create_session, delete_session},
+    api::{create_session_with_browser, delete_session_with_browser},
     completion::{
         parse_openai_messages, plan_completion_turns, web_turn_to_prompt,
     },
     pow::cache::PowCache,
-    session::exchange::{exchange_session, invalidate_token_cache},
+    session::{
+        exchange::{exchange_browser_session, invalidate_token_cache},
+        file::BrowserSession,
+    },
     sse::{build_non_stream_response, collect_sse, transform_sse_to_openai},
     tls::fetch::{HttpFetch, default_fetch},
 };
@@ -40,6 +44,7 @@ pub struct ExecuteStats {
 #[derive(Clone)]
 pub struct ExecuteRequest {
     pub user_token: String,
+    pub browser_session: Option<BrowserSession>,
     pub body: Value,
     pub stream: bool,
     pub turn_hook: Option<TurnHook>,
@@ -49,6 +54,7 @@ impl std::fmt::Debug for ExecuteRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ExecuteRequest")
             .field("user_token", &"<redacted>")
+            .field("browser_session", &self.browser_session.is_some())
             .field("body", &self.body)
             .field("stream", &self.stream)
             .field("turn_hook", &self.turn_hook.is_some())
@@ -111,9 +117,24 @@ impl Executor {
 
         let user_token =
             crate::session::token::normalize_user_token(&req.user_token);
-        let access = exchange_session(self.fetch.as_ref(), &user_token).await?;
-        let session_id =
-            create_session(self.fetch.as_ref(), &access.token).await?;
+        let browser_session = req
+            .browser_session
+            .clone()
+            .unwrap_or_else(|| BrowserSession::from_token(user_token.clone()));
+        let (access, session_id) = async {
+            let access =
+                exchange_browser_session(self.fetch.as_ref(), &browser_session)
+                    .await?;
+            let session_id = create_session_with_browser(
+                self.fetch.as_ref(),
+                &access.token,
+                Some(&browser_session),
+            )
+            .await?;
+            Ok::<_, Error>((access, session_id))
+        }
+        .instrument(tracing::info_span!("gateway.web.deepseek.session_prepare"))
+        .await?;
         let pow_cache = PowCache::new();
 
         let mut structured_attempt = 0u32;
@@ -129,6 +150,7 @@ impl Executor {
                     &model,
                     &access.token,
                     &session_id,
+                    &browser_session,
                     &pow_cache,
                     schema_spec.as_ref(),
                     mode,
@@ -185,7 +207,13 @@ impl Executor {
             }
         };
 
-        delete_session(self.fetch.as_ref(), &access.token, &session_id).await;
+        delete_session_with_browser(
+            self.fetch.as_ref(),
+            &access.token,
+            &session_id,
+            Some(&browser_session),
+        )
+        .await;
 
         match result {
             Ok(ok) => Ok(ok),
@@ -205,6 +233,7 @@ impl Executor {
         model: &str,
         access_token: &str,
         session_id: &str,
+        browser_session: &BrowserSession,
         pow_cache: &PowCache,
         schema_spec: Option<&web_structured_output::JsonSchemaSpec>,
         mode: Option<StructuredOutputMode>,
@@ -255,6 +284,7 @@ impl Executor {
             model,
             body: &req.body,
             pow_cache,
+            browser_session: Some(browser_session),
         };
 
         let turn_count = plan.turns.len();
@@ -262,18 +292,47 @@ impl Executor {
         let mut last_collected = None;
 
         for (idx, turn) in plan.turns.iter().enumerate() {
-            if let Some(hook) = &req.turn_hook {
-                hook().await?;
-            }
             stats.turns += 1;
 
             let mut prompt = web_turn_to_prompt(turn);
             let is_final = idx + 1 == turn_count;
+            let is_upload =
+                matches!(turn.kind, WebTurnKind::ContextUpload { .. });
+            let turn_kind = if is_upload {
+                "upload"
+            } else if is_final {
+                "final"
+            } else {
+                "turn"
+            };
             if is_final && let Some(suffix) = retry_suffix {
                 prompt.push_str(suffix);
             }
 
-            let raw_sse = run_completion_turn(&turn_ctx, prompt).await?;
+            let turn_span = tracing::info_span!(
+                "gateway.web.deepseek.turn",
+                turn_index = idx,
+                turns = turn_count,
+                final = is_final,
+                kind = turn_kind,
+            );
+            let run_turn = async {
+                if let Some(hook) = &req.turn_hook {
+                    hook().await?;
+                }
+                run_completion_turn(&turn_ctx, prompt).await
+            };
+            let raw_sse = if is_upload {
+                run_turn
+                    .instrument(tracing::info_span!(
+                        "gateway.web.deepseek.upload",
+                        turn_index = idx,
+                    ))
+                    .instrument(turn_span)
+                    .await?
+            } else {
+                run_turn.instrument(turn_span).await?
+            };
             let collected = collect_sse(&raw_sse, model);
 
             if is_final {
@@ -293,11 +352,16 @@ impl Executor {
 
         stats.pow_cache_hits = pow_cache.cache_hits();
         let collected = last_collected.ok_or(Error::EmptyResponse)?;
-        Ok((
-            build_non_stream_response(model, &collected),
-            last_raw_sse,
-            stats,
-        ))
+        Ok(
+            tracing::info_span!("gateway.web.deepseek.response_finalize")
+                .in_scope(|| {
+                    (
+                        build_non_stream_response(model, &collected),
+                        last_raw_sse,
+                        stats,
+                    )
+                }),
+        )
     }
 }
 

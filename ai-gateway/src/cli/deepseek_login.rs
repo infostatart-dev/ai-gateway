@@ -58,6 +58,7 @@ pub async fn run_probe(
         let result = Executor::default()
             .execute(ExecuteRequest {
                 user_token,
+                browser_session: None,
                 body: json!({
                     "model": "deepseek-chat",
                     "stream": false,
@@ -111,6 +112,7 @@ async fn run_probe_structured_output() -> Result<(), Box<dyn std::error::Error>>
     let result = Executor::default()
         .execute(ExecuteRequest {
             user_token,
+            browser_session: None,
             body: body.clone(),
             stream: false,
             turn_hook: None,
@@ -147,6 +149,7 @@ async fn run_probe_context_limit() -> Result<(), Box<dyn std::error::Error>> {
         let result = Executor::default()
             .execute(ExecuteRequest {
                 user_token: user_token.clone(),
+                browser_session: None,
                 body: json!({
                     "model": "deepseek-chat",
                     "stream": false,

@@ -109,6 +109,7 @@ impl Dispatcher {
                     reason,
                 );
             }
+            emit_retry_event(reason, delay, retry_after);
             notify_retry(&result, delay);
             tokio::time::sleep(delay).await;
         }
@@ -227,6 +228,7 @@ pub async fn dispatch_stream_with_retry(
                 .sleep(tokio::time::sleep)
                 .when(is_stream_retryable)
                 .notify(move |err: &ApiError, dur: Duration| {
+                    emit_retry_event("backoff", dur, None);
                     notify_stream_retry(err, dur);
                     if let Some(ref l) = rtl {
                         st.runtime_metrics()
@@ -257,6 +259,7 @@ pub async fn dispatch_stream_with_retry(
                 .sleep(tokio::time::sleep)
                 .when(is_stream_retryable)
                 .notify(move |err: &ApiError, dur: Duration| {
+                    emit_retry_event("backoff", dur, None);
                     notify_stream_retry(err, dur);
                     if let Some(ref l) = rtl {
                         st.runtime_metrics()
@@ -321,6 +324,22 @@ fn notify_retry(
     {
         tracing::warn!(error = %e, retry_in = ?dur, "retrying sync request...");
     }
+}
+
+fn emit_retry_event(
+    reason: &'static str,
+    wait: Duration,
+    retry_after: Option<Duration>,
+) {
+    tracing::event!(
+        tracing::Level::INFO,
+        reason,
+        wait_ms = u64::try_from(wait.as_millis()).unwrap_or(u64::MAX),
+        retry_after_ms = retry_after.map_or(0, |duration| {
+            u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+        }),
+        "gateway.retry"
+    );
 }
 
 fn is_stream_retryable(e: &ApiError) -> bool {

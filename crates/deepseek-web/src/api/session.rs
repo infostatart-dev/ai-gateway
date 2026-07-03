@@ -4,7 +4,8 @@ use crate::{
     Error,
     constants::{SESSION_CREATE_URL, SESSION_DELETE_URL},
     cookie::generate_fake_cookie,
-    headers::json_headers,
+    headers::json_headers_for_session,
+    session::file::BrowserSession,
     tls::fetch::{FetchRequest, HttpFetch},
 };
 
@@ -12,8 +13,18 @@ pub async fn create_session(
     fetch: &dyn HttpFetch,
     access_token: &str,
 ) -> Result<String, Error> {
-    let mut headers = json_headers(access_token);
-    headers.push(("Cookie".into(), generate_fake_cookie()));
+    create_session_with_browser(fetch, access_token, None).await
+}
+
+pub async fn create_session_with_browser(
+    fetch: &dyn HttpFetch,
+    access_token: &str,
+    session: Option<&BrowserSession>,
+) -> Result<String, Error> {
+    let mut headers = json_headers_for_session(access_token, session);
+    if session.and_then(|s| s.cookie.as_deref()).is_none() {
+        headers.push(("Cookie".into(), generate_fake_cookie()));
+    }
 
     let resp = fetch
         .fetch(FetchRequest {
@@ -40,12 +51,21 @@ pub async fn delete_session(
     access_token: &str,
     session_id: &str,
 ) {
+    delete_session_with_browser(fetch, access_token, session_id, None).await;
+}
+
+pub async fn delete_session_with_browser(
+    fetch: &dyn HttpFetch,
+    access_token: &str,
+    session_id: &str,
+    session: Option<&BrowserSession>,
+) {
     let body = serde_json::json!({ "chat_session_id": session_id }).to_string();
     let _ = fetch
         .fetch(FetchRequest {
             url: SESSION_DELETE_URL.into(),
             method: "POST".into(),
-            headers: json_headers(access_token),
+            headers: json_headers_for_session(access_token, session),
             body: Some(body.into_bytes()),
             timeout_ms: 15_000,
         })

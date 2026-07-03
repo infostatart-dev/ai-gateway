@@ -3,9 +3,12 @@ use std::collections::HashSet;
 use axum_core::body::Body;
 use http::request::Parts;
 use http_body_util::BodyExt;
+use tracing::Instrument;
 
 use super::{
-    call, failure, structured_output, trace,
+    call,
+    cooldown::CandidateWaitOutcome,
+    failure, structured_output, trace,
     types::{BudgetAwareRouter, BudgetCandidate},
 };
 use crate::{
@@ -41,7 +44,7 @@ pub async fn run_failover_candidates(
     this: BudgetAwareRouter,
     parts: Parts,
     body_bytes: bytes::Bytes,
-    mut candidates: Vec<BudgetCandidate>,
+    candidates: Vec<BudgetCandidate>,
     requirements: RequestRequirements,
     routing_intent: Option<crate::router::intent::RoutingIntent>,
 ) -> Result<Response, ApiError> {
@@ -49,21 +52,66 @@ pub async fn run_failover_candidates(
         .extensions
         .get::<crate::types::extensions::RoutePlanContext>()
         .cloned();
+    let route_span = tracing::info_span!(
+        "gateway.route",
+        router_id = %this.router_id,
+        strategy = this.strategy,
+        source_model = plan_ctx
+            .as_ref()
+            .and_then(|ctx| ctx.source_model.as_deref())
+            .unwrap_or("none"),
+        candidates = candidates.len(),
+        planned_hops = plan_ctx.as_ref().map_or(0, |ctx| ctx.planned_hops),
+        plan_rebuilds = 0u32,
+        route_memory_hit = plan_ctx
+            .as_ref()
+            .is_some_and(|ctx| ctx.route_memory_hit),
+        route_memory_invalidated = false,
+        json_schema_required = requirements.json_schema_required,
+        duration_ms = tracing::field::Empty,
+        tfft_ms = tracing::field::Empty,
+        generation_ms_per_output_token = tracing::field::Empty,
+        input_tokens = tracing::field::Empty,
+        output_tokens = tracing::field::Empty,
+        usage_source = tracing::field::Empty,
+        response_body_bytes = tracing::field::Empty,
+    );
+    run_failover_candidates_inner(
+        this,
+        parts,
+        body_bytes,
+        candidates,
+        requirements,
+        routing_intent,
+        plan_ctx,
+        route_span.clone(),
+    )
+    .instrument(route_span)
+    .await
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+async fn run_failover_candidates_inner(
+    this: BudgetAwareRouter,
+    parts: Parts,
+    body_bytes: bytes::Bytes,
+    mut candidates: Vec<BudgetCandidate>,
+    requirements: RequestRequirements,
+    routing_intent: Option<crate::router::intent::RoutingIntent>,
+    plan_ctx: Option<crate::types::extensions::RoutePlanContext>,
+    route_span: tracing::Span,
+) -> Result<Response, ApiError> {
     let mut exclude = std::collections::HashSet::<(String, String)>::new();
     let mut plan_rebuild_count = 0u32;
-    let mut current_replay =
-        plan_ctx.as_ref().and_then(|ctx| ctx.replay.clone());
+    let mut route_trace = trace::RouteTrace::new_with_plan(
+        candidates.len(),
+        plan_ctx.as_ref(),
+        route_span.clone(),
+    );
 
     'walk: loop {
         let mut failed_credentials = HashSet::<ProviderCredentialId>::new();
         let mut failed_models = HashSet::<ModelCooldownKey>::new();
-        let mut route_trace = trace::RouteTrace::new_with_plan(
-            candidates.len(),
-            plan_ctx.as_ref(),
-        );
-        if let Some(replay) = current_replay.clone() {
-            route_trace.set_replay(replay);
-        }
         route_trace.set_plan_rebuilds(plan_rebuild_count);
 
         for (index, candidate) in candidates.iter().enumerate() {
@@ -72,6 +120,12 @@ pub async fn run_failover_candidates(
                 &failed_credentials,
                 &failed_models,
             ) {
+                route_trace.event_candidate_skipped(
+                    candidate,
+                    "excluded_after_failure",
+                    "credential_or_model",
+                    0,
+                );
                 route_trace.record_skipped(1);
                 continue;
             }
@@ -102,20 +156,83 @@ pub async fn run_failover_candidates(
                     blocked_reason = ?admit_verdict.blocked_reason,
                     "re-admit skipped infeasible hop"
                 );
+                route_trace.event_candidate_skipped(
+                    candidate,
+                    "admission",
+                    format!("{:?}", admit_verdict.blocked_reason),
+                    admit_verdict.next_wait.as_millis(),
+                );
                 route_trace.record_skipped(1);
                 continue;
             }
-            if !this.wait_for_candidate(candidate, has_next_candidate).await {
-                route_trace.record_skipped(1);
-                continue;
+            match this.wait_for_candidate(candidate, has_next_candidate).await {
+                CandidateWaitOutcome::Ready => {}
+                CandidateWaitOutcome::Skipped {
+                    wait,
+                    blocked_reason,
+                } => {
+                    route_trace.event_candidate_skipped(
+                        candidate,
+                        "pacing",
+                        format!("{blocked_reason:?}"),
+                        wait.as_millis(),
+                    );
+                    route_trace.record_skipped(1);
+                    continue;
+                }
+                CandidateWaitOutcome::Waited {
+                    wait,
+                    blocked_reason,
+                } => {
+                    tracing::debug!(
+                        credential = %candidate.credential_id,
+                        provider = %candidate.capability.provider,
+                        model = %candidate.capability.model,
+                        wait_ms = wait.as_millis(),
+                        blocked_reason = ?blocked_reason,
+                        "candidate admission resumed after wait"
+                    );
+                }
             }
             let model_id = candidate.capability.model.to_string();
             if budget_probe_skips(&this, candidate, model_id.as_str()).await {
+                route_trace.event_candidate_skipped(
+                    candidate,
+                    "budget_probe",
+                    "paid_budget",
+                    0,
+                );
                 route_trace.record_skipped(1);
                 continue;
             }
 
             route_trace.record_attempt();
+            let stream = trace::request_stream_flag(&body_bytes);
+            let attempt_started = std::time::Instant::now();
+            let attempt_span = tracing::info_span!(
+                parent: route_trace.route_span(),
+                "gateway.upstream.attempt",
+                attempt_index = route_trace.attempts().saturating_sub(1),
+                provider = %candidate.capability.provider,
+                credential = %candidate.credential_id,
+                model = %candidate.capability.model,
+                tier = candidate.credential_tier.as_str(),
+                admit_feasible = admit_verdict.feasible,
+                stream,
+                estimated_tokens,
+                status_code = tracing::field::Empty,
+                failover_class = tracing::field::Empty,
+                upstream_failure_kind = tracing::field::Empty,
+                exhaustion_scope = tracing::field::Empty,
+                restricted_until = tracing::field::Empty,
+                duration_ms = tracing::field::Empty,
+                tfft_ms = tracing::field::Empty,
+                generation_ms_per_output_token = tracing::field::Empty,
+                input_tokens = tracing::field::Empty,
+                output_tokens = tracing::field::Empty,
+                usage_source = tracing::field::Empty,
+                response_body_bytes = tracing::field::Empty,
+            );
             let mut req = Request::from_parts(
                 parts.clone(),
                 Body::from(body_bytes.clone()),
@@ -134,10 +251,12 @@ pub async fn run_failover_candidates(
                     crate::types::extensions::GatewayPayloadEstimate(tokens),
                 );
             }
-            let start = std::time::Instant::now();
-            let response = call::call_candidate(candidate, req).await?;
-            let elapsed = start.elapsed();
+            let response = call::call_candidate(candidate, req)
+                .instrument(attempt_span.clone())
+                .await?;
+            let elapsed = attempt_started.elapsed();
             let status = response.status();
+            attempt_span.record("status_code", u64::from(status.as_u16()));
 
             if has_next_candidate && is_failoverable_status(status) {
                 let skipped = fail_over_candidate(
@@ -151,6 +270,7 @@ pub async fn run_failover_candidates(
                     &mut failed_models,
                     &attempt_ctx,
                     &mut route_trace,
+                    &attempt_span,
                     plan_ctx.as_ref(),
                     &mut exclude,
                 )
@@ -174,6 +294,7 @@ pub async fn run_failover_candidates(
                         failed_models: &mut failed_models,
                         route_trace: &mut route_trace,
                         attempt_ctx: &attempt_ctx,
+                        attempt_span: &attempt_span,
                         plan_ctx: plan_ctx.as_ref(),
                         exclude: &mut exclude,
                     })
@@ -185,6 +306,12 @@ pub async fn run_failover_candidates(
                         candidate,
                     )
                     .await;
+                    route_trace.record_terminal_attempt(
+                        candidate,
+                        attempt_span.clone(),
+                        attempt_started,
+                        stream,
+                    );
                     return Ok(finish_success(
                         &this,
                         &mut route_trace,
@@ -198,6 +325,12 @@ pub async fn run_failover_candidates(
                 continue;
             }
 
+            route_trace.record_terminal_attempt(
+                candidate,
+                attempt_span,
+                attempt_started,
+                stream,
+            );
             return Ok(finish_terminal(
                 &this,
                 &mut route_trace,
@@ -209,20 +342,10 @@ pub async fn run_failover_candidates(
             .await);
         }
 
-        route_trace.emit(
-            &this.router_id,
-            this.strategy,
-            &trace::RouteOutcome {
-                label: "exhausted",
-                provider: None,
-                credential: None,
-                status: None,
-            },
-            None,
-        );
         if plan_rebuild_count == 0
             && let Some(ctx) = plan_ctx.as_ref()
         {
+            let previous_candidates = candidates.len();
             plan_rebuild_count = 1;
             let plan = super::plan::plan_route_chain(
                 &this,
@@ -236,12 +359,36 @@ pub async fn run_failover_candidates(
                 &exclude,
             )
             .await;
+            route_trace.record_replan(
+                previous_candidates,
+                plan.chain.len(),
+                plan_rebuild_count,
+                exclude.len(),
+                if plan.chain.is_empty() {
+                    "empty"
+                } else {
+                    "applied"
+                },
+            );
             if !plan.chain.is_empty() {
                 candidates = plan.chain;
-                current_replay = plan.replay;
+                if let Some(replay) = plan.replay {
+                    route_trace.set_replay(replay);
+                }
                 continue 'walk;
             }
         }
+        route_trace.emit(
+            &this.router_id,
+            this.strategy,
+            &trace::RouteOutcome {
+                label: "exhausted",
+                provider: None,
+                credential: None,
+                status: None,
+            },
+            None,
+        );
         return Err(ApiError::Internal(InternalError::ProviderNotFound));
     }
 }
@@ -284,13 +431,13 @@ fn finish_success(
             credential: Some(&candidate.credential_id),
             status: Some(status.as_u16()),
         };
-        response.extensions_mut().insert(route_trace.attach_pending(
+        let pending = route_trace.attach_pending(
             &this.router_id,
             this.strategy,
             &outcome,
             Some(intent_context),
-        ));
-        return response;
+        );
+        return trace::wrap_response_with_route_trace(response, pending);
     }
     this.app_state
         .0
@@ -303,13 +450,13 @@ fn finish_success(
         credential: Some(&candidate.credential_id),
         status: Some(status.as_u16()),
     };
-    response.extensions_mut().insert(route_trace.attach_pending(
+    let pending = route_trace.attach_pending(
         &this.router_id,
         this.strategy,
         &outcome,
         None,
-    ));
-    response
+    );
+    trace::wrap_response_with_route_trace(response, pending)
 }
 
 async fn finish_terminal(
@@ -336,18 +483,19 @@ async fn finish_terminal(
         &candidate.credential_id,
         &candidate.capability.model,
     );
-    route_trace.emit(
+    let outcome = trace::RouteOutcome {
+        label: "terminal_failure",
+        provider: Some(&candidate.capability.provider),
+        credential: Some(&candidate.credential_id),
+        status: Some(status.as_u16()),
+    };
+    let pending = route_trace.attach_pending(
         &this.router_id,
         this.strategy,
-        &trace::RouteOutcome {
-            label: "terminal_failure",
-            provider: Some(&candidate.capability.provider),
-            credential: Some(&candidate.credential_id),
-            status: Some(status.as_u16()),
-        },
+        &outcome,
         None,
     );
-    response
+    trace::wrap_response_with_route_trace(response, pending)
 }
 
 struct SuccessCandidateContext<'a> {
@@ -363,6 +511,7 @@ struct SuccessCandidateContext<'a> {
     failed_models: &'a mut HashSet<ModelCooldownKey>,
     route_trace: &'a mut trace::RouteTrace,
     attempt_ctx: &'a crate::types::extensions::UpstreamAttemptContext,
+    attempt_span: &'a tracing::Span,
     plan_ctx: Option<&'a crate::types::extensions::RoutePlanContext>,
     exclude: &'a mut std::collections::HashSet<(String, String)>,
 }
@@ -381,6 +530,7 @@ async fn handle_successful_candidate(
         elapsed,
         route_trace,
         attempt_ctx,
+        attempt_span,
         ..
     } = ctx;
     let has_next = index + 1 < candidates.len();
@@ -417,6 +567,7 @@ async fn handle_successful_candidate(
                     ctx.failed_models,
                     attempt_ctx,
                     route_trace,
+                    attempt_span,
                     ctx.plan_ctx,
                     ctx.exclude,
                 )
@@ -473,6 +624,7 @@ async fn fail_over_candidate(
     failed_models: &mut HashSet<ModelCooldownKey>,
     attempt: &crate::types::extensions::UpstreamAttemptContext,
     route_trace: &mut trace::RouteTrace,
+    attempt_span: &tracing::Span,
     plan_ctx: Option<&crate::types::extensions::RoutePlanContext>,
     exclude: &mut std::collections::HashSet<(String, String)>,
 ) -> usize {
@@ -519,6 +671,22 @@ async fn fail_over_candidate(
     }
     exclude.insert((candidate.credential_id.to_string(), model.clone()));
     route_trace.record_failure_signal(class, failure_ctx.as_ref());
+    let failover_class = format!("{class:?}");
+    let upstream_failure_kind = failure_ctx
+        .as_ref()
+        .map_or_else(|| "none".to_string(), |ctx| format!("{:?}", ctx.kind));
+    let restricted_until = failure_ctx
+        .as_ref()
+        .and_then(|ctx| ctx.restricted_until.map(|dt| dt.to_rfc3339()))
+        .unwrap_or_else(|| "none".to_string());
+    let exhaustion_scope = format!("{scope:?}");
+    attempt_span.record("duration_ms", elapsed.as_secs_f64() * 1000.0);
+    attempt_span.record("status_code", u64::from(status.as_u16()));
+    attempt_span.record("failover_class", failover_class.as_str());
+    attempt_span
+        .record("upstream_failure_kind", upstream_failure_kind.as_str());
+    attempt_span.record("exhaustion_scope", exhaustion_scope.as_str());
+    attempt_span.record("restricted_until", restricted_until.as_str());
     let quota_profile = this
         .app_state
         .config()
@@ -567,6 +735,15 @@ async fn fail_over_candidate(
         remaining_candidates,
         failed_credentials,
         failed_models,
+    );
+    route_trace.event_failover(
+        &candidate.capability.provider,
+        next_provider,
+        status.as_u16(),
+        &failover_class,
+        &upstream_failure_kind,
+        &exhaustion_scope,
+        &restricted_until,
     );
     failure::record_failover_metric(
         this,

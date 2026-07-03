@@ -9,7 +9,8 @@ use serde::Deserialize;
 use crate::{
     Error,
     constants::{TOKEN_TTL_SECS, USERS_CURRENT_URL},
-    headers::auth_headers,
+    headers::{auth_headers, auth_headers_for_session},
+    session::file::BrowserSession,
     tls::fetch::{FetchRequest, HttpFetch},
 };
 
@@ -45,15 +46,35 @@ pub async fn exchange_session(
     fetch: &dyn HttpFetch,
     user_token: &str,
 ) -> Result<AccessToken, Error> {
+    exchange_session_inner(fetch, user_token, None).await
+}
+
+pub async fn exchange_browser_session(
+    fetch: &dyn HttpFetch,
+    session: &BrowserSession,
+) -> Result<AccessToken, Error> {
+    exchange_session_inner(fetch, &session.token, Some(session)).await
+}
+
+async fn exchange_session_inner(
+    fetch: &dyn HttpFetch,
+    user_token: &str,
+    session: Option<&BrowserSession>,
+) -> Result<AccessToken, Error> {
     if let Some(entry) = token_lookup(user_token) {
         return Ok(entry);
     }
+
+    let headers = session.map_or_else(
+        || auth_headers(user_token),
+        |session| auth_headers_for_session(user_token, Some(session)),
+    );
 
     let resp = fetch
         .fetch(FetchRequest {
             url: USERS_CURRENT_URL.into(),
             method: "GET".into(),
-            headers: auth_headers(user_token),
+            headers,
             body: None,
             timeout_ms: 30_000,
         })

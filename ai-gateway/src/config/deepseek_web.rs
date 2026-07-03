@@ -20,10 +20,17 @@ pub fn session_valid(path: &Path) -> bool {
 
 #[must_use]
 pub fn load_session_token(path: &Path) -> Option<String> {
+    load_browser_session(path).map(|session| session.token)
+}
+
+#[must_use]
+pub fn load_browser_session(
+    path: &Path,
+) -> Option<deepseek_web::BrowserSession> {
     let raw = std::fs::read_to_string(path).ok()?;
     let session: deepseek_web::SessionFile = serde_json::from_str(&raw).ok()?;
     let token = session.token.trim();
-    (!token.is_empty()).then(|| deepseek_web::normalize_user_token(token))
+    (!token.is_empty()).then(|| deepseek_web::BrowserSession::from(&session))
 }
 
 #[must_use]
@@ -77,6 +84,24 @@ mod tests {
         write_session(&path, r#"{"token":"user-tok-abc"}"#);
         assert!(session_valid(&path));
         assert_eq!(load_session_token(&path).as_deref(), Some("user-tok-abc"));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn loads_browser_session_bundle() {
+        let path = std::env::temp_dir().join("ai-gw-ds-bundle.json");
+        write_session(
+            &path,
+            r#"{
+                "token":"user-tok-abc",
+                "cookie":"ds_session_id=session",
+                "headers":{"x-client-version":"2.0.0"}
+            }"#,
+        );
+        let session = load_browser_session(&path).expect("browser session");
+        assert_eq!(session.token, "user-tok-abc");
+        assert_eq!(session.cookie.as_deref(), Some("ds_session_id=session"));
+        assert_eq!(session.header("X-Client-Version"), Some("2.0.0"));
         let _ = std::fs::remove_file(&path);
     }
 }

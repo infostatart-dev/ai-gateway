@@ -6,6 +6,7 @@ use std::{
 };
 
 use axum_core::response::Response;
+use chrono::{DateTime, Utc};
 use futures::future::Either;
 use http::{Method, Request, StatusCode, header::CONTENT_TYPE};
 use tower::{Layer, Service};
@@ -101,7 +102,7 @@ where
             let path = req.uri().path().to_string();
             if path == "/health" {
                 return Either::Left(Either::Left(ready(Ok(
-                    healthy_response(),
+                    healthy_response(&self.app_state),
                 ))));
             }
             if let Some((provider, credential)) = observability_filter(&path) {
@@ -121,12 +122,20 @@ where
     }
 }
 
-fn healthy_response() -> Response {
-    let body = axum_core::body::Body::empty();
-    http::Response::builder()
-        .status(http::StatusCode::OK)
-        .body(body)
-        .expect("always valid if tests pass")
+#[derive(Debug, serde::Serialize)]
+struct HealthSnapshot {
+    version: &'static str,
+    started_at_utc: DateTime<Utc>,
+    started_at_server_time: String,
+}
+
+fn healthy_response(app_state: &AppState) -> Response {
+    let snapshot = app_state.provider_stats_snapshot(None, None);
+    json_response(HealthSnapshot {
+        version: snapshot.version,
+        started_at_utc: snapshot.started_at_utc,
+        started_at_server_time: snapshot.started_at_server_time,
+    })
 }
 
 fn observability_filter(
@@ -162,8 +171,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_healthy_response() {
-        let response = healthy_response();
-        assert_eq!(response.status(), http::StatusCode::OK);
+    fn observability_filter_accepts_top_level_stats() {
+        assert_eq!(
+            observability_filter("/v1/observability/provider-stats"),
+            Some((None, None))
+        );
     }
 }

@@ -19,75 +19,74 @@ use crate::{
     types::request::Request,
 };
 
+struct ChatGptPreparedRequest {
+    cookie: String,
+    openai_body: Value,
+    json_schema_required: bool,
+    session_path: PathBuf,
+    target_url: Url,
+    req_body_bytes: Bytes,
+}
+
 impl Dispatcher {
-    #[tracing::instrument(name = "chatgpt_web_execute", skip(self, req))]
+    #[tracing::instrument(
+        name = "gateway.web.chatgpt.execute",
+        skip(self, req)
+    )]
     pub(super) async fn dispatch_chatgpt_web(
         &self,
         req: Request,
         request_headers: HeaderMap,
         credential_id: Option<&ProviderCredentialId>,
     ) -> Result<DispatchOutcome, ApiError> {
-        let session_path = resolve_session_path(
+        let prepared = prepare_chatgpt_request(
             &self.app_state.config().credentials,
+            req,
             credential_id,
-            chatgpt_cfg::DEFAULT_CREDENTIAL_ID,
         )
-        .ok_or_else(|| ApiError::Internal(InternalError::ProviderNotFound))?;
-        let cookie = chatgpt_cfg::load_session_cookie(&session_path)
-            .ok_or_else(|| {
-                ApiError::Internal(InternalError::ProviderNotFound)
-            })?;
-        let body_bytes = req
-            .into_body()
-            .collect()
-            .await
-            .map_err(|e| InternalError::RequestBodyError(Box::new(e)))?
-            .to_bytes();
-        let req_body_bytes = body_bytes.clone();
-        let openai_body: Value =
-            serde_json::from_slice(&body_bytes).map_err(|e| {
-                ApiError::Internal(InternalError::Deserialize {
-                    ty: "chat completion request",
-                    error: e,
-                })
-            })?;
-        let json_schema_required =
-            chatgpt_cfg::request_requires_json_schema(&openai_body);
-
-        let target_url =
-            Url::parse(CONV_URL).map_err(|_| InternalError::Internal)?;
+        .instrument(tracing::info_span!("gateway.web.chatgpt.request_prepare"))
+        .await?;
+        let executor_span = tracing::info_span!(
+            "gateway.web.chatgpt.executor",
+            turns = tracing::field::Empty,
+            upload_parts = tracing::field::Empty,
+            pow_cache_hits = tracing::field::Empty,
+        );
 
         let result = match Executor::default()
             .execute(ExecuteRequest {
-                cookie,
-                body: openai_body,
-                json_schema_required,
-                session_path: Some(session_path),
+                cookie: prepared.cookie,
+                body: prepared.openai_body,
+                json_schema_required: prepared.json_schema_required,
+                session_path: Some(prepared.session_path),
             })
-            .instrument(tracing::info_span!("chatgpt_web_executor"))
+            .instrument(executor_span.clone())
             .await
         {
             Ok(result) => result,
             Err(e) => {
                 tracing::warn!(error = %e, "chatgpt-web executor failed");
                 let (status, body) = chatgpt_error_body(e)?;
-                return outcome_from_bytes(
-                    status,
-                    HeaderMap::new(),
-                    &body,
-                    target_url,
-                    req_body_bytes,
-                    request_headers,
+                return tracing::info_span!(
+                    "gateway.web.chatgpt.request_finalize"
                 )
+                .in_scope(|| {
+                    outcome_from_bytes(
+                        status,
+                        HeaderMap::new(),
+                        &body,
+                        prepared.target_url,
+                        prepared.req_body_bytes,
+                        request_headers,
+                    )
+                })
                 .map_err(ApiError::Internal);
             }
         };
 
-        tracing::info!(
-            chatgpt_web_turns = result.stats.turns,
-            chatgpt_web_upload_parts = result.stats.upload_parts,
-            "chatgpt-web executor stats"
-        );
+        executor_span.record("turns", result.stats.turns);
+        executor_span.record("upload_parts", result.stats.upload_parts);
+        executor_span.record("pow_cache_hits", result.stats.pow_cache_hits);
 
         let status = StatusCode::from_u16(result.status)
             .unwrap_or(StatusCode::BAD_GATEWAY);
@@ -97,21 +96,68 @@ impl Dispatcher {
             http::HeaderValue::from_static("application/json"),
         );
         let response_body = Bytes::from(result.body);
-        let mut outcome = outcome_from_bytes(
-            status,
-            headers,
-            &response_body,
-            target_url,
-            req_body_bytes,
-            request_headers,
-        )
-        .map_err(ApiError::Internal)?;
+        let mut outcome =
+            tracing::info_span!("gateway.web.chatgpt.request_finalize")
+                .in_scope(|| {
+                    outcome_from_bytes(
+                        status,
+                        headers,
+                        &response_body,
+                        prepared.target_url,
+                        prepared.req_body_bytes,
+                        request_headers,
+                    )
+                })
+                .map_err(ApiError::Internal)?;
         outcome.response.extensions_mut().insert(ChatGptWebTrace {
             turns: result.stats.turns,
             upload_parts: result.stats.upload_parts,
+            pow_cache_hits: result.stats.pow_cache_hits,
         });
         Ok(outcome)
     }
+}
+
+async fn prepare_chatgpt_request(
+    registry: &crate::config::credentials::CredentialRegistry,
+    req: Request,
+    credential_id: Option<&ProviderCredentialId>,
+) -> Result<ChatGptPreparedRequest, ApiError> {
+    let session_path = resolve_session_path(
+        registry,
+        credential_id,
+        chatgpt_cfg::DEFAULT_CREDENTIAL_ID,
+    )
+    .ok_or_else(|| ApiError::Internal(InternalError::ProviderNotFound))?;
+    let cookie = chatgpt_cfg::load_session_cookie(&session_path)
+        .ok_or_else(|| ApiError::Internal(InternalError::ProviderNotFound))?;
+    let body_bytes = req
+        .into_body()
+        .collect()
+        .await
+        .map_err(|e| InternalError::RequestBodyError(Box::new(e)))?
+        .to_bytes();
+    let req_body_bytes = body_bytes.clone();
+    let openai_body: Value =
+        serde_json::from_slice(&body_bytes).map_err(|e| {
+            ApiError::Internal(InternalError::Deserialize {
+                ty: "chat completion request",
+                error: e,
+            })
+        })?;
+    let json_schema_required =
+        chatgpt_cfg::request_requires_json_schema(&openai_body);
+    let target_url =
+        Url::parse(CONV_URL).map_err(|_| InternalError::Internal)?;
+
+    Ok(ChatGptPreparedRequest {
+        cookie,
+        openai_body,
+        json_schema_required,
+        session_path,
+        target_url,
+        req_body_bytes,
+    })
 }
 
 fn resolve_session_path(
