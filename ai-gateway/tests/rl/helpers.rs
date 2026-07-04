@@ -18,6 +18,7 @@ pub fn trip_circuit(app_state: &AppState, credential: &str) {
     }
 }
 
+#[allow(dead_code)]
 pub fn trip_circuits(app_state: &AppState, credentials: &[&str]) {
     for credential in credentials {
         trip_circuit(app_state, credential);

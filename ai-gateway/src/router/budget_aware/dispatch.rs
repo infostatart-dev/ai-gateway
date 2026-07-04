@@ -4,6 +4,7 @@ use serde_json::Value;
 
 use super::{failover_loop, types::BudgetAwareRouter};
 use crate::{
+    config::credentials::ProviderCredentialId,
     error::{api::ApiError, internal::InternalError},
     router::{
         capability::{
@@ -40,14 +41,19 @@ pub(super) fn budget_aware_call(
         {
             apply_payload_estimate(&mut requirements, estimate);
         }
-        let source_model =
-            parsed.as_ref().and_then(extract_source_model_from_value);
+        let source_model = parsed.as_ref().and_then(|value| {
+            extract_managed_source_model(&parts, value)
+                .or_else(|| extract_source_model_from_value(value))
+        });
         let routing_intent = source_model
             .as_ref()
             .map(crate::router::intent::extract_routing_intent);
 
-        let pool =
+        let mut pool =
             this.ordered_candidates(&requirements, source_model.as_ref())?;
+        if let Some(credential_id) = managed_credential_id(&parts) {
+            pool.retain(|candidate| &candidate.credential_id == credential_id);
+        }
 
         let caller = parts
             .extensions
@@ -80,6 +86,11 @@ pub(super) fn budget_aware_call(
         )
         .await;
         if plan.chain.is_empty() {
+            if !pool.is_empty() {
+                return Ok(failover_loop::route_exhausted_response(
+                    std::time::Duration::from_secs(1),
+                ));
+            }
             return Err(ApiError::Internal(InternalError::ProviderNotFound));
         }
         let candidates = plan.chain;
@@ -107,4 +118,42 @@ pub(super) fn budget_aware_call(
         )
         .await
     })
+}
+
+fn managed_credential_id(
+    parts: &http::request::Parts,
+) -> Option<&ProviderCredentialId> {
+    if parts
+        .extensions
+        .get::<crate::types::extensions::RequestKind>()
+        != Some(&crate::types::extensions::RequestKind::Managed)
+    {
+        return None;
+    }
+    parts.extensions.get::<ProviderCredentialId>()
+}
+
+fn extract_managed_source_model(
+    parts: &http::request::Parts,
+    value: &Value,
+) -> Option<crate::types::model_id::ModelId> {
+    if parts
+        .extensions
+        .get::<crate::types::extensions::RequestKind>()
+        != Some(&crate::types::extensions::RequestKind::Managed)
+    {
+        return None;
+    }
+    let provider = parts
+        .extensions
+        .get::<crate::types::provider::InferenceProvider>()?;
+    let model = value.get("model").and_then(Value::as_str)?;
+    crate::types::model_id::ModelId::from_str_and_provider(
+        provider.clone(),
+        model
+            .strip_prefix(provider.as_ref())
+            .and_then(|rest| rest.strip_prefix('/'))
+            .unwrap_or(model),
+    )
+    .ok()
 }

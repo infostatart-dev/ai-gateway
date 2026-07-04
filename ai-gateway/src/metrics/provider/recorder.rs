@@ -84,6 +84,7 @@ const fn request_kind_label(kind: RequestKind) -> &'static str {
         RequestKind::Router => "router",
         RequestKind::UnifiedApi => "unified_api",
         RequestKind::DirectProxy => "direct_proxy",
+        RequestKind::Managed => "managed",
     }
 }
 

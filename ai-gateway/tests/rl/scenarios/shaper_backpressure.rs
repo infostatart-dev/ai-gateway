@@ -2,8 +2,6 @@ use std::time::Duration;
 
 use ai_gateway::middleware::decision::{policy::Tier, shaping::TrafficShaper};
 
-use crate::rl::support::*;
-
 pub async fn run() {
     let shaper = TrafficShaper::new(32, 16, 16, 16, 16);
     let mut permits = Vec::new();

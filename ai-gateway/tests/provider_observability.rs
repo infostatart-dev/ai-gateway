@@ -134,6 +134,12 @@ async fn provider_stats_public_and_aggregates_two_providers() {
             .and_then(Value::as_str)
             .is_some()
     );
+    assert!(
+        snapshot
+            .get("started_at_server_timezone")
+            .and_then(Value::as_str)
+            .is_some()
+    );
     assert!(snapshot.get("uptime_seconds").is_some());
     assert!(
         attempts(&snapshot, "openai") >= 1,

@@ -37,6 +37,8 @@ pub enum InternalError {
     ExtensionNotFound(&'static str),
     /// Provider not found
     ProviderNotFound,
+    /// `invalid_structured_json_after_reflection`
+    InvalidStructuredJsonAfterReflection,
     /// Could not collect response body: {0}
     CollectBodyError(axum_core::Error),
     /// Could not process request body: {0}
@@ -153,6 +155,8 @@ pub enum InternalErrorMetric {
     ExtensionNotFound,
     /// Provider not found
     ProviderNotFound,
+    /// `invalid_structured_json_after_reflection`
+    InvalidStructuredJsonAfterReflection,
     /// Could not collect response body
     CollectBodyError,
     /// Could not process request body
@@ -216,6 +220,9 @@ impl From<&InternalError> for InternalErrorMetric {
             }
             InternalError::ExtensionNotFound(_) => Self::ExtensionNotFound,
             InternalError::ProviderNotFound => Self::ProviderNotFound,
+            InternalError::InvalidStructuredJsonAfterReflection => {
+                Self::InvalidStructuredJsonAfterReflection
+            }
             InternalError::CollectBodyError(_) => Self::CollectBodyError,
             InternalError::RequestBodyError(_) => Self::RequestBodyError,
             InternalError::ReqwestError(_) => Self::ReqwestError,

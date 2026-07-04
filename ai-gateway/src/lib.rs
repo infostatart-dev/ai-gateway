@@ -5,6 +5,7 @@ pub mod cli;
 pub mod client_access;
 pub mod config;
 pub mod control_plane;
+pub mod declared_models;
 pub mod discover;
 pub(crate) mod dispatcher;
 pub mod emulated;

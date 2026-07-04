@@ -6,6 +6,7 @@ pub mod conversation;
 pub mod errors;
 pub mod executor;
 pub mod headers;
+pub mod model_config;
 pub mod models;
 pub mod schema;
 pub mod sentinel;

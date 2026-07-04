@@ -37,7 +37,7 @@ type InnerRouterService = BoxCloneService<
 
 /// The top-level service we use to compose both
 /// middleware along with the routing strategy service.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Router {
     inner: HashMap<EndpointType, InnerRouterService>,
     pub(crate) router_config: Arc<RouterConfig>,

@@ -12,7 +12,8 @@ use crate::{
         collect_sse_turn_meta, parse_openai_messages, plan_conversation_turns,
     },
     headers::{browser_headers, oai_headers},
-    models::map_model,
+    model_config::{ThinkingEffortUpdate, set_user_thinking_effort},
+    models::{is_thinking_capable, resolve_model},
     schema::{
         StructuredOutputIssue, base_system_without_schema,
         build_schema_instruction, check_structured_response,
@@ -308,7 +309,25 @@ impl Executor {
             ..ExecuteStats::default()
         };
 
-        let model_slug = map_model(model);
+        let resolved_model = resolve_model(model, body);
+        let model_slug = resolved_model.slug;
+        if let Some(effort) = resolved_model.effort
+            && is_thinking_capable(model, &model_slug)
+        {
+            set_user_thinking_effort(
+                self.fetch.as_ref(),
+                ThinkingEffortUpdate {
+                    model_slug: &model_slug,
+                    effort,
+                    access_token: &token.access_token,
+                    account_id: token.account_id.as_deref(),
+                    session_id: &session_id,
+                    device_id: &device_id,
+                    cookie: &cookie,
+                },
+            )
+            .await?;
+        }
         let mut conversation_id: Option<String> = None;
         let mut parent_message_id = uuid::Uuid::new_v4().to_string();
         let turn_count = plan.turns.len();
@@ -339,6 +358,7 @@ impl Executor {
             let cgpt_body = build_conversation_body(
                 &turn_parsed,
                 &model_slug,
+                resolved_model.effort.map(|e| e.as_str()),
                 &parent_message_id,
                 conversation_id.as_deref(),
             );

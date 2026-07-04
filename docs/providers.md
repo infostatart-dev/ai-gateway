@@ -25,6 +25,7 @@ Embedded slots in [`credentials.yaml`](../ai-gateway/config/embedded/credentials
 | `cerebras-default` | cerebras | Cerebras API |
 | `mistral-default` | mistral | Mistral experiment tier (~1B tok/mo) |
 | `opencode-default` | opencode | OpenCode Free tier |
+| `llm7-default` | llm7 | LLM7 free-token API |
 | `github-models-default` | github-models | GitHub Models PAT (`models:read`) |
 | `longcat-default` | longcat | Meituan LongCat public beta |
 | `doubao-default` | doubao | Volcengine Ark (cn-beijing) |
@@ -64,6 +65,7 @@ OpenAI-compatible providers gated on secrets-file credentials. Autodefault prior
 | `inclusionai` | `https://api.inclusionai.tech/v1/` | `inclusionai/inclusion-model` |
 | `cohere` | `https://api.cohere.com/compatibility/v1/` | `cohere/command-a-03-2025` |
 | `doubao` | `https://ark.cn-beijing.volces.com/api/v3/` | `doubao/doubao-pro-32k` |
+| `llm7` | `https://api.llm7.io/v1/` | `llm7/fast` |
 
 ```bash
 curl http://localhost:8080/ai/chat/completions \

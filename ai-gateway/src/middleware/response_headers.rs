@@ -194,6 +194,8 @@ where
             }
         }
 
+        apply_declared_model_headers(&mut response);
+
         if this.observability.echo_work_unit_id
             && let Some(caller) =
                 response.extensions().get::<CallerRequestContext>()
@@ -210,6 +212,20 @@ where
             );
         }
         Poll::Ready(Ok(response))
+    }
+}
+
+fn apply_declared_model_headers<RespBody>(response: &mut Response<RespBody>) {
+    let source_model = response
+        .extensions()
+        .get::<crate::types::extensions::PendingRouteTrace>()
+        .and_then(|pending| pending.source_model.as_deref())
+        .map(str::to_owned);
+    if let Some(source_model) = source_model.as_deref() {
+        crate::declared_models::apply_smart_headers(
+            response.headers_mut(),
+            source_model,
+        );
     }
 }
 
@@ -239,6 +255,47 @@ mod tests {
         })
     }
 
+    fn pending_route_trace(
+        source_model: &'static str,
+    ) -> crate::types::extensions::PendingRouteTrace {
+        crate::types::extensions::PendingRouteTrace {
+            router_id: crate::types::router::RouterId::Named("test".into()),
+            strategy: "test",
+            hops: 1,
+            candidates: 1,
+            skipped: 0,
+            outcome_label: "success",
+            terminal_provider: None,
+            terminal_credential: None,
+            terminal_status: Some(200),
+            deepseek_web: None,
+            chatgpt_web: None,
+            intent_tier: None,
+            selection_phase: None,
+            quota_scope: None,
+            model_ladder_band: None,
+            model_ladder_position: None,
+            upstream_failure_kind: None,
+            restricted_until: None,
+            failover_class: None,
+            failure_stage: None,
+            error_source: None,
+            error_class: None,
+            agent_name: None,
+            work_unit_id: None,
+            work_unit_source: None,
+            planned_hops: None,
+            plan_rebuilds: None,
+            route_memory_hit: None,
+            route_memory_invalidated: None,
+            source_model: Some(source_model.to_string()),
+            json_schema_required: false,
+            estimated_usage: crate::metrics::llm::TokenUsage::default(),
+            replay: None,
+            finalize: None,
+        }
+    }
+
     #[tokio::test]
     async fn test_response_headers_disabled() {
         let config = ResponseHeadersConfig {
@@ -265,6 +322,80 @@ mod tests {
 
         assert!(!response.headers().contains_key("helicone-provider"));
         assert!(!response.headers().contains_key("helicone-provider-req-id"));
+    }
+
+    #[tokio::test]
+    async fn stable_declared_model_gets_smart_status_header() {
+        let config = ResponseHeadersConfig {
+            provider: false,
+            provider_request_id: false,
+        };
+
+        let mut service = ResponseHeaderService::new(
+            config,
+            ObservabilityResponseHeadersConfig::default(),
+            create_mock_service(|| {
+                let mut response = Response::new("test".to_string());
+                response
+                    .extensions_mut()
+                    .insert(pending_route_trace("gpt-5.5-mini"));
+                response
+            }),
+        );
+
+        let request = Request::new(());
+        let response =
+            service.ready().await.unwrap().call(request).await.unwrap();
+
+        assert_eq!(
+            response
+                .headers()
+                .get(crate::declared_models::SMART_STATUS_HEADER)
+                .unwrap(),
+            crate::declared_models::STABLE_BINDING_STATUS
+        );
+        assert!(
+            !response
+                .headers()
+                .contains_key(crate::declared_models::SMART_WARNING_HEADER)
+        );
+    }
+
+    #[tokio::test]
+    async fn unstable_declared_model_gets_smart_warning_header() {
+        let config = ResponseHeadersConfig {
+            provider: false,
+            provider_request_id: false,
+        };
+
+        let mut service = ResponseHeaderService::new(
+            config,
+            ObservabilityResponseHeadersConfig::default(),
+            create_mock_service(|| {
+                let mut response = Response::new("test".to_string());
+                response
+                    .extensions_mut()
+                    .insert(pending_route_trace("gpt-5.5"));
+                response
+            }),
+        );
+
+        let request = Request::new(());
+        let response =
+            service.ready().await.unwrap().call(request).await.unwrap();
+
+        assert_eq!(
+            response
+                .headers()
+                .get(crate::declared_models::SMART_WARNING_HEADER)
+                .unwrap(),
+            crate::declared_models::UNSTABLE_GPT55_WARNING
+        );
+        assert!(
+            !response
+                .headers()
+                .contains_key(crate::declared_models::SMART_STATUS_HEADER)
+        );
     }
 
     #[tokio::test]

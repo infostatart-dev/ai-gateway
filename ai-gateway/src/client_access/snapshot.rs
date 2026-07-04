@@ -128,6 +128,7 @@ impl ClientAccessScope {
                 matches!(
                     request_kind,
                     crate::types::extensions::RequestKind::DirectProxy
+                        | crate::types::extensions::RequestKind::Managed
                 ) && direct_provider == Some(allowed)
             }
         }

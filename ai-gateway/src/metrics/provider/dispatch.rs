@@ -112,11 +112,16 @@ pub fn attach_usage_header(
 
 #[cfg(test)]
 mod tests {
+    use compact_str::CompactString;
+
     use super::*;
     use crate::{
         metrics::llm::TokenUsage,
         types::{
-            body::Body, extensions::GatewayProviderUsageExtension,
+            body::Body,
+            extensions::{
+                GatewayProviderUsageExtension, RouteTraceFinalizeContext,
+            },
             provider::InferenceProvider,
         },
     };
@@ -175,6 +180,83 @@ mod tests {
             Some("openai")
         );
     }
+
+    fn pending_with_finalize_failure(
+        finalize_failure: Option<(&str, &str, &str)>,
+    ) -> PendingRouteTrace {
+        PendingRouteTrace {
+            router_id: RouterId::Named(CompactString::new("autodefault")),
+            strategy: "budget-aware-capability-after",
+            hops: 2,
+            candidates: 2,
+            skipped: 0,
+            outcome_label: "success",
+            terminal_provider: None,
+            terminal_credential: None,
+            terminal_status: Some(200),
+            deepseek_web: None,
+            chatgpt_web: None,
+            intent_tier: None,
+            selection_phase: None,
+            quota_scope: None,
+            model_ladder_band: None,
+            model_ladder_position: None,
+            upstream_failure_kind: None,
+            restricted_until: None,
+            failover_class: Some("Transient".to_string()),
+            failure_stage: Some("structured_output".to_string()),
+            error_source: Some("gateway".to_string()),
+            error_class: Some("invalid_structured_json".to_string()),
+            agent_name: None,
+            work_unit_id: None,
+            work_unit_source: None,
+            planned_hops: Some(2),
+            plan_rebuilds: Some(0),
+            route_memory_hit: Some(false),
+            route_memory_invalidated: Some(false),
+            source_model: None,
+            json_schema_required: true,
+            estimated_usage: TokenUsage::default(),
+            replay: None,
+            finalize: Some(RouteTraceFinalizeContext {
+                route_span: tracing::Span::none(),
+                attempt_span: Some(tracing::Span::none()),
+                route_started: std::time::Instant::now(),
+                attempt_started: Some(std::time::Instant::now()),
+                terminal_model: Some("terminal-model".to_string()),
+                stream: false,
+                failure_stage: finalize_failure.map(|f| f.0.to_string()),
+                error_source: finalize_failure.map(|f| f.1.to_string()),
+                error_class: finalize_failure.map(|f| f.2.to_string()),
+            }),
+        }
+    }
+
+    #[test]
+    fn summary_failure_fields_prefer_clean_terminal_success() {
+        let pending = pending_with_finalize_failure(None);
+
+        let fields = terminal_failure_fields(&pending);
+
+        assert_eq!(fields.failure_stage, "none");
+        assert_eq!(fields.error_source, "none");
+        assert_eq!(fields.error_class, "none");
+    }
+
+    #[test]
+    fn summary_failure_fields_keep_terminal_failure() {
+        let pending = pending_with_finalize_failure(Some((
+            "upstream",
+            "upstream_provider",
+            "http_429",
+        )));
+
+        let fields = terminal_failure_fields(&pending);
+
+        assert_eq!(fields.failure_stage, "upstream");
+        assert_eq!(fields.error_source, "upstream_provider");
+        assert_eq!(fields.error_class, "http_429");
+    }
 }
 
 pub fn emit_pending_route_trace(
@@ -187,6 +269,7 @@ pub fn emit_pending_route_trace(
         .as_ref()
         .map_or_else(|| "none".to_string(), ToString::to_string);
     let credential = pending.terminal_credential.as_deref().unwrap_or("none");
+    let terminal_failure = terminal_failure_fields(pending);
     tracing::info!(
         router_id = %pending.router_id,
         strategy = pending.strategy,
@@ -224,9 +307,9 @@ pub fn emit_pending_route_trace(
             pending.upstream_failure_kind.as_deref().unwrap_or("none"),
         restricted_until = pending.restricted_until.as_deref().unwrap_or("none"),
         failover_class = pending.failover_class.as_deref().unwrap_or("none"),
-        failure_stage = pending.failure_stage.as_deref().unwrap_or("none"),
-        error_source = pending.error_source.as_deref().unwrap_or("none"),
-        error_class = pending.error_class.as_deref().unwrap_or("none"),
+        failure_stage = terminal_failure.failure_stage,
+        error_source = terminal_failure.error_source,
+        error_class = terminal_failure.error_class,
         agent_name = pending.agent_name.as_deref().unwrap_or("none"),
         work_unit_id = pending.work_unit_id.as_deref().unwrap_or("none"),
         work_unit_source = pending
@@ -252,6 +335,29 @@ pub fn emit_pending_route_trace(
     );
     if let Some(replay) = build_replay_record(pending) {
         tracing::info!(replay = ?replay, "route replay record");
+    }
+}
+
+struct TerminalFailureFields<'a> {
+    failure_stage: &'a str,
+    error_source: &'a str,
+    error_class: &'a str,
+}
+
+fn terminal_failure_fields(
+    pending: &PendingRouteTrace,
+) -> TerminalFailureFields<'_> {
+    if let Some(finalize) = pending.finalize.as_ref() {
+        return TerminalFailureFields {
+            failure_stage: finalize.failure_stage.as_deref().unwrap_or("none"),
+            error_source: finalize.error_source.as_deref().unwrap_or("none"),
+            error_class: finalize.error_class.as_deref().unwrap_or("none"),
+        };
+    }
+    TerminalFailureFields {
+        failure_stage: pending.failure_stage.as_deref().unwrap_or("none"),
+        error_source: pending.error_source.as_deref().unwrap_or("none"),
+        error_class: pending.error_class.as_deref().unwrap_or("none"),
     }
 }
 

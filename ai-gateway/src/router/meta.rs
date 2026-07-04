@@ -28,6 +28,7 @@ use crate::{
     },
     router::{
         direct::{DirectProxiesWithoutMapper, DirectProxyServiceWithoutMapper},
+        managed::{ManagedUpstreamService, ManagedUpstreams},
         router_details::{RouteType, RouterDetailsLayer},
         unified_api,
     },
@@ -48,6 +49,7 @@ pub struct MetaRouter {
     dynamic_router: DynamicRouter<RouterDiscovery, axum_core::body::Body>,
     unified_api: UnifiedApiService,
     direct_proxies: DirectProxiesWithoutMapper,
+    managed_upstreams: ManagedUpstreams,
 }
 
 pub type MetaRouterService = BoxCloneService<
@@ -101,11 +103,13 @@ impl MetaRouter {
             .service(unified_api::Service::new(&app_state).await?);
         let direct_proxies =
             DirectProxiesWithoutMapper::new(&app_state).await?;
+        let managed_upstreams = ManagedUpstreams::new(&app_state).await?;
 
         let meta_router = Self {
             dynamic_router,
             unified_api,
             direct_proxies,
+            managed_upstreams,
         };
         Ok(meta_router)
     }
@@ -122,10 +126,12 @@ impl MetaRouter {
             .service(unified_api::Service::new(&app_state).await?);
         let direct_proxies =
             DirectProxiesWithoutMapper::new(&app_state).await?;
+        let managed_upstreams = ManagedUpstreams::new(&app_state).await?;
         let meta_router = Self {
             dynamic_router,
             unified_api,
             direct_proxies,
+            managed_upstreams,
         };
         Ok(meta_router)
     }
@@ -183,6 +189,30 @@ impl MetaRouter {
             future: direct_proxy.call(req),
         }
     }
+
+    fn handle_managed_request(
+        &mut self,
+        req: crate::types::request::Request,
+        provider: InferenceProvider,
+    ) -> ResponseFuture {
+        tracing::trace!(
+            provider = %provider,
+            "received /managed/{{provider}} request"
+        );
+
+        let Some(mut managed) = self.managed_upstreams.get(&provider).cloned()
+        else {
+            tracing::warn!(provider = %provider, "requested provider is not configured for managed upstream");
+            return ResponseFuture::Ready {
+                future: ready(Err(ApiError::InvalidRequest(
+                    InvalidRequestError::UnsupportedProvider(provider),
+                ))),
+            };
+        };
+        ResponseFuture::Managed {
+            future: managed.call(req),
+        }
+    }
 }
 
 impl tower::Service<crate::types::request::Request> for MetaRouter {
@@ -225,6 +255,9 @@ impl tower::Service<crate::types::request::Request> for MetaRouter {
             Some(RouteType::DirectProxy { provider, .. }) => {
                 self.handle_direct_proxy_request(req, provider.clone())
             }
+            Some(RouteType::Managed { provider, .. }) => {
+                self.handle_managed_request(req, provider.clone())
+            }
             None => {
                 tracing::debug!("no route type found");
                 ResponseFuture::Ready {
@@ -258,6 +291,10 @@ pin_project! {
             #[pin]
             future: <DirectProxyServiceWithoutMapper as tower::Service<crate::types::request::Request>>::Future,
         },
+        Managed {
+            #[pin]
+            future: <ManagedUpstreamService as tower::Service<crate::types::request::Request>>::Future,
+        },
     }
 }
 
@@ -275,6 +312,9 @@ impl std::future::Future for ResponseFuture {
             }
             ResponseFutureProj::UnifiedApi { future } => future.poll(cx),
             ResponseFutureProj::DirectProxy { future } => future
+                .poll(cx)
+                .map_err(|_| ApiError::Internal(InternalError::Internal)),
+            ResponseFutureProj::Managed { future } => future
                 .poll(cx)
                 .map_err(|_| ApiError::Internal(InternalError::Internal)),
         }

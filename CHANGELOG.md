@@ -5,6 +5,78 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.6.7] - 2026-07-06
+
+**Managed upstream routing and LLM7 catalog support** — the gateway can expose
+curated managed provider paths, declared model bindings, and provider-specific
+adapters while preserving budget-aware routing, structured-output validation,
+and provider telemetry semantics.
+
+### Features
+
+- **Managed upstream routes:** `/managed/{provider}/...` requests use a
+  provider-pinned budget-aware router for the initial managed set: OpenAI,
+  Gemini, LongCat, and LLM7
+- **LLM7 provider catalog:** embedded credentials, provider metadata,
+  conservative free-tier limits, autodefault routing, and OpenAI-compatible
+  path handling cover LLM7 free-token traffic
+- **Structured-output repair:** LLM7 and LongCat can use a schema-conformance
+  reflection retry when a non-streaming JSON schema response fails validation;
+  LLM7 markdown-fenced JSON responses are normalized before validation
+- **In-flight route leases:** budget-aware routing limits concurrent upstream
+  attempts per pacing scope, skips busy candidates while alternatives remain,
+  and keeps single-candidate routes available as a last resort
+- **Prometheus scrape endpoint:** `/metrics` exposes process metrics in
+  Prometheus text format when telemetry metrics are initialized
+- **Managed adapter expansion:** managed routes cover additional compatibility
+  adapters and can target a specific credential path without bypassing
+  budget-aware routing
+- **Declared model bindings:** `/models` exposes stable and unstable declared
+  model bindings, and response headers mark stable selectors or warn on
+  unstable ones
+- **Reasoning-aware model resolution:** compatible upstream adapters can receive
+  normalized reasoning-effort hints while stable declared selectors continue to
+  map through existing gateway aliases
+
+### Fixed
+
+- **Terminal failure labels:** route summaries and finalized trace spans use
+  terminal-attempt failure fields, so a successful failover no longer inherits
+  an earlier invalid structured-output error
+- **OpenAI-compatible paths:** LongCat and LLM7 chat-completions requests avoid
+  adding an extra `v1/` prefix when their base URLs already include the versioned
+  API root
+- **Exhausted route response:** viable routes exhausted by pacing or in-flight
+  leases return a typed `429` with retry headers instead of falling through to
+  provider-not-found handling
+- **Credential-scoped managed routes:** budget-aware dispatch filters managed
+  candidates to the requested credential when the route includes an explicit
+  credential segment
+- **Session refresh retry:** session-backed upstream adapters refresh cached
+  access state once after an authentication failure before returning the
+  provider error
+- **Terminal failover classification:** routes that exhaust remaining viable
+  candidates during failover keep the terminal response and classified trace
+  fields instead of continuing into an empty-candidate path
+
+### Quality
+
+- LLM7 catalog fixtures verify embedded concrete model slugs against the frozen
+  Models API response while allowing stable selector models
+- Managed route parsing, provider-scoped client access, structured-output
+  reflection, markdown-fenced JSON normalization, and terminal trace
+  finalization are covered by focused tests
+- Structured-output warning logs keep validation metadata without logging
+  assistant response excerpts
+- Route spans include caller, work-unit, and client-access labels for
+  provider-level observability without adding request or response payloads
+- Routing-load scenarios cover lease fallback, lease exhaustion, route trace
+  client tags, and the Prometheus health endpoint covers scrape output
+- Capability ordering covers newly declared deep JSON-schema candidates, and
+  model-binding tests verify alias lookup, smart headers, and `/models` output
+- Debug builds disable HTTP rate-limit wrappers after config load so local and
+  remote development loops are not throttled by gateway-level request limits
+
 ## [0.6.6] - 2026-07-03
 
 **Trace diagnostics alignment** — routing traces now keep cost and failure

@@ -105,6 +105,16 @@ where
                     healthy_response(&self.app_state),
                 ))));
             }
+            if path == "/metrics" {
+                return Either::Left(Either::Left(ready(Ok(
+                    metrics_response(),
+                ))));
+            }
+            if path == "/models" {
+                return Either::Left(Either::Left(ready(Ok(
+                    declared_models_response(),
+                ))));
+            }
             if let Some((provider, credential)) = observability_filter(&path) {
                 let app_state = self.app_state.clone();
                 return Either::Left(Either::Right(Box::pin(async move {
@@ -127,6 +137,7 @@ struct HealthSnapshot {
     version: &'static str,
     started_at_utc: DateTime<Utc>,
     started_at_server_time: String,
+    started_at_server_timezone: String,
 }
 
 fn healthy_response(app_state: &AppState) -> Response {
@@ -135,7 +146,37 @@ fn healthy_response(app_state: &AppState) -> Response {
         version: snapshot.version,
         started_at_utc: snapshot.started_at_utc,
         started_at_server_time: snapshot.started_at_server_time,
+        started_at_server_timezone: snapshot.started_at_server_timezone,
     })
+}
+
+#[derive(Debug, serde::Serialize)]
+struct MetricsErrorSnapshot {
+    error: String,
+}
+
+fn metrics_response() -> Response {
+    match telemetry::prometheus_metrics_text() {
+        Some(Ok(metrics)) => http::Response::builder()
+            .status(StatusCode::OK)
+            .header(CONTENT_TYPE, metrics.content_type)
+            .body(axum_core::body::Body::from(metrics.body))
+            .expect("valid metrics response"),
+        Some(Err(error)) => json_status_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            MetricsErrorSnapshot { error },
+        ),
+        None => json_status_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            MetricsErrorSnapshot {
+                error: "metrics exporter not initialized".to_string(),
+            },
+        ),
+    }
+}
+
+fn declared_models_response() -> Response {
+    json_response(crate::declared_models::catalog())
 }
 
 fn observability_filter(
@@ -153,9 +194,16 @@ fn observability_filter(
 }
 
 fn json_response<T: serde::Serialize>(value: T) -> Response {
+    json_status_response(StatusCode::OK, value)
+}
+
+fn json_status_response<T: serde::Serialize>(
+    status: StatusCode,
+    value: T,
+) -> Response {
     match serde_json::to_vec(&value) {
         Ok(body) => http::Response::builder()
-            .status(StatusCode::OK)
+            .status(status)
             .header(CONTENT_TYPE, "application/json")
             .body(axum_core::body::Body::from(body))
             .expect("valid json response"),

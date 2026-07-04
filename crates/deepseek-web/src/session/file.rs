@@ -45,6 +45,12 @@ impl BrowserSession {
             .find(|(key, _)| key.eq_ignore_ascii_case(name))
             .map(|(_, value)| value.as_str())
     }
+
+    #[must_use]
+    pub fn has_browser_context(&self) -> bool {
+        self.cookie.as_deref().is_some_and(|v| !v.trim().is_empty())
+            || !self.headers.is_empty()
+    }
 }
 
 impl From<&SessionFile> for BrowserSession {

@@ -18,11 +18,7 @@ pub fn browser_headers(
         ("Accept-Encoding".into(), "gzip, deflate, br, zstd".into()),
         (
             "Accept-Language".into(),
-            session_value(
-                session,
-                "accept-language",
-                "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
-            ),
+            session_value(session, "accept-language", "en-US,en;q=0.9"),
         ),
         ("Origin".into(), DEEPSEEK_WEB_BASE.into()),
         ("Referer".into(), format!("{DEEPSEEK_WEB_BASE}/")),

@@ -1,0 +1,38 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "codestral-latest",
+      "object": "model",
+      "tier": "turbo",
+      "schema_endpoints": ["openai"],
+      "context_window": { "tokens": 32000 },
+      "stream": true,
+      "json_mode": true,
+      "reasoning": false,
+      "tools_calling": true
+    },
+    {
+      "id": "devstral-small-2:24b",
+      "object": "model",
+      "tier": "turbo",
+      "schema_endpoints": ["openai"],
+      "context_window": { "tokens": 384000 },
+      "stream": true,
+      "json_mode": true,
+      "reasoning": false,
+      "tools_calling": true
+    },
+    {
+      "id": "gpt-oss:20b",
+      "object": "model",
+      "tier": "turbo",
+      "schema_endpoints": ["openai"],
+      "context_window": { "tokens": 128000 },
+      "stream": true,
+      "json_mode": true,
+      "reasoning": false,
+      "tools_calling": true
+    }
+  ]
+}

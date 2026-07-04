@@ -2,8 +2,6 @@ use std::time::Duration;
 
 use ai_gateway::tests::routing::{PacingGate, PacingLimits};
 
-use crate::rl::support::*;
-
 pub async fn run() {
     let gate = PacingGate::new(PacingLimits {
         concurrent: 4,

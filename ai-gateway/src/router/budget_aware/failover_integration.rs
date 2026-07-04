@@ -45,6 +45,10 @@ mod structured_output_failover {
         InferenceProvider::Named("cerebras".into())
     }
 
+    fn llm7() -> InferenceProvider {
+        InferenceProvider::Named("llm7".into())
+    }
+
     fn chat_completion(content: &str) -> crate::types::response::Response {
         http::Response::builder()
             .status(StatusCode::OK)
@@ -245,6 +249,101 @@ mod structured_output_failover {
 
     #[tokio::test]
     #[serial_test::serial]
+    async fn llm7_schema_conformance_reflector_repairs_invalid_json_schema() {
+        clear_test_call_responses();
+        push_test_call_response(Ok(chat_completion(
+            "```json\n{\"wrong\":\"kept text\"}\n```",
+        )));
+        push_test_call_response(Ok(chat_completion(
+            r#"{"value":"kept text"}"#,
+        )));
+
+        let app_state = AppState::test_default().await;
+        let router = test_router(app_state.clone()).await;
+        let candidates =
+            vec![candidate(&app_state, llm7(), "fast", Some(32_000)).await];
+
+        let response = run_failover_candidates(
+            router.clone(),
+            request_parts(),
+            json_schema_request_body(""),
+            candidates,
+            RequestRequirements {
+                json_schema_required: true,
+                ..RequestRequirements::default()
+            },
+            None,
+        )
+        .await
+        .expect("llm7 reflector should repair the schema mismatch");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(REAL_MODE_MODEL_AND_PROVIDER)
+                .and_then(|value| value.to_str().ok()),
+            Some("llm7-test/fast")
+        );
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            parsed["choices"][0]["message"]["content"],
+            r#"{"value":"kept text"}"#
+        );
+
+        let llm7_credential = ProviderCredentialId::new("llm7-test");
+        let states = router.states.lock().expect("credential states");
+        assert!(
+            states
+                .get(&llm7_credential)
+                .and_then(|state| state.cooldown_until)
+                .is_none(),
+            "repaired structured output must not put llm7 into cooldown"
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn llm7_reflector_accepts_single_markdown_fenced_json_object() {
+        clear_test_call_responses();
+        push_test_call_response(Ok(chat_completion(
+            r#"{"wrong":"kept text"}"#,
+        )));
+        push_test_call_response(Ok(chat_completion(
+            "```json\n{\"value\":\"kept text\"}\n```",
+        )));
+
+        let app_state = AppState::test_default().await;
+        let router = test_router(app_state.clone()).await;
+        let candidates =
+            vec![candidate(&app_state, llm7(), "fast", Some(32_000)).await];
+
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            json_schema_request_body(""),
+            candidates,
+            RequestRequirements {
+                json_schema_required: true,
+                ..RequestRequirements::default()
+            },
+            None,
+        )
+        .await
+        .expect("llm7 markdown-fenced reflector JSON should normalize");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            parsed["choices"][0]["message"]["content"],
+            r#"{"value":"kept text"}"#
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
     async fn structured_output_failover_returns_provider_not_found_when_all_invalid()
      {
         clear_test_call_responses();
@@ -284,7 +383,9 @@ mod structured_output_failover {
 
         assert!(matches!(
             error,
-            ApiError::Internal(InternalError::ProviderNotFound)
+            ApiError::Internal(
+                InternalError::InvalidStructuredJsonAfterReflection
+            )
         ));
     }
 

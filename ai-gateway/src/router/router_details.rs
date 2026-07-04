@@ -10,6 +10,7 @@ use http::uri::PathAndQuery;
 use regex::Regex;
 
 use crate::{
+    config::credentials::ProviderCredentialId,
     error::{
         api::ApiError, internal::InternalError,
         invalid_req::InvalidRequestError,
@@ -27,6 +28,7 @@ use crate::{
 /// Unified regex that matches all three routing patterns:
 /// - `/router/{id}[/path][?query]` - Router pattern
 /// - `/ai[/path][?query]` - Unified API pattern
+/// - `/managed/{provider}[/path][?query]` - Managed upstream pattern
 /// - `/{provider}[/path][?query]` - Direct proxy pattern
 const UNIFIED_URL_REGEX: &str =
     r"^/(?P<first_segment>[^/?]+)(?P<rest>/[^?]*)?(?P<query>\?.*)?$";
@@ -75,6 +77,11 @@ pub enum RouteType {
         provider: InferenceProvider,
         path: CompactString,
     },
+    Managed {
+        provider: InferenceProvider,
+        credential_id: Option<ProviderCredentialId>,
+        path: CompactString,
+    },
 }
 
 impl<S> RouterDetailsService<S> {
@@ -92,6 +99,7 @@ impl<S> RouterDetailsService<S> {
 
             let is_router_request = first_segment == "router";
             let is_unified_api_request = first_segment == "ai";
+            let is_managed_request = first_segment == "managed";
 
             let rest_path = captures
                 .name("rest")
@@ -100,7 +108,9 @@ impl<S> RouterDetailsService<S> {
             if let Some(forced_routing) =
                 request.headers().get(FORCED_ROUTING_HEADER)
                 && let Ok(forced_routing) = forced_routing.to_str()
-                && (is_router_request || is_unified_api_request)
+                && (is_router_request
+                    || is_unified_api_request
+                    || is_managed_request)
             {
                 let Ok(provider) = InferenceProvider::from_str(forced_routing);
                 return Ok(RouteType::DirectProxy {
@@ -121,6 +131,14 @@ impl<S> RouterDetailsService<S> {
                 Ok(RouteType::UnifiedApi {
                     path: rest_path.trim_start_matches('/').into(),
                 })
+            } else if is_managed_request {
+                let (provider, credential_id, extracted_api_path) =
+                    extract_managed_provider_and_path(path)?;
+                Ok(RouteType::Managed {
+                    provider,
+                    credential_id,
+                    path: extracted_api_path.trim_start_matches('/').into(),
+                })
             } else {
                 let Ok(provider) = InferenceProvider::from_str(first_segment);
                 Ok(RouteType::DirectProxy {
@@ -134,6 +152,39 @@ impl<S> RouterDetailsService<S> {
             )))
         }
     }
+}
+
+fn extract_managed_provider_and_path(
+    path: &str,
+) -> Result<(InferenceProvider, Option<ProviderCredentialId>, &str), ApiError> {
+    let rest = path.strip_prefix("/managed/").ok_or_else(|| {
+        ApiError::InvalidRequest(InvalidRequestError::NotFound(
+            path.to_string(),
+        ))
+    })?;
+    let Some((provider, api_path)) = rest.split_once('/') else {
+        return Err(ApiError::InvalidRequest(InvalidRequestError::NotFound(
+            path.to_string(),
+        )));
+    };
+    if provider.is_empty() || api_path.is_empty() {
+        return Err(ApiError::InvalidRequest(InvalidRequestError::NotFound(
+            path.to_string(),
+        )));
+    }
+    let Ok(provider) = InferenceProvider::from_str(provider);
+    let Some((maybe_credential, remaining_api_path)) = api_path.split_once('/')
+    else {
+        return Ok((provider, None, api_path));
+    };
+    if maybe_credential.contains('-') && !remaining_api_path.is_empty() {
+        return Ok((
+            provider,
+            Some(ProviderCredentialId::new(maybe_credential)),
+            remaining_api_path,
+        ));
+    }
+    Ok((provider, None, api_path))
 }
 
 fn extract_router_id_and_path<'a>(
@@ -251,6 +302,28 @@ where
                     };
                     req.extensions_mut().insert(mapper_ctx);
                 }
+                RouteType::Managed {
+                    provider,
+                    credential_id,
+                    path,
+                } => {
+                    let extracted_path_and_query =
+                        match extract_path_and_query(path, req.uri().query()) {
+                            Ok(p) => p,
+                            Err(e) => {
+                                return Either::Left(ready(Err(e)));
+                            }
+                        };
+                    req.extensions_mut().insert(extracted_path_and_query);
+                    req.extensions_mut().insert(RequestKind::Managed);
+                    req.extensions_mut().insert(provider.clone());
+                    if let Some(credential_id) = credential_id {
+                        req.extensions_mut().insert(credential_id.clone());
+                    }
+                    req.extensions_mut().insert(RouterId::Named(
+                        format!("managed-{provider}").into(),
+                    ));
+                }
             }
             req.extensions_mut().insert(route_type);
         }
@@ -299,6 +372,10 @@ mod tests {
         assert!(regex.is_match("/openai/v1/chat/completions"));
         assert!(regex.is_match("/anthropic/v1/messages"));
         assert!(regex.is_match("/bedrock/converse"));
+
+        // --- Managed upstream patterns ---
+        assert!(regex.is_match("/managed/llm7/chat/completions"));
+        assert!(regex.is_match("/managed/openai/v1/chat/completions"));
 
         // Note: The unified regex matches "/router" because it's a valid first
         // segment, but it will fail when parsed as a router request due
@@ -412,5 +489,104 @@ mod tests {
             extract_router_id_and_path(&url_regex, path_id_too_long),
             Err(ApiError::InvalidRequest(_))
         ));
+    }
+
+    #[test]
+    fn test_extract_managed_provider_and_path() {
+        let (provider, credential_id, path) =
+            extract_managed_provider_and_path("/managed/llm7/chat/completions")
+                .unwrap();
+        assert_eq!(provider, InferenceProvider::Named("llm7".into()));
+        assert_eq!(credential_id, None);
+        assert_eq!(path, "chat/completions");
+
+        let (provider, credential_id, path) =
+            extract_managed_provider_and_path(
+                "/managed/openai/v1/chat/completions",
+            )
+            .unwrap();
+        assert_eq!(provider, InferenceProvider::OpenAI);
+        assert_eq!(credential_id, None);
+        assert_eq!(path, "v1/chat/completions");
+
+        let (provider, credential_id, path) =
+            extract_managed_provider_and_path(
+                "/managed/chatgpt-web/chatgpt-web-default/chat/completions",
+            )
+            .unwrap();
+        assert_eq!(provider, InferenceProvider::Named("chatgpt-web".into()));
+        assert_eq!(
+            credential_id,
+            Some(ProviderCredentialId::new("chatgpt-web-default"))
+        );
+        assert_eq!(path, "chat/completions");
+
+        assert!(matches!(
+            extract_managed_provider_and_path("/managed/llm7"),
+            Err(ApiError::InvalidRequest(_))
+        ));
+    }
+
+    #[test]
+    fn test_extract_path_and_query_keeps_chat_completions_path() {
+        let path = extract_path_and_query("chat/completions", None).unwrap();
+        assert_eq!(path.path(), "chat/completions");
+    }
+
+    #[test]
+    fn test_parse_managed_route() {
+        let service = RouterDetailsService {
+            inner: tower::service_fn(|req: Request| async move {
+                Ok::<_, ApiError>(http::Response::new(req.into_body()))
+            }),
+            unified_url_regex: Regex::new(UNIFIED_URL_REGEX).unwrap(),
+            router_url_regex: Regex::new(ROUTER_URL_REGEX).unwrap(),
+        };
+        let req = http::Request::builder()
+            .uri("/managed/llm7/chat/completions")
+            .body(axum_core::body::Body::empty())
+            .unwrap();
+        let route = service.parse_route(&req).unwrap();
+        let RouteType::Managed {
+            provider,
+            credential_id,
+            path,
+        } = route
+        else {
+            panic!("expected managed route");
+        };
+        assert_eq!(provider, InferenceProvider::Named("llm7".into()));
+        assert_eq!(credential_id, None);
+        assert_eq!(path.as_str(), "chat/completions");
+    }
+
+    #[test]
+    fn test_parse_managed_route_with_credential() {
+        let service = RouterDetailsService {
+            inner: tower::service_fn(|req: Request| async move {
+                Ok::<_, ApiError>(http::Response::new(req.into_body()))
+            }),
+            unified_url_regex: Regex::new(UNIFIED_URL_REGEX).unwrap(),
+            router_url_regex: Regex::new(ROUTER_URL_REGEX).unwrap(),
+        };
+        let req = http::Request::builder()
+            .uri("/managed/deepseek-web/deepseek-web-2/chat/completions")
+            .body(axum_core::body::Body::empty())
+            .unwrap();
+        let route = service.parse_route(&req).unwrap();
+        let RouteType::Managed {
+            provider,
+            credential_id,
+            path,
+        } = route
+        else {
+            panic!("expected managed route");
+        };
+        assert_eq!(provider, InferenceProvider::Named("deepseek-web".into()));
+        assert_eq!(
+            credential_id,
+            Some(ProviderCredentialId::new("deepseek-web-2"))
+        );
+        assert_eq!(path.as_str(), "chat/completions");
     }
 }

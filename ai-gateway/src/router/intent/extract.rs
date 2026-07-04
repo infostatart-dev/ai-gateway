@@ -113,8 +113,12 @@ fn normalize_model_name(model_name: &str) -> String {
 fn is_fast_thinking_gpt5(name: &str) -> bool {
     name.contains("gpt-5-nano")
         || name.contains("gpt-5.4-nano")
+        || name.contains("gpt-5.5-nano")
+        || name.contains("gpt5.5-nano")
         || name.contains("gpt-5-mini")
         || name.contains("gpt-5.4-mini")
+        || name.contains("gpt-5.5-mini")
+        || name.contains("gpt5.5-mini")
 }
 
 fn is_deep_client_model(name: &str) -> bool {
@@ -156,6 +160,14 @@ mod tests {
     fn nano_is_not_deep() {
         let intent = extract_routing_intent_from_name("openai/gpt-5.4-nano");
         assert_ne!(intent.preferred_tier, IntentTier::Deep);
+    }
+
+    #[test]
+    fn declared_stable_gpt55_aliases_are_fast_thinking() {
+        let mini = extract_routing_intent_from_name("openai/gpt-5.5-mini");
+        let nano = extract_routing_intent_from_name("openai/gpt-5.5-nano");
+        assert_eq!(mini.preferred_tier, IntentTier::FastThinking);
+        assert_eq!(nano.preferred_tier, IntentTier::FastThinking);
     }
 
     #[test]

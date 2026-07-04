@@ -359,7 +359,9 @@ pub fn get_retry_config<'a>(
     req_ctx: &'a RequestContext,
 ) -> Option<&'a RetryConfig> {
     match request_kind {
-        RequestKind::Router => router_config(app_state, req_ctx),
+        RequestKind::Router | RequestKind::Managed => {
+            router_config(app_state, req_ctx)
+        }
         RequestKind::UnifiedApi => {
             app_state.config().unified_api.retries.as_ref()
         }

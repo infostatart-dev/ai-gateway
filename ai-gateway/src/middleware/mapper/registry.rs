@@ -475,4 +475,12 @@ mod catalog_registry_tests {
             "bazaarlink not in catalog as api-key provider"
         );
     }
+
+    #[test]
+    fn llm7_is_registered_as_named_api_key_provider() {
+        assert!(
+            named_api_key_provider_in_catalog("llm7"),
+            "llm7 not in catalog as api-key provider"
+        );
+    }
 }

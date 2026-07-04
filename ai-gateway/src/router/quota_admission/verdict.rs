@@ -13,6 +13,7 @@ pub enum BlockedReason {
     MinInterval,
     Rpd,
     Tpd,
+    InFlight,
     ModelCooldown,
     SlotCooldown,
     UpstreamReconcile,

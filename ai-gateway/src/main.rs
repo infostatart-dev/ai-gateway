@@ -225,6 +225,9 @@ fn load_and_validate_config(
     if verbose {
         config.telemetry.level = "info,ai_gateway=trace".to_string();
     }
+    ai_gateway::config::dev_overrides::apply_dev_rate_limit_overrides(
+        &mut config,
+    );
 
     config.validate().inspect_err(|e| {
         tracing::error!(error = %e, "configuration validation failed");

@@ -15,6 +15,7 @@ mod intent_acceptance;
 mod intent_selection;
 mod ladder_filter;
 mod ladder_rank;
+mod lease;
 mod memory;
 mod new_router;
 mod payload;
@@ -47,9 +48,11 @@ pub use call::{
     clear_test_call_responses, install_upstream_mock, push_test_call_response,
     push_test_call_response_for_credential,
 };
+pub(crate) use failover_loop::route_exhausted_response;
 #[cfg(feature = "testing")]
 pub use failover_loop::run_failover_candidates;
 pub use health_registry::{CredentialHealthRegistry, RoutingHealthSnapshot};
+pub use lease::InFlightRouteRegistry;
 #[cfg(feature = "testing")]
 pub use memory::RouteBinding;
 pub use memory::WorkUnitRouteMemory;
@@ -59,8 +62,8 @@ pub use test_support::{
     balance_ranked, chatgpt_candidate, deep_paid_candidate,
     deepseek_model_candidate, deepseek_slots, empty_router, gemini_candidate,
     gemini_model_candidate, gemini_slots, groq_candidate,
-    intent_autodefault_router, named_model_candidate,
-    openrouter_model_candidate, ordered_candidates,
+    hold_candidate_route_lease, intent_autodefault_router,
+    named_model_candidate, openrouter_model_candidate, ordered_candidates,
     ordered_candidates_for_source, request_parts, router_app_state,
     router_with_candidates, scout_candidate,
 };

@@ -76,6 +76,8 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
         ));
     let route_memory =
         Arc::new(crate::router::budget_aware::WorkUnitRouteMemory::new());
+    let route_leases =
+        Arc::new(crate::router::budget_aware::InFlightRouteRegistry::new());
 
     Ok(AppState(Arc::new(InnerAppState {
         config,
@@ -106,6 +108,7 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
         upstream_pacing,
         budget_probe,
         route_memory,
+        route_leases,
     })))
 }
 

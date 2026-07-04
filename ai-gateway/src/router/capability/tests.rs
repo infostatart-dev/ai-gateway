@@ -357,6 +357,42 @@ mod async_tests {
             ]
         );
     }
+
+    #[tokio::test]
+    async fn gpt5_strict_json_includes_gemini_deep_candidate() {
+        let app_state = AppState::test_default().await;
+        let router_id = RouterId::Named("test".into());
+        let router_config = Arc::new(RouterConfig::default());
+        let providers = nonempty_collections::nes![
+            InferenceProvider::GoogleGemini,
+            InferenceProvider::Anthropic
+        ];
+
+        let router = CapabilityAwareRouter::new(
+            app_state,
+            router_id,
+            router_config,
+            &providers,
+        )
+        .await
+        .unwrap();
+
+        let source_model = ModelId::from_str("openai/gpt-5").unwrap();
+        let requirements = RequestRequirements {
+            json_schema_required: true,
+            ..RequestRequirements::default()
+        };
+        let candidates = router
+            .ordered_candidates(&requirements, Some(&source_model), None)
+            .unwrap();
+
+        assert!(candidates.iter().any(|c| {
+            c.capability.provider == InferenceProvider::GoogleGemini
+                && c.capability.model.to_string() == "gemini-3.1-pro-preview"
+                && c.capability.supports_json_schema
+                && c.capability.intent_tier == IntentTier::Deep
+        }));
+    }
 }
 
 // ─── tier-cascade chain helpers ─────────────────────────────────────────

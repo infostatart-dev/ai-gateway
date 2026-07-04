@@ -213,7 +213,10 @@ impl Dispatcher {
                     agent_name: agent_name.as_deref(),
                 });
 
-                if request_kind == RequestKind::DirectProxy {
+                if matches!(
+                    request_kind,
+                    RequestKind::DirectProxy | RequestKind::Managed
+                ) {
                     app_state.0.metrics.provider.record_client_request(false);
                 }
 

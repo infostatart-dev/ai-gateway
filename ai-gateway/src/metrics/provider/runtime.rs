@@ -83,6 +83,7 @@ pub struct ProviderStatsSnapshot {
     pub started_at: DateTime<Utc>,
     pub started_at_utc: DateTime<Utc>,
     pub started_at_server_time: String,
+    pub started_at_server_timezone: String,
     pub uptime_seconds: u64,
     pub providers: Vec<ProviderStatsRow>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -444,6 +445,9 @@ impl ProviderRuntimeRegistry {
             started_at,
             started_at_utc: started_at,
             started_at_server_time: started_at
+                .with_timezone(&Local)
+                .to_rfc3339(),
+            started_at_server_timezone: started_at
                 .with_timezone(&Local)
                 .to_rfc3339(),
             uptime_seconds,

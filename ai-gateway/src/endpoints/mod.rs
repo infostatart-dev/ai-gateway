@@ -150,6 +150,8 @@ impl ApiEndpoint {
                 if provider == &InferenceProvider::Named("opencode".into())
                     || provider
                         == &InferenceProvider::Named("github-models".into())
+                    || provider == &InferenceProvider::Named("llm7".into())
+                    || provider == &InferenceProvider::Named("longcat".into())
                 {
                     Ok(EndpointRoute::ChatCompletions.path().to_string())
                 } else {
@@ -197,7 +199,16 @@ mod tests {
             provider: InferenceProvider::Named("longcat".into()),
             openai_endpoint: OpenAI::chat_completions(),
         };
-        assert_eq!(endpoint.path(None, false).unwrap(), "v1/chat/completions");
+        assert_eq!(endpoint.path(None, false).unwrap(), "chat/completions");
+    }
+
+    #[test]
+    fn llm7_chat_completions_path_does_not_prepend_v1() {
+        let endpoint = ApiEndpoint::OpenAICompatible {
+            provider: InferenceProvider::Named("llm7".into()),
+            openai_endpoint: OpenAI::chat_completions(),
+        };
+        assert_eq!(endpoint.path(None, false).unwrap(), "chat/completions");
     }
 
     #[test]

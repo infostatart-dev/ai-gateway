@@ -60,7 +60,16 @@ impl QuotaSnapshot {
                 now,
             )
             .await;
-            entries.insert(key, entry_from_verdict(&verdict));
+            let mut entry = entry_from_verdict(&verdict);
+            if let Some(lease) = router.route_lease_snapshot(candidate)
+                && lease.active >= lease.limit
+            {
+                entry.next_wait = Duration::from_millis(1);
+                entry.headroom_score = 0.0;
+                entry.blocked_reason = BlockedReason::InFlight;
+                entry.next_available_at = None;
+            }
+            entries.insert(key, entry);
         }
         Self {
             captured_at: Utc::now(),

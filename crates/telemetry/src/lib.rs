@@ -2,6 +2,8 @@ pub mod make_span;
 pub mod tracing;
 pub mod utils;
 
+use std::sync::OnceLock;
+
 use opentelemetry::{
     TraceId, global,
     trace::{TracerProvider, noop::NoopTextMapPropagator},
@@ -17,6 +19,7 @@ use opentelemetry_sdk::{
     propagation::TraceContextPropagator,
     trace::{IdGenerator, SdkTracerProvider},
 };
+use prometheus::Encoder;
 use serde::{Deserialize, Serialize};
 pub use tracing_subscriber::util::TryInitError;
 use tracing_subscriber::{
@@ -25,6 +28,8 @@ use tracing_subscriber::{
 };
 use utils::default_true;
 use uuid::Uuid;
+
+static PROMETHEUS_REGISTRY: OnceLock<prometheus::Registry> = OnceLock::new();
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
@@ -91,6 +96,12 @@ fn default_otlp_endpoint() -> String {
     "http://localhost:4317/v1/metrics".to_string()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrometheusMetricsText {
+    pub content_type: String,
+    pub body: Vec<u8>,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum TelemetryError {
     #[error("Log exporter build error: {0}")]
@@ -99,6 +110,8 @@ pub enum TelemetryError {
     TraceExporterBuild(ExporterBuildError),
     #[error("Metric exporter build error: {0}")]
     MetricExporterBuild(ExporterBuildError),
+    #[error("Prometheus exporter build error: {0}")]
+    PrometheusExporterBuild(opentelemetry_sdk::error::OTelSdkError),
     #[error("Invalid log directive: {0}")]
     InvalidLogDirective(#[from] ParseError),
     #[error("Subscriber error: {0}")]
@@ -143,7 +156,9 @@ pub fn init_telemetry(
     match config.exporter {
         Exporter::Stdout => {
             let tracer_provider = init_stdout(&resource, config)?;
-            Ok((None, tracer_provider, None))
+            let metrics_provider = prometheus_metrics_provider(resource)?;
+            global::set_meter_provider(metrics_provider.clone());
+            Ok((None, tracer_provider, Some(metrics_provider)))
         }
         Exporter::Otlp => {
             let (logger_provider, tracer_provider, metrics_provider) =
@@ -243,8 +258,7 @@ fn init_otlp_pipeline(
         .try_init()?;
 
     // metrics
-    let metrics_provider = metrics_provider(config, resource)
-        .map_err(TelemetryError::MetricExporterBuild)?;
+    let metrics_provider = metrics_provider(config, resource)?;
 
     global::set_meter_provider(metrics_provider.clone());
     global::set_tracer_provider(tracer_provider.clone());
@@ -359,15 +373,71 @@ fn logger_provider(
 fn metrics_provider(
     config: &Config,
     resource: Resource,
-) -> Result<SdkMeterProvider, ExporterBuildError> {
+) -> Result<SdkMeterProvider, TelemetryError> {
     let exporter = MetricExporter::builder()
         .with_tonic()
         .with_endpoint(config.otlp_endpoint.clone())
-        .build()?;
+        .build()
+        .map_err(TelemetryError::MetricExporterBuild)?;
+    let prometheus_exporter = prometheus_exporter()?;
     Ok(SdkMeterProvider::builder()
+        .with_reader(prometheus_exporter)
         .with_periodic_exporter(exporter)
         .with_resource(resource)
         .build())
+}
+
+fn prometheus_metrics_provider(
+    resource: Resource,
+) -> Result<SdkMeterProvider, TelemetryError> {
+    let prometheus_exporter = prometheus_exporter()?;
+    Ok(SdkMeterProvider::builder()
+        .with_reader(prometheus_exporter)
+        .with_resource(resource)
+        .build())
+}
+
+fn prometheus_exporter()
+-> Result<opentelemetry_prometheus::PrometheusExporter, TelemetryError> {
+    opentelemetry_prometheus::exporter()
+        .with_registry(prometheus_registry())
+        .build()
+        .map_err(TelemetryError::PrometheusExporterBuild)
+}
+
+fn prometheus_registry() -> prometheus::Registry {
+    PROMETHEUS_REGISTRY
+        .get_or_init(prometheus::Registry::new)
+        .clone()
+}
+
+#[must_use]
+pub fn prometheus_metrics_text() -> Option<Result<PrometheusMetricsText, String>>
+{
+    let registry = PROMETHEUS_REGISTRY.get()?.clone();
+    let encoder = prometheus::TextEncoder::new();
+    let metric_families = registry.gather();
+    let mut body = Vec::new();
+    Some(
+        encoder
+            .encode(&metric_families, &mut body)
+            .map(|()| PrometheusMetricsText {
+                content_type: encoder.format_type().to_string(),
+                body,
+            })
+            .map_err(|error| error.to_string()),
+    )
+}
+
+pub fn init_prometheus_metrics_for_current_process(
+    service_name: impl Into<String>,
+) -> Result<SdkMeterProvider, TelemetryError> {
+    let resource = Resource::builder()
+        .with_service_name(service_name.into())
+        .build();
+    let metrics_provider = prometheus_metrics_provider(resource)?;
+    global::set_meter_provider(metrics_provider.clone());
+    Ok(metrics_provider)
 }
 
 #[derive(Debug)]

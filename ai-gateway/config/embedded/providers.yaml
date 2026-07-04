@@ -349,6 +349,11 @@ gemini:
     - "gemini-2.0-flash-lite"
   base-url: https://generativelanguage.googleapis.com/
   model-capabilities:
+    gemini-3.1-pro-preview:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 1000000
+      intent-tier: deep
     gemini-3-flash-preview:
       supports-tools: true
       supports-json-schema: true
@@ -540,6 +545,41 @@ opencode:
       context-window: 200000
       reasoning: true
 
+llm7:
+  last-verified-at: "2026-07-04"
+  verify-source: live_models_api
+  models:
+    # LLM7 docs recommend selectors for free-token/anonymous traffic because
+    # concrete model ids rotate; concrete turbo ids below were live on
+    # 2026-07-04 via https://api.llm7.io/v1/models.
+    - "default"
+    - "fast"
+    - "codestral-latest"
+    - "devstral-small-2:24b"
+    - "gpt-oss:20b"
+  base-url: https://api.llm7.io/v1/
+  model-capabilities:
+    default:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    fast:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+    codestral-latest:
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 32000
+    "devstral-small-2:24b":
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 384000
+    "gpt-oss:20b":
+      supports-tools: true
+      supports-json-schema: true
+      context-window: 128000
+
 cloudflare:
   models:
     - "@cf/meta/llama-3.1-70b-instruct"
@@ -597,9 +637,65 @@ vllm:
 
 chatgpt-web:
   models:
+    - "gpt-5.5-pro"
+    - "gpt-5.5-pro-extended"
+    - "gpt-5.5-thinking"
+    - "gpt-5.5"
+    - "gpt-5.4-pro"
+    - "gpt-5.4-thinking"
+    - "gpt-5.4-thinking-mini"
+    - "gpt-5.3-instant"
+    - "gpt-5.3"
+    - "gpt-5.3-mini"
     - "gpt-5.5-instant"
   base-url: https://chatgpt.com/
   model-capabilities:
+    gpt-5.5-pro:
+      supports-tools: false
+      supports-json-schema: true
+      context-window: 128000
+      reasoning: true
+    gpt-5.5-pro-extended:
+      supports-tools: false
+      supports-json-schema: true
+      context-window: 128000
+      reasoning: true
+    gpt-5.5-thinking:
+      supports-tools: false
+      supports-json-schema: true
+      context-window: 128000
+      reasoning: true
+    gpt-5.5:
+      supports-tools: false
+      supports-json-schema: true
+      context-window: 128000
+    gpt-5.4-pro:
+      supports-tools: false
+      supports-json-schema: true
+      context-window: 128000
+      reasoning: true
+    gpt-5.4-thinking:
+      supports-tools: false
+      supports-json-schema: true
+      context-window: 128000
+      reasoning: true
+    gpt-5.4-thinking-mini:
+      supports-tools: false
+      supports-json-schema: true
+      context-window: 128000
+      reasoning: true
+    gpt-5.3-instant:
+      supports-tools: false
+      supports-json-schema: true
+      context-window: 128000
+    gpt-5.3:
+      supports-tools: false
+      supports-json-schema: true
+      context-window: 128000
+    gpt-5.3-mini:
+      supports-tools: false
+      supports-json-schema: true
+      context-window: 128000
     gpt-5.5-instant:
       supports-tools: false
       supports-json-schema: true

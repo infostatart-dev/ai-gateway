@@ -66,6 +66,8 @@ gpt-5-mini:
   - "openrouter/nvidia/nemotron-3-nano-30b-a3b:free"
   - "bluesminds/gpt-4.1-nano"
   - "sambanova/gpt-oss-120b"
+  - "llm7/fast"
+  - "llm7/gpt-oss:20b"
   - "ollama-cloud/kimi-k2.6"
   - "openrouter/openai/gpt-oss-120b:free"
   - "opencode/nemotron-3-ultra-free"
@@ -169,6 +171,8 @@ gpt-5.4-nano:
   - openrouter/nvidia/nemotron-3-nano-30b-a3b:free
   - bluesminds/gpt-4.1-nano
   - sambanova/gpt-oss-120b
+  - llm7/fast
+  - llm7/gpt-oss:20b
   - ollama-cloud/kimi-k2.6
   - openrouter/openai/gpt-oss-120b:free
   - opencode/nemotron-3-ultra-free
@@ -193,6 +197,8 @@ gpt-5.4-mini:
   - openrouter/nvidia/nemotron-3-nano-30b-a3b:free
   - bluesminds/gpt-4.1-nano
   - sambanova/gpt-oss-120b
+  - llm7/fast
+  - llm7/gpt-oss:20b
   - ollama-cloud/kimi-k2.6
   - openrouter/openai/gpt-oss-120b:free
   - opencode/nemotron-3-ultra-free

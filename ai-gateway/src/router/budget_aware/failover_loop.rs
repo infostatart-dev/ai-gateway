@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
-use axum_core::body::Body;
+use axum_core::{body::Body, response::IntoResponse};
 use http::request::Parts;
 use http_body_util::BodyExt;
-use tracing::Instrument;
+use tracing::{Instrument, info_span};
 
 use super::{
     call,
@@ -13,7 +13,11 @@ use super::{
 };
 use crate::{
     config::credentials::ProviderCredentialId,
-    error::{api::ApiError, internal::InternalError},
+    error::{
+        api::ApiError,
+        internal::InternalError,
+        invalid_req::{InvalidRequestError, TooManyRequestsError},
+    },
     router::{
         capability::RequestRequirements,
         provider_attempt::{ModelCooldownKey, is_failoverable_status},
@@ -52,10 +56,33 @@ pub async fn run_failover_candidates(
         .extensions
         .get::<crate::types::extensions::RoutePlanContext>()
         .cloned();
+    let caller = plan_ctx.as_ref().map(|ctx| &ctx.caller);
+    let work_unit_source =
+        caller.map_or("none", |ctx| match ctx.work_unit_source {
+            crate::types::extensions::WorkUnitSource::Explicit => "explicit",
+            crate::types::extensions::WorkUnitSource::HeliconeSession => {
+                "helicone-session"
+            }
+            crate::types::extensions::WorkUnitSource::RequestId => "request-id",
+            crate::types::extensions::WorkUnitSource::Generated => "generated",
+        });
+    let client_access = parts
+        .extensions
+        .get::<crate::types::extensions::ClientAccessContext>();
     let route_span = tracing::info_span!(
         "gateway.route",
         router_id = %this.router_id,
         strategy = this.strategy,
+        agent_name = caller.map_or("none", |ctx| ctx.agent_name.as_str()),
+        work_unit_id = caller
+            .and_then(|ctx| ctx.work_unit_id.as_deref())
+            .unwrap_or("none"),
+        work_unit_source,
+        client_subject_id = client_access
+            .map_or("none", |ctx| ctx.subject_id.as_str()),
+        client_key_id = client_access.map_or("none", |ctx| ctx.key_id.as_str()),
+        client_plan_id = client_access
+            .map_or("none", |ctx| ctx.plan_id.as_str()),
         source_model = plan_ctx
             .as_ref()
             .and_then(|ctx| ctx.source_model.as_deref())
@@ -106,6 +133,7 @@ async fn run_failover_candidates_inner(
 ) -> Result<Response, ApiError> {
     let mut exclude = std::collections::HashSet::<(String, String)>::new();
     let mut plan_rebuild_count = 0u32;
+    let mut exhausted_retry_after: Option<std::time::Duration> = None;
     let estimated_usage = trace::estimated_usage_from_request(
         &body_bytes,
         this.app_state.config().observability.estimate_tokens,
@@ -156,6 +184,10 @@ async fn run_failover_candidates_inner(
                 )
                 .await;
             if !admit_verdict.feasible {
+                remember_exhausted_wait(
+                    &mut exhausted_retry_after,
+                    admit_verdict.next_wait,
+                );
                 tracing::debug!(
                     credential = %candidate.credential_id,
                     provider = %candidate.capability.provider,
@@ -179,6 +211,7 @@ async fn run_failover_candidates_inner(
                     wait,
                     blocked_reason,
                 } => {
+                    remember_exhausted_wait(&mut exhausted_retry_after, wait);
                     route_trace.event_candidate_skipped(
                         candidate,
                         "pacing",
@@ -204,6 +237,10 @@ async fn run_failover_candidates_inner(
             }
             let model_id = candidate.capability.model.to_string();
             if budget_probe_skips(&this, candidate, model_id.as_str()).await {
+                remember_exhausted_wait(
+                    &mut exhausted_retry_after,
+                    std::time::Duration::from_secs(1),
+                );
                 route_trace.event_candidate_skipped(
                     candidate,
                     "budget_probe",
@@ -213,6 +250,28 @@ async fn run_failover_candidates_inner(
                 route_trace.record_skipped(1);
                 continue;
             }
+            let _route_lease = match this
+                .try_acquire_route_lease(candidate, has_next_candidate)
+            {
+                Ok(lease) => lease,
+                Err(snapshot) => {
+                    remember_exhausted_wait(
+                        &mut exhausted_retry_after,
+                        std::time::Duration::from_secs(1),
+                    );
+                    route_trace.event_candidate_skipped(
+                        candidate,
+                        "route_lease",
+                        format!(
+                            "in_flight active={} limit={}",
+                            snapshot.active, snapshot.limit
+                        ),
+                        0,
+                    );
+                    route_trace.record_skipped(1);
+                    continue;
+                }
+            };
 
             route_trace.record_attempt();
             let stream = trace::request_stream_flag(&body_bytes);
@@ -236,6 +295,7 @@ async fn run_failover_candidates_inner(
                 failure_stage = tracing::field::Empty,
                 error_source = tracing::field::Empty,
                 error_class = tracing::field::Empty,
+                structured_output_normalization = tracing::field::Empty,
                 duration_ms = tracing::field::Empty,
                 tfft_ms = tracing::field::Empty,
                 generation_ms_per_output_token = tracing::field::Empty,
@@ -270,7 +330,7 @@ async fn run_failover_candidates_inner(
             attempt_span.record("status_code", u64::from(status.as_u16()));
 
             if has_next_candidate && is_failoverable_status(status) {
-                let skipped = fail_over_candidate(
+                let decision = fail_over_candidate(
                     &this,
                     candidate,
                     &candidates[index + 1..],
@@ -286,7 +346,29 @@ async fn run_failover_candidates_inner(
                     &mut exclude,
                 )
                 .await;
-                route_trace.record_skipped(skipped);
+                route_trace.record_skipped(decision.skipped);
+                if !candidates[index + 1..].iter().any(|next| {
+                    candidate_available(
+                        next,
+                        &failed_credentials,
+                        &failed_models,
+                    )
+                }) {
+                    route_trace.record_terminal_attempt(
+                        candidate,
+                        attempt_span,
+                        attempt_started,
+                        stream,
+                        decision.failure_trace.as_ref(),
+                    );
+                    return Ok(finish_classified_terminal(
+                        &this,
+                        &mut route_trace,
+                        candidate,
+                        decision.response,
+                        status,
+                    ));
+                }
                 continue;
             }
 
@@ -294,6 +376,7 @@ async fn run_failover_candidates_inner(
                 if let Some(response) =
                     handle_successful_candidate(SuccessCandidateContext {
                         this: &this,
+                        parts: &parts,
                         candidate,
                         index,
                         candidates: &candidates,
@@ -322,6 +405,7 @@ async fn run_failover_candidates_inner(
                         attempt_span.clone(),
                         attempt_started,
                         stream,
+                        None,
                     );
                     return Ok(finish_success(
                         &this,
@@ -336,16 +420,17 @@ async fn run_failover_candidates_inner(
                 continue;
             }
 
-            if let Some(fields) =
-                record_attempt_failure_fields(status, &response, &attempt_span)
-            {
-                route_trace.record_failure_trace_fields(&fields);
+            let failure_fields =
+                record_attempt_failure_fields(status, &response, &attempt_span);
+            if let Some(fields) = failure_fields.as_ref() {
+                route_trace.record_failure_trace_fields(fields);
             }
             route_trace.record_terminal_attempt(
                 candidate,
                 attempt_span,
                 attempt_started,
                 stream,
+                failure_fields.as_ref(),
             );
             return Ok(finish_terminal(
                 &this,
@@ -401,12 +486,40 @@ async fn run_failover_candidates_inner(
                 label: "exhausted",
                 provider: None,
                 credential: None,
-                status: None,
+                status: exhausted_retry_after.map(|_| 429),
             },
             None,
         );
+        if let Some(retry_after) = exhausted_retry_after {
+            return Ok(route_exhausted_response(retry_after));
+        }
         return Err(ApiError::Internal(InternalError::ProviderNotFound));
     }
+}
+
+fn remember_exhausted_wait(
+    exhausted_retry_after: &mut Option<std::time::Duration>,
+    wait: std::time::Duration,
+) {
+    let wait = if wait.is_zero() {
+        std::time::Duration::from_secs(1)
+    } else {
+        wait
+    };
+    if exhausted_retry_after.is_none_or(|current| wait < current) {
+        *exhausted_retry_after = Some(wait);
+    }
+}
+
+pub(crate) fn route_exhausted_response(
+    retry_after: std::time::Duration,
+) -> Response {
+    InvalidRequestError::TooManyRequests(TooManyRequestsError {
+        ratelimit_limit: 1,
+        ratelimit_remaining: 0,
+        retry_after: retry_after.as_secs().max(1),
+    })
+    .into_response()
 }
 
 fn finish_success(
@@ -514,6 +627,33 @@ async fn finish_terminal(
     trace::wrap_response_with_route_trace(response, pending)
 }
 
+fn finish_classified_terminal(
+    this: &BudgetAwareRouter,
+    route_trace: &mut trace::RouteTrace,
+    candidate: &BudgetCandidate,
+    mut response: Response,
+    status: http::StatusCode,
+) -> Response {
+    attach_routed_identity(
+        &mut response,
+        &candidate.credential_id,
+        &candidate.capability.model,
+    );
+    let outcome = trace::RouteOutcome {
+        label: "terminal_failure",
+        provider: Some(&candidate.capability.provider),
+        credential: Some(&candidate.credential_id),
+        status: Some(status.as_u16()),
+    };
+    let pending = route_trace.attach_pending(
+        &this.router_id,
+        this.strategy,
+        &outcome,
+        None,
+    );
+    trace::wrap_response_with_route_trace(response, pending)
+}
+
 fn record_attempt_failure_fields(
     status: http::StatusCode,
     response: &Response,
@@ -537,6 +677,7 @@ fn record_attempt_failure_fields(
 
 struct SuccessCandidateContext<'a> {
     this: &'a BudgetAwareRouter,
+    parts: &'a Parts,
     candidate: &'a BudgetCandidate,
     index: usize,
     candidates: &'a [BudgetCandidate],
@@ -556,8 +697,49 @@ struct SuccessCandidateContext<'a> {
 async fn handle_successful_candidate(
     ctx: SuccessCandidateContext<'_>,
 ) -> Result<Option<Response>, ApiError> {
+    let has_next = ctx.index + 1 < ctx.candidates.len();
+    if structured_output_validation_required(
+        ctx.requirements,
+        ctx.candidate,
+        ctx.body_bytes,
+    ) {
+        return handle_structured_output_candidate(ctx, has_next).await;
+    }
+
+    ctx.this.record_success(
+        &ctx.candidate.credential_id,
+        &ctx.candidate.capability.provider,
+        &ctx.candidate.capability.model.to_string(),
+        ctx.elapsed,
+    );
+    if let Some(ds) = ctx.response.extensions().get::<trace::DeepSeekWebTrace>()
+    {
+        ctx.route_trace.record_deepseek_web(*ds);
+    }
+    if let Some(cg) = ctx.response.extensions().get::<trace::ChatGptWebTrace>()
+    {
+        ctx.route_trace.record_chatgpt_web(*cg);
+    }
+    Ok(Some(ctx.response))
+}
+
+fn structured_output_validation_required(
+    requirements: &RequestRequirements,
+    candidate: &BudgetCandidate,
+    body_bytes: &bytes::Bytes,
+) -> bool {
+    requirements.json_schema_required
+        && candidate.capability.supports_json_schema
+        && !structured_output::request_is_stream(body_bytes)
+}
+
+async fn handle_structured_output_candidate(
+    ctx: SuccessCandidateContext<'_>,
+    has_next: bool,
+) -> Result<Option<Response>, ApiError> {
     let SuccessCandidateContext {
         this,
+        parts,
         candidate,
         index,
         candidates,
@@ -565,97 +747,308 @@ async fn handle_successful_candidate(
         body_bytes,
         response,
         elapsed,
+        failed_credentials,
+        failed_models,
         route_trace,
         attempt_ctx,
         attempt_span,
-        ..
+        plan_ctx,
+        exclude,
     } = ctx;
-    let has_next = index + 1 < candidates.len();
-    if requirements.json_schema_required
-        && candidate.capability.supports_json_schema
-        && !structured_output::request_is_stream(body_bytes)
-    {
-        let (response_parts, response_body) = response.into_parts();
-        let response_bytes = response_body
-            .collect()
-            .await
-            .map_err(InternalError::CollectBodyError)?
-            .to_bytes();
-        let mut response = Response::from_parts(
-            response_parts,
-            Body::from(response_bytes.clone()),
-        );
-
-        if !structured_output::structured_output_valid(
-            requirements,
-            &candidate.capability,
-            body_bytes,
-            &response_bytes,
-        ) {
-            mark_invalid_structured_output(&mut response);
-            if has_next {
-                let skipped = fail_over_candidate(
-                    this,
-                    candidate,
-                    &candidates[index + 1..],
-                    response,
-                    elapsed,
-                    "structured_output",
-                    ctx.failed_credentials,
-                    ctx.failed_models,
-                    attempt_ctx,
-                    route_trace,
-                    attempt_span,
-                    ctx.plan_ctx,
-                    ctx.exclude,
-                )
-                .await;
-                route_trace.record_skipped(skipped);
-            } else {
-                let failure_fields = record_attempt_failure_fields(
-                    response.status(),
-                    &response,
-                    attempt_span,
-                );
-                let _ = this
-                    .record_failure(
-                        &candidate.credential_id,
-                        &candidate.capability.provider,
-                        &candidate.capability.model.to_string(),
-                        response,
-                        elapsed,
-                    )
-                    .await;
-                if let Some(fields) = failure_fields {
-                    route_trace.record_failure_trace_fields(&fields);
-                }
-                ctx.failed_credentials
-                    .insert(candidate.credential_id.clone());
-                tracing::warn!(
-                    credential = %candidate.credential_id,
-                    provider = %candidate.capability.provider,
-                    model = %candidate.capability.model,
-                    "provider returned invalid structured JSON on last candidate"
-                );
-            }
-            return Ok(None);
-        }
+    let (response_parts, response_bytes) = collect_normalized_response_body(
+        response,
+        candidate,
+        "initial",
+        attempt_span,
+    )
+    .await?;
+    let response = Response::from_parts(
+        response_parts,
+        Body::from(response_bytes.clone()),
+    );
+    let validation = structured_output::validate_structured_output(
+        requirements,
+        &candidate.capability,
+        body_bytes,
+        &response_bytes,
+    );
+    if validation.is_valid_or_skipped() {
         return Ok(Some(response));
     }
 
-    this.record_success(
-        &candidate.credential_id,
-        &candidate.capability.provider,
-        &candidate.capability.model.to_string(),
-        elapsed,
+    let validation_issue = validation.issue();
+    tracing::warn!(
+        credential = %candidate.credential_id,
+        provider = %candidate.capability.provider,
+        model = %candidate.capability.model,
+        phase = "initial",
+        validation_issue = ?validation_issue,
+        "JSON validation exception from structured output"
     );
-    if let Some(ds) = response.extensions().get::<trace::DeepSeekWebTrace>() {
-        route_trace.record_deepseek_web(*ds);
+    if let Some(reflected_response) =
+        try_schema_conformance_reflector(ReflectorContext {
+            candidate,
+            parts,
+            request_body: body_bytes,
+            response_body: &response_bytes,
+            requirements,
+            attempt_ctx,
+            route_trace,
+        })
+        .await?
+    {
+        return Ok(Some(reflected_response));
     }
-    if let Some(cg) = response.extensions().get::<trace::ChatGptWebTrace>() {
-        route_trace.record_chatgpt_web(*cg);
+    handle_invalid_structured_output(
+        InvalidStructuredOutputContext {
+            this,
+            candidate,
+            index,
+            candidates,
+            elapsed,
+            failed_credentials,
+            failed_models,
+            route_trace,
+            attempt_ctx,
+            attempt_span,
+            plan_ctx,
+            exclude,
+        },
+        response,
+        validation_issue,
+        has_next,
+    )
+    .await
+}
+
+async fn collect_normalized_response_body(
+    response: Response,
+    candidate: &BudgetCandidate,
+    phase: &'static str,
+    span: &tracing::Span,
+) -> Result<(http::response::Parts, bytes::Bytes), ApiError> {
+    let (response_parts, response_body) = response.into_parts();
+    let mut response_bytes = response_body
+        .collect()
+        .await
+        .map_err(InternalError::CollectBodyError)?
+        .to_bytes();
+    normalize_markdown_fenced_json(candidate, phase, span, &mut response_bytes);
+    Ok((response_parts, response_bytes))
+}
+
+fn normalize_markdown_fenced_json(
+    candidate: &BudgetCandidate,
+    phase: &'static str,
+    span: &tracing::Span,
+    response_bytes: &mut bytes::Bytes,
+) {
+    if !structured_output::markdown_fenced_json_normalizer_enabled(
+        &candidate.capability.provider,
+    ) {
+        return;
     }
-    Ok(Some(response))
+    let Some(normalized) =
+        structured_output::normalize_markdown_fenced_json_response(
+            response_bytes,
+        )
+    else {
+        return;
+    };
+
+    *response_bytes = normalized;
+    span.record("structured_output_normalization", "markdown_fenced_json");
+    tracing::warn!(
+        credential = %candidate.credential_id,
+        provider = %candidate.capability.provider,
+        model = %candidate.capability.model,
+        phase,
+        normalization = "markdown_fenced_json",
+        "applied semi-heuristic structured JSON normalization"
+    );
+}
+
+struct InvalidStructuredOutputContext<'a> {
+    this: &'a BudgetAwareRouter,
+    candidate: &'a BudgetCandidate,
+    index: usize,
+    candidates: &'a [BudgetCandidate],
+    elapsed: std::time::Duration,
+    failed_credentials: &'a mut HashSet<ProviderCredentialId>,
+    failed_models: &'a mut HashSet<ModelCooldownKey>,
+    route_trace: &'a mut trace::RouteTrace,
+    attempt_ctx: &'a crate::types::extensions::UpstreamAttemptContext,
+    attempt_span: &'a tracing::Span,
+    plan_ctx: Option<&'a crate::types::extensions::RoutePlanContext>,
+    exclude: &'a mut std::collections::HashSet<(String, String)>,
+}
+
+async fn handle_invalid_structured_output(
+    ctx: InvalidStructuredOutputContext<'_>,
+    mut response: Response,
+    validation_issue: Option<web_structured_output::StructuredOutputIssue>,
+    has_next: bool,
+) -> Result<Option<Response>, ApiError> {
+    mark_invalid_structured_output(&mut response);
+    if has_next {
+        let decision = fail_over_candidate(
+            ctx.this,
+            ctx.candidate,
+            &ctx.candidates[ctx.index + 1..],
+            response,
+            ctx.elapsed,
+            "structured_output",
+            ctx.failed_credentials,
+            ctx.failed_models,
+            ctx.attempt_ctx,
+            ctx.route_trace,
+            ctx.attempt_span,
+            ctx.plan_ctx,
+            ctx.exclude,
+        )
+        .await;
+        ctx.route_trace.record_skipped(decision.skipped);
+        return Ok(None);
+    }
+
+    let failure_fields = record_attempt_failure_fields(
+        response.status(),
+        &response,
+        ctx.attempt_span,
+    );
+    let _ = ctx
+        .this
+        .record_failure(
+            &ctx.candidate.credential_id,
+            &ctx.candidate.capability.provider,
+            &ctx.candidate.capability.model.to_string(),
+            response,
+            ctx.elapsed,
+        )
+        .await;
+    if let Some(fields) = failure_fields {
+        ctx.route_trace.record_failure_trace_fields(&fields);
+    }
+    ctx.failed_credentials
+        .insert(ctx.candidate.credential_id.clone());
+    tracing::warn!(
+        credential = %ctx.candidate.credential_id,
+        provider = %ctx.candidate.capability.provider,
+        model = %ctx.candidate.capability.model,
+        validation_issue = ?validation_issue,
+        "provider returned invalid structured JSON on last candidate"
+    );
+    Err(ApiError::Internal(
+        InternalError::InvalidStructuredJsonAfterReflection,
+    ))
+}
+
+struct ReflectorContext<'a> {
+    candidate: &'a BudgetCandidate,
+    parts: &'a Parts,
+    request_body: &'a bytes::Bytes,
+    response_body: &'a bytes::Bytes,
+    requirements: &'a RequestRequirements,
+    attempt_ctx: &'a crate::types::extensions::UpstreamAttemptContext,
+    route_trace: &'a mut trace::RouteTrace,
+}
+
+async fn try_schema_conformance_reflector(
+    ctx: ReflectorContext<'_>,
+) -> Result<Option<Response>, ApiError> {
+    if !structured_output::schema_conformance_reflector_enabled(
+        &ctx.candidate.capability.provider,
+    ) {
+        return Ok(None);
+    }
+    let Some(repair_body) =
+        structured_output::build_schema_conformance_reflection_request(
+            ctx.request_body,
+            ctx.response_body,
+        )
+    else {
+        tracing::warn!(
+            provider = %ctx.candidate.capability.provider,
+            model = %ctx.candidate.capability.model,
+            "schema conformance reflector could not build repair request"
+        );
+        return Ok(None);
+    };
+
+    let repair_span = info_span!(
+        parent: ctx.route_trace.route_span(),
+        "gateway.structured_output.reflector",
+        provider = %ctx.candidate.capability.provider,
+        credential = %ctx.candidate.credential_id,
+        model = %ctx.candidate.capability.model,
+        attempt_index = ctx.attempt_ctx.attempt_index,
+        status_code = tracing::field::Empty,
+        valid = tracing::field::Empty,
+        validation_issue = tracing::field::Empty,
+        structured_output_normalization = tracing::field::Empty,
+    );
+    let instrument_span = repair_span.clone();
+    execute_schema_conformance_reflector(ctx, repair_body, repair_span)
+        .instrument(instrument_span)
+        .await
+}
+
+async fn execute_schema_conformance_reflector(
+    ctx: ReflectorContext<'_>,
+    repair_body: bytes::Bytes,
+    repair_span: tracing::Span,
+) -> Result<Option<Response>, ApiError> {
+    tracing::info!("schema conformance reflector started");
+    let mut repair_req =
+        Request::from_parts(ctx.parts.clone(), Body::from(repair_body));
+    repair_req.extensions_mut().insert(ctx.attempt_ctx.clone());
+
+    let repair_response =
+        call::call_candidate(ctx.candidate, repair_req).await?;
+    let status = repair_response.status();
+    repair_span.record("status_code", u64::from(status.as_u16()));
+    if !status.is_success() {
+        repair_span.record("valid", false);
+        tracing::warn!(
+            status = status.as_u16(),
+            "schema conformance reflector upstream call failed"
+        );
+        return Ok(None);
+    }
+
+    let (parts, repair_bytes) = collect_normalized_response_body(
+        repair_response,
+        ctx.candidate,
+        "reflector",
+        &repair_span,
+    )
+    .await?;
+    let validation = structured_output::validate_structured_output(
+        ctx.requirements,
+        &ctx.candidate.capability,
+        ctx.request_body,
+        &repair_bytes,
+    );
+    repair_span.record("valid", validation.is_valid_or_skipped());
+    if !validation.is_valid_or_skipped() {
+        let validation_issue = validation.issue();
+        repair_span.record(
+            "validation_issue",
+            tracing::field::display(format!("{validation_issue:?}")),
+        );
+        tracing::warn!(
+            provider = %ctx.candidate.capability.provider,
+            credential = %ctx.candidate.credential_id,
+            model = %ctx.candidate.capability.model,
+            phase = "reflector",
+            validation_issue = ?validation_issue,
+            "schema conformance reflector returned invalid structured JSON"
+        );
+        return Ok(None);
+    }
+
+    tracing::info!("schema conformance reflector repaired response");
+    Ok(Some(Response::from_parts(parts, Body::from(repair_bytes))))
 }
 
 fn mark_invalid_structured_output(response: &mut Response) {
@@ -679,7 +1072,7 @@ async fn fail_over_candidate(
     attempt_span: &tracing::Span,
     plan_ctx: Option<&crate::types::extensions::RoutePlanContext>,
     exclude: &mut std::collections::HashSet<(String, String)>,
-) -> usize {
+) -> FailoverDecision {
     let status = response.status();
     let model = candidate.capability.model.to_string();
     if status == http::StatusCode::TOO_MANY_REQUESTS && !attempt.admit_feasible
@@ -827,21 +1220,40 @@ async fn fail_over_candidate(
                 credential_id: candidate.credential_id.clone(),
                 model,
             });
-            0
+            FailoverDecision {
+                skipped: 0,
+                response,
+                failure_trace,
+            }
         }
         ExhaustionScope::Slot => {
             failed_credentials.insert(candidate.credential_id.clone());
-            0
+            FailoverDecision {
+                skipped: 0,
+                response,
+                failure_trace,
+            }
         }
         ExhaustionScope::Project => {
             failed_credentials.insert(candidate.credential_id.clone());
-            skip_free_siblings_on_exhaustion(
+            let skipped = skip_free_siblings_on_exhaustion(
                 candidate,
                 remaining_candidates,
                 failed_credentials,
-            )
+            );
+            FailoverDecision {
+                skipped,
+                response,
+                failure_trace,
+            }
         }
     }
+}
+
+struct FailoverDecision {
+    skipped: usize,
+    response: Response,
+    failure_trace: Option<trace::FailureTraceFields>,
 }
 
 fn skip_free_siblings_on_exhaustion(

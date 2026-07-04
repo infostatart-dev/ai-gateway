@@ -121,14 +121,63 @@ impl Executor {
             .browser_session
             .clone()
             .unwrap_or_else(|| BrowserSession::from_token(user_token.clone()));
+        let mut attempt = 0u8;
+        loop {
+            let result = self
+                .execute_with_session(
+                    &req,
+                    &model,
+                    &browser_session,
+                    mode,
+                    schema_spec.as_ref(),
+                    structured_required,
+                    reserved_output,
+                )
+                .await;
+
+            match result {
+                Ok(ok) => return Ok(ok),
+                Err(e @ Error::CredentialRestricted { .. }) => return Err(e),
+                Err(Error::SessionAuth(_)) if attempt == 0 => {
+                    attempt += 1;
+                    invalidate_token_cache(&user_token);
+                    tracing::warn!(
+                        browser_session_bundle =
+                            browser_session.has_browser_context(),
+                        "deepseek-web session auth failed; refreshing access \
+                         token and retrying once"
+                    );
+                    continue;
+                }
+                Err(e) => {
+                    if matches!(e, Error::SessionAuth(_)) {
+                        invalidate_token_cache(&user_token);
+                    }
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn execute_with_session(
+        &self,
+        req: &ExecuteRequest,
+        model: &str,
+        browser_session: &BrowserSession,
+        mode: Option<StructuredOutputMode>,
+        schema_spec: Option<&web_structured_output::JsonSchemaSpec>,
+        structured_required: bool,
+        reserved_output: u32,
+    ) -> Result<ExecuteResult, Error> {
         let (access, session_id) = async {
             let access =
-                exchange_browser_session(self.fetch.as_ref(), &browser_session)
+                exchange_browser_session(self.fetch.as_ref(), browser_session)
                     .await?;
             let session_id = create_session_with_browser(
                 self.fetch.as_ref(),
                 &access.token,
-                Some(&browser_session),
+                Some(browser_session),
             )
             .await?;
             Ok::<_, Error>((access, session_id))
@@ -146,13 +195,13 @@ impl Executor {
                 .then(|| retry_suffix_for(last_issue));
             match self
                 .run_planned_turns(
-                    &req,
-                    &model,
+                    req,
+                    model,
                     &access.token,
                     &session_id,
-                    &browser_session,
+                    browser_session,
                     &pow_cache,
-                    schema_spec.as_ref(),
+                    schema_spec,
                     mode,
                     reserved_output,
                     retry_suffix,
@@ -162,10 +211,8 @@ impl Executor {
                 Ok((response, _raw_sse, stats))
                     if structured_required && !req.stream =>
                 {
-                    let issue = check_structured_response(
-                        &response,
-                        schema_spec.as_ref(),
-                    );
+                    let issue =
+                        check_structured_response(&response, schema_spec);
                     if let Some(i) = issue {
                         last_issue = Some(i);
                         if structured_attempt < MAX_STRUCTURED_RETRIES {
@@ -185,7 +232,7 @@ impl Executor {
                 }
                 Ok((response, raw_sse, stats)) if req.stream => {
                     let body = raw_sse
-                        .map(|raw| transform_sse_to_openai(&raw, &model))
+                        .map(|raw| transform_sse_to_openai(&raw, model))
                         .unwrap_or_else(|| {
                             serde_json::to_vec(&response).unwrap_or_default()
                         });
@@ -211,19 +258,11 @@ impl Executor {
             self.fetch.as_ref(),
             &access.token,
             &session_id,
-            Some(&browser_session),
+            Some(browser_session),
         )
         .await;
 
-        match result {
-            Ok(ok) => Ok(ok),
-            Err(e) => {
-                if matches!(e, Error::SessionAuth(_)) {
-                    invalidate_token_cache(&user_token);
-                }
-                Err(e)
-            }
-        }
+        result
     }
 
     #[allow(clippy::too_many_arguments)]

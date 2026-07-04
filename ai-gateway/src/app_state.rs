@@ -112,6 +112,13 @@ impl AppState {
     }
 
     #[must_use]
+    pub fn route_leases(
+        &self,
+    ) -> &Arc<crate::router::budget_aware::InFlightRouteRegistry> {
+        &self.0.route_leases
+    }
+
+    #[must_use]
     pub fn credential_health(
         &self,
     ) -> &Arc<crate::router::budget_aware::CredentialHealthRegistry> {
@@ -186,6 +193,7 @@ pub struct InnerAppState {
     pub upstream_pacing: Arc<crate::router::pacing::PacingRegistry>,
     pub budget_probe: Arc<crate::router::budget_probe::BudgetProbeRegistry>,
     pub route_memory: Arc<crate::router::budget_aware::WorkUnitRouteMemory>,
+    pub route_leases: Arc<crate::router::budget_aware::InFlightRouteRegistry>,
 }
 
 impl fmt::Debug for InnerAppState {

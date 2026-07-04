@@ -99,9 +99,12 @@ async fn ordered_candidates_include_chatgpt_for_unmapped_model() {
         .ordered_candidates(&requirements, Some(&source))
         .expect("candidates");
 
-    assert_eq!(candidates.len(), 1);
-    assert_eq!(
-        candidates[0].capability.provider,
-        InferenceProvider::Named("chatgpt-web".into())
-    );
+    assert!(!candidates.is_empty());
+    assert!(candidates.iter().all(|candidate| {
+        candidate.capability.provider
+            == InferenceProvider::Named("chatgpt-web".into())
+    }));
+    assert!(candidates.iter().any(|candidate| {
+        candidate.capability.model.to_string() == source.to_string()
+    }));
 }

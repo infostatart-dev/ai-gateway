@@ -41,6 +41,41 @@ impl PacingRegistry {
         self.catalog.pacing_limits_for(provider)
     }
 
+    #[must_use]
+    pub fn limits_for_candidate(
+        &self,
+        provider: &InferenceProvider,
+        tier: Option<&str>,
+        model: Option<&str>,
+    ) -> Option<PacingLimits> {
+        if self.catalog.quota_profile(provider)
+            == ProviderQuotaProfile::PerModel
+        {
+            return PacingLimits::resolve_for_model(
+                &self.catalog,
+                provider,
+                tier?,
+                model?,
+            );
+        }
+        self.limits_for(provider)
+    }
+
+    #[must_use]
+    pub fn scope_key_for(
+        &self,
+        provider: &InferenceProvider,
+        credential_id: Option<&ProviderCredentialId>,
+        tier: Option<&str>,
+        model: Option<&str>,
+    ) -> Option<String> {
+        let quota_profile = self.catalog.quota_profile(provider);
+        let _limits = self.limits_for_candidate(provider, tier, model)?;
+        let scope =
+            resolve_pacing_scope(provider, credential_id, model, quota_profile);
+        Some(pacing_scope_key(&scope))
+    }
+
     pub fn gate_for(
         &self,
         provider: &InferenceProvider,

@@ -26,7 +26,7 @@ edition = "2024"
 authors = [ "Thomas Harmon <tom@helicone.ai>, Justin Torre <justin@helicone.ai>, Kavin Desi Valli <kavin@helicone.ai>, Charlie Wu <charlie@helicone.ai>", "Helicone Developers" ]
 license = "Apache-2.0"
 publish = false
-version = "0.6.6"
+version = "0.6.7"
 
 
 [profile.release]
@@ -113,6 +113,7 @@ opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
 opentelemetry-appender-tracing = "0.31.0"
 opentelemetry-http = "0.31.0"
 opentelemetry-otlp = { version = "0.31.0", default-features = false }
+opentelemetry-prometheus = "0.31.0"
 opentelemetry-semantic-conventions = "0.31.0"
 opentelemetry-stdout = { version = "0.31.0" }
 opentelemetry-instrumentation-tower = "0.17.0"
@@ -120,6 +121,7 @@ opentelemetry-system-metrics = { version = "0.31.0" }
 pin-project = "1.1.11"
 pin-project-lite = "0.2.17"
 pretty_assertions = "1.4.1"
+prometheus = "0.14"
 r2d2 = "0.8.10"
 rand = "0.9.1"
 redis = { version = "0.32.4" }

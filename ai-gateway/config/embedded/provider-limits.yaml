@@ -716,6 +716,27 @@ opencode:
                 rpm: 20
                 rpd: 200
 
+llm7:
+  cooldown:
+    provider-error: 20s
+    quota-exhausted: 24h
+  observed-at: "2026-07-04"
+  scope: api-key
+  source: llm7-docs-models-api
+  notes:
+    - Requires an LLM7 API token for the configured free-token account.
+    - LLM7 docs classify free-token/anonymous models as `turbo`; `pro` models require subscription or balance.
+    - Use selectors `default` or `fast` for routing stability; concrete turbo ids can rotate.
+  tiers:
+    free:
+      endpoints:
+        chat-completions:
+          models:
+            all:
+              limits:
+                rpm: 20
+                rpd: 200
+
 github-models:
   cooldown:
     provider-error: 30s

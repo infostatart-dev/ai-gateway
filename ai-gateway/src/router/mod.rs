@@ -5,6 +5,7 @@ pub mod direct;
 pub mod failover;
 pub mod intent;
 pub mod latency;
+pub mod managed;
 pub mod meta;
 pub mod pacing;
 pub mod provider_attempt;

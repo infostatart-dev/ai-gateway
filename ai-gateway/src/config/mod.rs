@@ -10,6 +10,7 @@ pub mod credentials;
 pub mod database;
 pub mod deepseek_web;
 pub mod deployment_target;
+pub mod dev_overrides;
 pub mod discover;
 pub mod dispatcher;
 pub mod helicone;

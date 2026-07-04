@@ -10,6 +10,7 @@ use indexmap::IndexMap;
 
 use super::{
     credential_balance::CredentialRoundRobin,
+    lease::RouteLease,
     types::{BudgetAwareRouter, BudgetCandidate, CandidateSelectionMode},
 };
 use crate::{
@@ -204,6 +205,17 @@ pub fn ordered_candidates_for_source(
     source_model: &ModelId,
 ) -> Result<Vec<BudgetCandidate>, crate::error::internal::InternalError> {
     router.ordered_candidates(requirements, Some(source_model))
+}
+
+#[must_use]
+pub fn hold_candidate_route_lease(
+    router: &BudgetAwareRouter,
+    candidate: &BudgetCandidate,
+) -> Option<RouteLease> {
+    router
+        .try_acquire_route_lease(candidate, false)
+        .ok()
+        .flatten()
 }
 
 pub async fn gemini_model_candidate(

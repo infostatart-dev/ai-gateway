@@ -89,13 +89,13 @@ impl AuthService {
                         Err(AuthError::InvalidCredentials.into())
                     }
                 }
-                RequestKind::UnifiedApi | RequestKind::DirectProxy => {
-                    Ok(AuthContext {
-                        api_key: Secret::from(api_key_without_bearer),
-                        user_id: key.owner_id,
-                        org_id: key.organization_id,
-                    })
-                }
+                RequestKind::UnifiedApi
+                | RequestKind::DirectProxy
+                | RequestKind::Managed => Ok(AuthContext {
+                    api_key: Secret::from(api_key_without_bearer),
+                    user_id: key.owner_id,
+                    org_id: key.organization_id,
+                }),
             }
         } else {
             let Some(control_plane_state) =

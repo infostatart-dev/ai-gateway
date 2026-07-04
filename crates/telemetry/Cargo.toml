@@ -14,8 +14,10 @@ opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
 opentelemetry-otlp = { workspace = true, features = ["grpc-tonic", "trace", "metrics", "logs", "internal-logs"] }
+opentelemetry-prometheus = { workspace = true }
 opentelemetry-appender-tracing = { workspace = true }
 opentelemetry-http = { workspace = true }
+prometheus = { workspace = true }
 serde = { workspace = true }
 tower-http = { workspace = true, features = ['request-id'] }
 tower = { workspace = true}

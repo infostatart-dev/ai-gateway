@@ -118,6 +118,9 @@ pub(super) struct RouteTrace {
     terminal_attempt_started: Option<Instant>,
     terminal_model: Option<String>,
     terminal_stream: bool,
+    terminal_failure_stage: Option<String>,
+    terminal_error_source: Option<String>,
+    terminal_error_class: Option<String>,
     estimated_usage: TokenUsage,
 }
 
@@ -158,6 +161,9 @@ impl RouteTrace {
             terminal_attempt_started: None,
             terminal_model: None,
             terminal_stream: false,
+            terminal_failure_stage: None,
+            terminal_error_source: None,
+            terminal_error_class: None,
             estimated_usage,
         }
     }
@@ -205,11 +211,18 @@ impl RouteTrace {
         attempt_span: Span,
         attempt_started: Instant,
         stream: bool,
+        failure: Option<&FailureTraceFields>,
     ) {
         self.terminal_attempt_span = Some(attempt_span);
         self.terminal_attempt_started = Some(attempt_started);
         self.terminal_model = Some(candidate.capability.model.to_string());
         self.terminal_stream = stream;
+        self.terminal_failure_stage =
+            failure.map(|fields| fields.failure_stage.to_string());
+        self.terminal_error_source =
+            failure.map(|fields| fields.error_source.to_string());
+        self.terminal_error_class =
+            failure.map(|fields| fields.error_class.clone());
     }
 
     pub(super) fn record_failure_signal(
@@ -381,6 +394,9 @@ impl RouteTrace {
                 attempt_started: self.terminal_attempt_started,
                 terminal_model: self.terminal_model.clone(),
                 stream: self.terminal_stream,
+                failure_stage: self.terminal_failure_stage.clone(),
+                error_source: self.terminal_error_source.clone(),
+                error_class: self.terminal_error_class.clone(),
             }),
         }
     }
@@ -605,17 +621,17 @@ impl RouteTraceBodyState {
                 output_tokens = usage.output.unwrap_or(0),
                 usage_source,
                 failure_stage = self
-                    .pending
+                    .finalize
                     .failure_stage
                     .as_deref()
                     .unwrap_or("none"),
                 error_source = self
-                    .pending
+                    .finalize
                     .error_source
                     .as_deref()
                     .unwrap_or("none"),
                 error_class = self
-                    .pending
+                    .finalize
                     .error_class
                     .as_deref()
                     .unwrap_or("none"),
@@ -794,6 +810,9 @@ mod tests {
                 attempt_started: Some(Instant::now()),
                 terminal_model: Some("test-model".to_string()),
                 stream: false,
+                failure_stage: None,
+                error_source: None,
+                error_class: None,
             }),
         }
     }
@@ -850,6 +869,91 @@ mod tests {
         assert_eq!(pending.candidates, 3);
         assert_eq!(pending.plan_rebuilds, Some(1));
         assert_eq!(pending.outcome_label, "success");
+    }
+
+    #[test]
+    fn terminal_success_finalize_does_not_inherit_prior_failover_error() {
+        let mut trace = RouteTrace::new_with_plan(
+            1,
+            None,
+            Span::none(),
+            TokenUsage::default(),
+        );
+        let prior_failure = FailureTraceFields {
+            failure_stage: "structured_output",
+            error_source: "gateway",
+            error_class: "invalid_structured_json".to_string(),
+        };
+        trace.record_failure_trace_fields(&prior_failure);
+        trace.terminal_attempt_span = Some(Span::none());
+        trace.terminal_attempt_started = Some(Instant::now());
+        trace.terminal_model = Some("winner-model".to_string());
+        trace.terminal_stream = false;
+
+        let outcome = RouteOutcome {
+            label: "success",
+            provider: None,
+            credential: None,
+            status: Some(200),
+        };
+        let pending = trace.attach_pending(
+            &RouterId::Named(CompactString::new("autodefault")),
+            "budget-aware-capability-after",
+            &outcome,
+            None,
+        );
+        let finalize = pending.finalize.as_ref().expect("finalize context");
+
+        assert_eq!(pending.failure_stage.as_deref(), Some("structured_output"));
+        assert_eq!(
+            pending.error_class.as_deref(),
+            Some("invalid_structured_json")
+        );
+        assert_eq!(finalize.failure_stage, None);
+        assert_eq!(finalize.error_source, None);
+        assert_eq!(finalize.error_class, None);
+    }
+
+    #[test]
+    fn terminal_failure_finalize_keeps_terminal_error() {
+        let mut trace = RouteTrace::new_with_plan(
+            1,
+            None,
+            Span::none(),
+            TokenUsage::default(),
+        );
+        let terminal_failure = FailureTraceFields {
+            failure_stage: "upstream",
+            error_source: "upstream_provider",
+            error_class: "http_429".to_string(),
+        };
+        trace.terminal_attempt_span = Some(Span::none());
+        trace.terminal_attempt_started = Some(Instant::now());
+        trace.terminal_model = Some("failed-model".to_string());
+        trace.terminal_stream = false;
+        trace.terminal_failure_stage =
+            Some(terminal_failure.failure_stage.to_string());
+        trace.terminal_error_source =
+            Some(terminal_failure.error_source.to_string());
+        trace.terminal_error_class = Some(terminal_failure.error_class);
+
+        let outcome = RouteOutcome {
+            label: "terminal_failure",
+            provider: None,
+            credential: None,
+            status: Some(429),
+        };
+        let pending = trace.attach_pending(
+            &RouterId::Named(CompactString::new("autodefault")),
+            "budget-aware-capability-after",
+            &outcome,
+            None,
+        );
+        let finalize = pending.finalize.as_ref().expect("finalize context");
+
+        assert_eq!(finalize.failure_stage.as_deref(), Some("upstream"));
+        assert_eq!(finalize.error_source.as_deref(), Some("upstream_provider"));
+        assert_eq!(finalize.error_class.as_deref(), Some("http_429"));
     }
 
     #[test]

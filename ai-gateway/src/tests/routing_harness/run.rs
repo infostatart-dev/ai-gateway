@@ -58,6 +58,15 @@ pub async fn run_planned_failover(
     )
     .await;
     if plan.chain.is_empty() {
+        if !pool.is_empty() {
+            return Ok(PlannedResponse {
+                response: crate::router::budget_aware::route_exhausted_response(
+                    std::time::Duration::from_secs(1),
+                ),
+                planned_hops: 0,
+                route_memory_hit: false,
+            });
+        }
         return Err(ApiError::Internal(
             crate::error::internal::InternalError::ProviderNotFound,
         ));

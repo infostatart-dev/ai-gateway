@@ -10,6 +10,7 @@ pub use web_message_budget::{
 pub fn build_conversation_body(
     parsed: &ParsedMessages,
     model_slug: &str,
+    thinking_effort: Option<&str>,
     parent_message_id: &str,
     conversation_id: Option<&str>,
 ) -> Value {
@@ -32,7 +33,7 @@ pub fn build_conversation_body(
         "content": { "content_type": "text", "parts": [parsed.current_msg] },
     }));
 
-    serde_json::json!({
+    let mut body = serde_json::json!({
         "action": "next",
         "messages": messages,
         "model": model_slug,
@@ -42,7 +43,11 @@ pub fn build_conversation_body(
         "history_and_training_disabled": true,
         "suggestions": [],
         "websocket_request_id": uuid::Uuid::new_v4().to_string(),
-    })
+    });
+    if let Some(effort) = thinking_effort {
+        body["thinking_effort"] = Value::String(effort.to_string());
+    }
+    body
 }
 
 #[must_use]

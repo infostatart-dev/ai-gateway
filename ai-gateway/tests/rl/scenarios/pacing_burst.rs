@@ -5,8 +5,6 @@ use ai_gateway::{
     tests::routing::PacingRegistry, types::provider::InferenceProvider,
 };
 
-use crate::rl::support::*;
-
 pub async fn run() {
     let registry = PacingRegistry::new(ProviderLimitCatalog::default());
     let provider = InferenceProvider::Named("chatgpt-web".into());

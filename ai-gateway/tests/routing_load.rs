@@ -120,6 +120,18 @@ routing_load_test!(
     scenarios::route_memory_invalidate_on_429::run
 );
 routing_load_test!(
+    route_lease_single_slot,
+    scenarios::route_lease_single_slot::run
+);
+routing_load_test!(
+    route_lease_exhaustion_returns_429,
+    scenarios::route_lease_exhaustion_returns_429::run
+);
+routing_load_test!(
+    route_trace_client_tags,
+    scenarios::route_trace_client_tags::run
+);
+routing_load_test!(
     admission_zero_repeat_429,
     scenarios::admission_zero_repeat_429::run
 );

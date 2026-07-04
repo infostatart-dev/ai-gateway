@@ -1,4 +1,5 @@
 //! Shared harness imports for routing load scenarios.
+#![allow(unused_imports)]
 
 pub use ai_gateway::tests::routing_harness::{
     agent_header,

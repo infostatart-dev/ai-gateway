@@ -148,6 +148,7 @@ fn autodefault_provider_order() -> Vec<InferenceProvider> {
         InferenceProvider::Named("cerebras".into()),
         InferenceProvider::Named("cloudflare".into()),
         InferenceProvider::Named("sambanova".into()),
+        InferenceProvider::Named("llm7".into()),
         InferenceProvider::Named("inclusionai".into()),
         InferenceProvider::Named("ollama-cloud".into()),
         InferenceProvider::Named("cohere".into()),
@@ -414,6 +415,41 @@ credentials:
             .copied()
             .expect("openrouter in autodefault");
         assert!(openrouter_rank < longcat_rank);
+    }
+
+    #[test]
+    fn autodefault_includes_llm7_when_configured() {
+        let providers = ProvidersConfig::default();
+        let credentials = registry_from_secrets(
+            r#"
+credentials:
+  llm7-default:
+    api-key: llm7-test
+"#,
+        );
+        let llm7 = InferenceProvider::Named("llm7".into());
+        assert!(is_available_for_autodefault(
+            &llm7,
+            &providers,
+            &credentials,
+        ));
+
+        let config = Config {
+            providers: providers.clone(),
+            credentials: credentials.clone(),
+            ..Config::default()
+        };
+        let router =
+            build_autodefault_router(&config).expect("autodefault router");
+        let strategy = router.load_balance.0.get(&EndpointType::Chat).unwrap();
+        let BalanceConfigInner::BudgetAwareCapabilityAfter {
+            provider_priorities,
+            ..
+        } = strategy
+        else {
+            panic!("expected BudgetAwareCapabilityAfter");
+        };
+        assert!(provider_priorities.contains_key(&llm7));
     }
 
     #[test]

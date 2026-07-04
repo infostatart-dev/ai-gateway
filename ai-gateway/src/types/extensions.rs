@@ -97,6 +97,7 @@ pub enum RequestKind {
     Router,
     UnifiedApi,
     DirectProxy,
+    Managed,
 }
 
 /// Per-request routing labels for router runtime OTEL metrics (`router_*`).
@@ -235,6 +236,9 @@ pub struct RouteTraceFinalizeContext {
     pub attempt_started: Option<std::time::Instant>,
     pub terminal_model: Option<String>,
     pub stream: bool,
+    pub failure_stage: Option<String>,
+    pub error_source: Option<String>,
+    pub error_class: Option<String>,
 }
 
 /// Inputs for route-chain replanning during failover.

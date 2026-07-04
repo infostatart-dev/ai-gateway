@@ -136,9 +136,11 @@ impl ModelMapper {
         };
 
         let source_model_name = ModelName::from_model(source_model);
+        let lookup_model_name =
+            lookup_model_name_for_declared_binding(&source_model_name);
         let possible_mappings = model_mapping_config
             .as_ref()
-            .get(&source_model_name)
+            .get(&lookup_model_name)
             .ok_or_else(|| {
                 MapperError::NoModelMapping(
                     target_provider.clone(),
@@ -217,9 +219,11 @@ impl ModelMapper {
         };
 
         let source_model_name = ModelName::from_model(source_model);
+        let lookup_model_name =
+            lookup_model_name_for_declared_binding(&source_model_name);
         let possible_mappings = model_mapping_config
             .as_ref()
-            .get(&source_model_name)
+            .get(&lookup_model_name)
             .ok_or_else(|| {
                 MapperError::NoModelMapping(
                     target_provider.clone(),
@@ -285,6 +289,15 @@ impl ModelMapper {
     }
 }
 
+fn lookup_model_name_for_declared_binding<'a>(
+    source_model_name: &ModelName<'a>,
+) -> ModelName<'a> {
+    crate::declared_models::canonical_mapping_slug(
+        source_model_name.as_ref().as_ref(),
+    )
+    .map_or_else(|| source_model_name.clone(), ModelName::borrowed)
+}
+
 #[cfg(test)]
 mod tests {
     use std::{str::FromStr, sync::Arc};
@@ -316,5 +329,26 @@ mod tests {
             .expect("mapped");
         assert_eq!(mapped.to_string(), "openai/gpt-oss-120b:free");
         assert_ne!(mapped.to_string(), client.to_string());
+    }
+
+    #[tokio::test]
+    async fn declared_stable_gpt55_nano_uses_existing_gateway_lookup_alias() {
+        let app_state = AppState::test_default().await;
+        let router_config = Arc::new(RouterConfig::default());
+        let mapper = ModelMapper::new_for_router(app_state, router_config);
+
+        let declared =
+            ModelId::from_str("openai/gpt-5.5-nano").expect("declared alias");
+        let canonical =
+            ModelId::from_str("openai/gpt-5.4-nano").expect("canonical alias");
+
+        let declared_target = mapper
+            .map_model(&declared, &InferenceProvider::OpenRouter)
+            .expect("declared alias maps");
+        let canonical_target = mapper
+            .map_model(&canonical, &InferenceProvider::OpenRouter)
+            .expect("canonical alias maps");
+
+        assert_eq!(declared_target, canonical_target);
     }
 }
