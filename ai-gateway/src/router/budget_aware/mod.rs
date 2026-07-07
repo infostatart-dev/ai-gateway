@@ -48,14 +48,15 @@ pub use call::{
     clear_test_call_responses, install_upstream_mock, push_test_call_response,
     push_test_call_response_for_credential,
 };
+#[cfg(feature = "testing")]
 pub(crate) use failover_loop::route_exhausted_response;
 #[cfg(feature = "testing")]
 pub use failover_loop::run_failover_candidates;
 pub use health_registry::{CredentialHealthRegistry, RoutingHealthSnapshot};
 pub use lease::InFlightRouteRegistry;
-#[cfg(feature = "testing")]
-pub use memory::RouteBinding;
-pub use memory::{GatewayRouteMemory, RouteMemoryKey, RouteStreamMode};
+pub use memory::{
+    GatewayRouteMemory, RouteBinding, RouteMemoryKey, RouteStreamMode,
+};
 pub(crate) use rank::default_provider_budget_rank;
 #[cfg(feature = "testing")]
 pub use test_support::{

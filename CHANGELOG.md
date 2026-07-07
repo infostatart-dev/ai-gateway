@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.7.3] - 2026-07-07
+
+**Release build correction** — keeps the `0.7.2` routing and observability
+behavior intact while restoring plain release builds without the `testing`
+feature enabled.
+
+### Fixed
+
+- **Release compilation:** route-memory binding types used by production route
+  planning and tracing are exported outside the test-only surface, so Linux
+  release artifacts compile with the default feature set
+- **Clean production warnings:** test-only route-exhaustion helpers are no
+  longer re-exported in non-testing builds
+
 ## [0.7.2] - 2026-07-07
 
 **Route trace integrity and degraded-success policy** — fallback execution,
