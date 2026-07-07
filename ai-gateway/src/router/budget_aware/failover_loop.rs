@@ -105,6 +105,11 @@ pub async fn run_failover_candidates(
         input_tokens = tracing::field::Empty,
         output_tokens = tracing::field::Empty,
         usage_source = tracing::field::Empty,
+        terminal_provider = tracing::field::Empty,
+        terminal_credential = tracing::field::Empty,
+        terminal_model = tracing::field::Empty,
+        terminal_status = tracing::field::Empty,
+        terminal_outcome = tracing::field::Empty,
         failure_stage = tracing::field::Empty,
         error_source = tracing::field::Empty,
         error_class = tracing::field::Empty,
@@ -897,15 +902,18 @@ async fn handle_structured_output_candidate(
         &response_bytes,
     );
     if validation.is_valid_or_skipped() {
-        return Ok(structured_output_success(
+        return Ok(finish_structured_output_success(StructuredOutputSuccess {
             this,
             candidate,
             response,
             elapsed,
-            body_bytes,
-            &response_bytes,
+            request_body: body_bytes,
+            response_body: &response_bytes,
             attempt_ctx,
-        ));
+            agent_name: deferred_agent_name(plan_ctx),
+            outcome: CallOutcome::Success,
+            memory_policy: RouteMemorySuccessPolicy::Full,
+        }));
     }
 
     let validation_issue = validation.issue();
@@ -929,15 +937,18 @@ async fn handle_structured_output_candidate(
         })
         .await?
     {
-        return Ok(structured_output_degraded_success(
+        return Ok(finish_structured_output_success(StructuredOutputSuccess {
             this,
             candidate,
-            reflected_response,
+            response: reflected_response,
             elapsed,
-            body_bytes,
-            &reflected_bytes,
+            request_body: body_bytes,
+            response_body: &reflected_bytes,
             attempt_ctx,
-        ));
+            agent_name: deferred_agent_name(plan_ctx),
+            outcome: CallOutcome::SuccessDegraded,
+            memory_policy: RouteMemorySuccessPolicy::Degraded,
+        }));
     }
     handle_invalid_structured_output(
         InvalidStructuredOutputContext {
@@ -981,53 +992,49 @@ async fn normalized_structured_response(
     ))
 }
 
-fn structured_output_success(
-    this: &BudgetAwareRouter,
-    candidate: &BudgetCandidate,
+struct StructuredOutputSuccess<'a> {
+    this: &'a BudgetAwareRouter,
+    candidate: &'a BudgetCandidate,
     response: Response,
     elapsed: std::time::Duration,
-    request_body: &bytes::Bytes,
-    response_body: &bytes::Bytes,
-    attempt_ctx: &crate::types::extensions::UpstreamAttemptContext,
-) -> CandidateSuccessOutcome {
-    this.record_success(
-        &candidate.credential_id,
-        &candidate.capability.provider,
-        &candidate.capability.model.to_string(),
-        elapsed,
-    );
-    record_deferred_provider_attempt(&DeferredProviderAttempt {
-        this,
-        candidate,
-        attempt: attempt_ctx,
-        status: http::StatusCode::OK,
-        elapsed,
-        request_body,
-        response_body: Some(response_body),
-        outcome: CallOutcome::Success,
-        failover_class: None,
-    });
-    CandidateSuccessOutcome::Success {
-        response,
-        memory_policy: RouteMemorySuccessPolicy::Full,
-    }
+    request_body: &'a bytes::Bytes,
+    response_body: &'a bytes::Bytes,
+    attempt_ctx: &'a crate::types::extensions::UpstreamAttemptContext,
+    agent_name: Option<&'a str>,
+    outcome: CallOutcome,
+    memory_policy: RouteMemorySuccessPolicy,
 }
 
-fn structured_output_degraded_success(
-    this: &BudgetAwareRouter,
-    candidate: &BudgetCandidate,
-    response: Response,
-    elapsed: std::time::Duration,
-    request_body: &bytes::Bytes,
-    response_body: &bytes::Bytes,
-    attempt_ctx: &crate::types::extensions::UpstreamAttemptContext,
+fn finish_structured_output_success(
+    input: StructuredOutputSuccess<'_>,
 ) -> CandidateSuccessOutcome {
-    this.record_success_degraded(
-        &candidate.credential_id,
-        &candidate.capability.provider,
-        &candidate.capability.model.to_string(),
+    let StructuredOutputSuccess {
+        this,
+        candidate,
+        response,
         elapsed,
-    );
+        request_body,
+        response_body,
+        attempt_ctx,
+        agent_name,
+        outcome,
+        memory_policy,
+    } = input;
+    match outcome {
+        CallOutcome::Success => this.record_success(
+            &candidate.credential_id,
+            &candidate.capability.provider,
+            &candidate.capability.model.to_string(),
+            elapsed,
+        ),
+        CallOutcome::SuccessDegraded => this.record_success_degraded(
+            &candidate.credential_id,
+            &candidate.capability.provider,
+            &candidate.capability.model.to_string(),
+            elapsed,
+        ),
+        _ => unreachable!("structured output success used non-success outcome"),
+    }
     record_deferred_provider_attempt(&DeferredProviderAttempt {
         this,
         candidate,
@@ -1036,12 +1043,13 @@ fn structured_output_degraded_success(
         elapsed,
         request_body,
         response_body: Some(response_body),
-        outcome: CallOutcome::SuccessDegraded,
+        outcome,
         failover_class: None,
+        agent_name,
     });
     CandidateSuccessOutcome::Success {
         response,
-        memory_policy: RouteMemorySuccessPolicy::Degraded,
+        memory_policy,
     }
 }
 
@@ -1055,9 +1063,18 @@ struct DeferredProviderAttempt<'a> {
     response_body: Option<&'a bytes::Bytes>,
     outcome: CallOutcome,
     failover_class: Option<FailoverClass>,
+    agent_name: Option<&'a str>,
 }
 
-fn record_deferred_provider_attempt(input: &DeferredProviderAttempt<'_>) {
+fn deferred_agent_name(
+    plan_ctx: Option<&crate::types::extensions::RoutePlanContext>,
+) -> Option<&str> {
+    plan_ctx.map(|ctx| ctx.caller.agent_name.as_str())
+}
+
+fn build_deferred_provider_attempt_record(
+    input: &DeferredProviderAttempt<'_>,
+) -> crate::metrics::provider::AttemptRecord {
     let reported_usage =
         input
             .response_body
@@ -1066,30 +1083,33 @@ fn record_deferred_provider_attempt(input: &DeferredProviderAttempt<'_>) {
                     body, false,
                 )
             });
-    let record =
-        crate::metrics::provider::build_attempt_record(&RecordAttemptInput {
-            provider: &input.candidate.capability.provider,
-            credential: input.candidate.credential_id.as_str(),
-            model: Some(&input.candidate.capability.model),
-            router_id: Some(&input.this.router_id),
-            attempt: Some(input.attempt),
-            status: input.status,
-            stream: false,
-            request_kind: crate::types::extensions::RequestKind::Router,
-            duration_ms: input.elapsed.as_secs_f64() * 1000.0,
-            tfft_ms: None,
-            reported_usage,
-            request_body: Some(input.request_body),
-            estimate_tokens: input
-                .this
-                .app_state
-                .config()
-                .observability
-                .estimate_tokens,
-            failover_class: input.failover_class,
-            semantic_outcome: Some(input.outcome),
-            agent_name: None,
-        });
+    crate::metrics::provider::build_attempt_record(&RecordAttemptInput {
+        provider: &input.candidate.capability.provider,
+        credential: input.candidate.credential_id.as_str(),
+        model: Some(&input.candidate.capability.model),
+        router_id: Some(&input.this.router_id),
+        attempt: Some(input.attempt),
+        status: input.status,
+        stream: false,
+        request_kind: crate::types::extensions::RequestKind::Router,
+        duration_ms: input.elapsed.as_secs_f64() * 1000.0,
+        tfft_ms: None,
+        reported_usage,
+        request_body: Some(input.request_body),
+        estimate_tokens: input
+            .this
+            .app_state
+            .config()
+            .observability
+            .estimate_tokens,
+        failover_class: input.failover_class,
+        semantic_outcome: Some(input.outcome),
+        agent_name: input.agent_name,
+    })
+}
+
+fn record_deferred_provider_attempt(input: &DeferredProviderAttempt<'_>) {
+    let record = build_deferred_provider_attempt_record(input);
     input
         .this
         .app_state
@@ -1257,6 +1277,7 @@ fn record_semantic_model_health(
         response_body: Some(ctx.response_body),
         outcome: CallOutcome::SemanticError,
         failover_class: None,
+        agent_name: deferred_agent_name(ctx.plan_ctx),
     });
     ctx.this.app_state.credential_health().record_model_attempt(
         &ctx.candidate.capability.provider,
@@ -1574,6 +1595,7 @@ async fn fail_over_candidate(
             outcome: semantic_outcome
                 .unwrap_or_else(|| outcome_for_failover(status, class)),
             failover_class: Some(class),
+            agent_name: deferred_agent_name(plan_ctx),
         });
     }
     if let Some(ctx) = plan_ctx
@@ -1797,4 +1819,54 @@ async fn budget_probe_skips(
         );
     }
     skip
+}
+
+#[cfg(all(test, feature = "testing"))]
+mod tests {
+    use std::time::Duration;
+
+    use bytes::Bytes;
+
+    use super::*;
+    use crate::{
+        router::budget_aware::{empty_router, named_model_candidate},
+        types::extensions::UpstreamAttemptContext,
+    };
+
+    #[tokio::test]
+    async fn deferred_provider_attempt_preserves_agent_name() {
+        let app_state = crate::app_state::AppState::test_default().await;
+        let router = empty_router(&app_state);
+        let candidate = named_model_candidate(
+            &app_state,
+            "llm7",
+            "llm7-default",
+            "fast",
+            32_000,
+        )
+        .await;
+        let attempt = UpstreamAttemptContext {
+            attempt_index: 0,
+            upstream_attempts: 1,
+            credential: "llm7-default".to_string(),
+            admit_feasible: true,
+        };
+        let request_body = Bytes::from_static(br#"{"messages":[]}"#);
+
+        let record =
+            build_deferred_provider_attempt_record(&DeferredProviderAttempt {
+                this: &router,
+                candidate: &candidate,
+                attempt: &attempt,
+                status: http::StatusCode::OK,
+                elapsed: Duration::from_millis(12),
+                request_body: &request_body,
+                response_body: None,
+                outcome: CallOutcome::Success,
+                failover_class: None,
+                agent_name: Some("invoker-alpha"),
+            });
+
+        assert_eq!(record.agent_name.as_deref(), Some("invoker-alpha"));
+    }
 }

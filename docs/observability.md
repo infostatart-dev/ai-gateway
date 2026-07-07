@@ -173,5 +173,8 @@ Provider-native usage headers are not stripped; this header is additive.
 
 ## Routing trace
 
-Terminal budget-aware route summaries include `generation_ms_per_output_token`,
-`upstream_attempts`, `terminal_outcome`, and `usage_source` in structured logs.
+Terminal budget-aware route spans include `terminal_provider`,
+`terminal_credential`, `terminal_model`, `terminal_status`,
+`terminal_outcome`, `generation_ms_per_output_token`, and `usage_source`.
+Structured route summaries also include `upstream_attempts` for log-based
+failover inspection.

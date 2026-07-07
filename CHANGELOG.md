@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
-## [0.6.8] - 2026-07-07
+## [0.7.0] - 2026-07-07
 
 **Adaptive provider planning and route-class memory** — budget-aware routing now
 scores and replans across the full configured provider, credential, and model
@@ -56,6 +56,9 @@ upstream candidates.
 - Provider attempt telemetry records semantic structured-output outcomes,
   degraded repaired responses, and failover classes without double-counting the
   same upstream attempt
+- Route spans now keep the terminal executor fields
+  `terminal_provider`, `terminal_credential`, `terminal_model`,
+  `terminal_status`, and `terminal_outcome` for direct Jaeger filtering
 - Release and test automation now use portable `mise` tasks that detect
   available parallelism, keep release flags consistent, and report warning and
   failure summaries for local release validation

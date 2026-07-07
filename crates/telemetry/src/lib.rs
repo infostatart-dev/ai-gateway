@@ -30,6 +30,8 @@ use utils::default_true;
 use uuid::Uuid;
 
 static PROMETHEUS_REGISTRY: OnceLock<prometheus::Registry> = OnceLock::new();
+const MAX_EVENTS_PER_SPAN: u32 = 256;
+const MAX_ATTRIBUTES_PER_SPAN: u32 = 128;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
@@ -347,8 +349,8 @@ fn tracer_provider(
                 // we don't need an exporter here for stdout since we really
                 // just want the tracer to generate trace ids
                 .with_id_generator(UuidGenerator)
-                .with_max_events_per_span(256)
-                .with_max_attributes_per_span(16)
+                .with_max_events_per_span(MAX_EVENTS_PER_SPAN)
+                .with_max_attributes_per_span(MAX_ATTRIBUTES_PER_SPAN)
                 .build())
         }
         Exporter::Otlp | Exporter::Both => {
@@ -360,8 +362,8 @@ fn tracer_provider(
                 .with_resource(resource)
                 .with_batch_exporter(exporter)
                 .with_id_generator(UuidGenerator)
-                .with_max_events_per_span(256)
-                .with_max_attributes_per_span(16)
+                .with_max_events_per_span(MAX_EVENTS_PER_SPAN)
+                .with_max_attributes_per_span(MAX_ATTRIBUTES_PER_SPAN)
                 .build();
             Ok(provider)
         }
@@ -467,10 +469,119 @@ impl IdGenerator for UuidGenerator {
 
 #[cfg(test)]
 mod tests {
-    use super::Config;
+    use std::sync::{Arc, Mutex};
+
+    use opentelemetry::{
+        KeyValue,
+        trace::{Span, Tracer, TracerProvider},
+    };
+    use opentelemetry_sdk::{
+        error::OTelSdkResult,
+        trace::{SdkTracerProvider, SpanData, SpanExporter},
+    };
+
+    use super::{Config, MAX_ATTRIBUTES_PER_SPAN};
+
+    const GATEWAY_ROUTE_SPAN_FIELDS: &[&str] = &[
+        "router_id",
+        "strategy",
+        "agent_name",
+        "work_unit_id",
+        "work_unit_source",
+        "client_subject_id",
+        "client_key_id",
+        "client_plan_id",
+        "source_model",
+        "candidates",
+        "planned_hops",
+        "plan_rebuilds",
+        "route_memory_hit",
+        "route_memory_invalidated",
+        "json_schema_required",
+        "duration_ms",
+        "tfft_ms",
+        "generation_ms_per_output_token",
+        "input_tokens",
+        "output_tokens",
+        "usage_source",
+        "terminal_provider",
+        "terminal_credential",
+        "terminal_model",
+        "terminal_status",
+        "terminal_outcome",
+        "failure_stage",
+        "error_source",
+        "error_class",
+        "response_body_bytes",
+    ];
+
+    #[derive(Clone, Debug, Default)]
+    struct CapturingSpanExporter {
+        spans: Arc<Mutex<Vec<SpanData>>>,
+    }
+
+    impl CapturingSpanExporter {
+        fn finished_spans(&self) -> Vec<SpanData> {
+            self.spans.lock().expect("finished spans").clone()
+        }
+    }
+
+    impl SpanExporter for CapturingSpanExporter {
+        async fn export(&self, mut batch: Vec<SpanData>) -> OTelSdkResult {
+            self.spans
+                .lock()
+                .expect("finished spans")
+                .append(&mut batch);
+            Ok(())
+        }
+    }
 
     #[test]
     fn otlp_logs_default_enabled_for_backward_compatibility() {
         assert!(Config::default().otlp_logs);
+    }
+
+    #[test]
+    fn span_attribute_budget_covers_gateway_route_fields() {
+        assert!(
+            MAX_ATTRIBUTES_PER_SPAN
+                >= u32::try_from(GATEWAY_ROUTE_SPAN_FIELDS.len()).unwrap()
+        );
+        assert!(MAX_ATTRIBUTES_PER_SPAN >= 64);
+    }
+
+    #[test]
+    fn exported_route_span_keeps_all_gateway_route_fields() {
+        let exporter = CapturingSpanExporter::default();
+        let provider = SdkTracerProvider::builder()
+            .with_simple_exporter(exporter.clone())
+            .with_id_generator(super::UuidGenerator)
+            .with_max_events_per_span(super::MAX_EVENTS_PER_SPAN)
+            .with_max_attributes_per_span(MAX_ATTRIBUTES_PER_SPAN)
+            .build();
+        let tracer = provider.tracer("telemetry-test");
+        let mut span = tracer.start("gateway.route");
+
+        for field in GATEWAY_ROUTE_SPAN_FIELDS {
+            span.set_attribute(KeyValue::new(*field, "value"));
+        }
+        span.end();
+        provider.force_flush().unwrap();
+
+        let spans = exporter.finished_spans();
+        let route_span = spans
+            .iter()
+            .find(|span| span.name == "gateway.route")
+            .expect("exported gateway.route span");
+        assert_eq!(route_span.dropped_attributes_count, 0);
+        for field in GATEWAY_ROUTE_SPAN_FIELDS {
+            assert!(
+                route_span
+                    .attributes
+                    .iter()
+                    .any(|attribute| attribute.key.as_str() == *field),
+                "missing exported route span field {field}"
+            );
+        }
     }
 }

@@ -435,8 +435,11 @@ impl RouteTrace {
         );
         let usage_source =
             (!self.estimated_usage.is_empty()).then_some("estimated");
+        let pending =
+            self.attach_pending(router_id, strategy, outcome, intent_context);
+        record_terminal_route_fields(&self.route_span, &pending);
         crate::metrics::provider::emit_pending_route_trace(
-            &self.attach_pending(router_id, strategy, outcome, intent_context),
+            &pending,
             None,
             usage_source,
         );
@@ -638,6 +641,7 @@ impl RouteTraceBodyState {
             response_body_bytes: self.response_body_bytes,
         };
         record_final_fields(&self.finalize.route_span, route_fields);
+        record_terminal_route_fields(&self.finalize.route_span, &self.pending);
         if let Some(attempt_span) = self.finalize.attempt_span.as_ref() {
             record_final_fields(
                 attempt_span,
@@ -751,6 +755,31 @@ fn record_final_fields(span: &Span, fields: FinalSpanFields<'_>) {
     span.record("response_body_bytes", fields.response_body_bytes);
 }
 
+fn record_terminal_route_fields(span: &Span, pending: &PendingRouteTrace) {
+    let provider = pending
+        .terminal_provider
+        .as_ref()
+        .map_or_else(|| "none".to_string(), ToString::to_string);
+    span.record("terminal_provider", provider.as_str());
+    span.record(
+        "terminal_credential",
+        pending.terminal_credential.as_deref().unwrap_or("none"),
+    );
+    span.record(
+        "terminal_model",
+        pending
+            .finalize
+            .as_ref()
+            .and_then(|finalize| finalize.terminal_model.as_deref())
+            .unwrap_or("none"),
+    );
+    span.record(
+        "terminal_status",
+        u64::from(pending.terminal_status.unwrap_or(0)),
+    );
+    span.record("terminal_outcome", pending.outcome_label);
+}
+
 #[allow(clippy::cast_precision_loss)]
 fn generation_ms_per_output_token(
     duration_ms: f64,
@@ -776,12 +805,109 @@ pub(super) fn request_stream_flag(body: &Bytes) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::HashMap,
+        sync::{Arc, Mutex},
+    };
+
     use compact_str::CompactString;
     use http::StatusCode;
     use http_body_util::BodyExt as _;
+    use tracing::{
+        Subscriber,
+        field::{Field, Visit},
+        instrument::WithSubscriber,
+        span::{Attributes, Id, Record},
+    };
+    use tracing_subscriber::{
+        Layer,
+        layer::{Context, SubscriberExt},
+        registry::LookupSpan,
+    };
 
     use super::*;
-    use crate::types::router::RouterId;
+    use crate::types::{provider::InferenceProvider, router::RouterId};
+
+    #[derive(Clone, Default)]
+    struct SpanRecordCapture {
+        fields: Arc<Mutex<HashMap<String, String>>>,
+    }
+
+    impl SpanRecordCapture {
+        fn fields(&self) -> HashMap<String, String> {
+            self.fields.lock().expect("span records").clone()
+        }
+    }
+
+    impl<S> Layer<S> for SpanRecordCapture
+    where
+        S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+    {
+        fn on_new_span(
+            &self,
+            attrs: &Attributes<'_>,
+            _id: &Id,
+            _ctx: Context<'_, S>,
+        ) {
+            if attrs.metadata().name() == "test.route" {
+                let mut visitor = FieldCapture::default();
+                attrs.record(&mut visitor);
+                self.fields
+                    .lock()
+                    .expect("span records")
+                    .extend(visitor.fields);
+            }
+        }
+
+        fn on_record(&self, id: &Id, values: &Record<'_>, ctx: Context<'_, S>) {
+            let Some(span) = ctx.span(id) else {
+                return;
+            };
+            if span.metadata().name() != "test.route" {
+                return;
+            }
+            let mut visitor = FieldCapture::default();
+            values.record(&mut visitor);
+            self.fields
+                .lock()
+                .expect("span records")
+                .extend(visitor.fields);
+        }
+    }
+
+    #[derive(Default)]
+    struct FieldCapture {
+        fields: HashMap<String, String>,
+    }
+
+    impl FieldCapture {
+        fn insert(&mut self, field: &Field, value: &impl ToString) {
+            self.fields
+                .insert(field.name().to_string(), value.to_string());
+        }
+    }
+
+    impl Visit for FieldCapture {
+        fn record_bool(&mut self, field: &Field, value: bool) {
+            self.insert(field, &value);
+        }
+
+        fn record_i64(&mut self, field: &Field, value: i64) {
+            self.insert(field, &value);
+        }
+
+        fn record_u64(&mut self, field: &Field, value: u64) {
+            self.insert(field, &value);
+        }
+
+        fn record_str(&mut self, field: &Field, value: &str) {
+            self.insert(field, &value);
+        }
+
+        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+            self.insert(field, &format!("{value:?}"));
+        }
+    }
 
     fn pending_with_finalize() -> PendingRouteTrace {
         let route_span = tracing::info_span!(
@@ -792,6 +918,11 @@ mod tests {
             input_tokens = tracing::field::Empty,
             output_tokens = tracing::field::Empty,
             usage_source = tracing::field::Empty,
+            terminal_provider = tracing::field::Empty,
+            terminal_credential = tracing::field::Empty,
+            terminal_model = tracing::field::Empty,
+            terminal_status = tracing::field::Empty,
+            terminal_outcome = tracing::field::Empty,
             response_body_bytes = tracing::field::Empty,
         );
         let attempt_span = tracing::info_span!(
@@ -872,6 +1003,53 @@ mod tests {
 
         let collected = wrapped.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(collected, body);
+    }
+
+    #[tokio::test]
+    async fn route_span_records_terminal_executor_fields() {
+        let capture = SpanRecordCapture::default();
+        let subscriber = tracing_subscriber::registry().with(capture.clone());
+        let provider = InferenceProvider::GoogleGemini;
+
+        async {
+            let mut pending = pending_with_finalize();
+            pending.terminal_provider = Some(provider.clone());
+            pending.terminal_credential = Some("gemini-free-1".to_string());
+            pending.terminal_status = Some(200);
+            let response = http::Response::builder()
+                .status(StatusCode::OK)
+                .body(Body::from(
+                    r#"{"usage":{"prompt_tokens":3,"completion_tokens":5,"total_tokens":8}}"#,
+                ))
+                .unwrap();
+            let response = wrap_response_with_route_trace(response, pending);
+            let _ = response.into_body().collect().await.unwrap();
+        }
+        .with_subscriber(subscriber)
+        .await;
+
+        let fields = capture.fields();
+        let provider_name = provider.to_string();
+        assert_eq!(
+            fields.get("terminal_provider").map(String::as_str),
+            Some(provider_name.as_str())
+        );
+        assert_eq!(
+            fields.get("terminal_credential").map(String::as_str),
+            Some("gemini-free-1")
+        );
+        assert_eq!(
+            fields.get("terminal_model").map(String::as_str),
+            Some("test-model")
+        );
+        assert_eq!(
+            fields.get("terminal_status").map(String::as_str),
+            Some("200")
+        );
+        assert_eq!(
+            fields.get("terminal_outcome").map(String::as_str),
+            Some("success")
+        );
     }
 
     #[test]
