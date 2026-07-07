@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.7.2] - 2026-07-07
+
+**Route trace integrity and degraded-success policy** — fallback execution,
+terminal route summaries, provider attempt accounting, and route memory
+observability now stay aligned when upstream attempts time out, fail before an
+HTTP status, return invalid structured output, or serve the client after a slow
+success path.
+
+### Features
+
+- **Attempt timeout policy:** provider and model limit profiles can declare
+  route-attempt timeouts, allowing the gateway to continue through fallback
+  candidates while keeping the global dispatcher timeout unchanged
+- **Slow-success policy:** provider and model limit profiles can classify slow
+  HTTP 200 responses as degraded successes, so route memory receives a reduced
+  score while the client still receives the valid response
+- **Route summary fields:** route spans and pending traces expose terminal
+  executor fields, attempt totals, failover totals, ordered status/error
+  summaries, last failed binding fields, and route-memory hit, penalty,
+  recorded binding, and policy fields
+
+### Fixed
+
+- **No-status upstream failures:** transport failures and attempt timeouts now
+  enter the normal fallback model instead of bypassing route summary or
+  failover accounting
+- **Terminal no-status freshness:** stale timeout or transport terminals are
+  cleared after later HTTP failovers and applied replans, so exhausted routes do
+  not report an earlier no-status attempt as the terminal outcome
+- **Route memory trace accuracy:** penalized route-memory bindings are recorded
+  only when the binding was actually present and penalized
+- **Structured-output accounting:** invalid, retried, repaired, semantic-error,
+  and reflector-assisted structured-output paths report provider outcomes,
+  model health, and route memory policy without promoting repaired responses to
+  full route-memory confidence
+- **Trace attribute budget:** telemetry exporters allow larger route and
+  attempt spans so terminal and aggregate fields remain available to OTLP and
+  stdout exporters
+
+### Quality
+
+- Regression tests cover transport-error fallback, timeout fallback, terminal
+  timeout, timeout followed by HTTP route exhaustion, semantic terminal failure
+  without failover inflation, slow-success degraded memory, route-memory
+  penalty visibility, route summary aggregation, structured-output provider
+  observability, and exporter attribute budget behavior
+
 ## [0.7.1] - 2026-07-07
 
 **Declared routing catalog and strict-output accounting** — model admission,

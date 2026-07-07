@@ -82,6 +82,7 @@ pub async fn run_planned_failover(
         estimated_tokens,
         route_memory_key: plan.memory_key.clone(),
         route_memory_hit: plan.route_memory_hit,
+        route_memory_hit_binding: plan.route_memory_hit_binding,
         planned_hops: plan.planned_hops,
         source_model: None,
         stream: false,

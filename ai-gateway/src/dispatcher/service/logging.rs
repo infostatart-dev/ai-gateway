@@ -22,8 +22,9 @@ use crate::{
     types::{
         body::{Body, BodyReader},
         extensions::{
-            MapperContext, PendingRouteTrace, PromptContext, RequestContext,
-            RequestKind, RouterRuntimeLabels, UpstreamAttemptContext,
+            MapperContext, PendingRouteTrace, PromptContext,
+            ProviderAttemptPolicy, RequestContext, RequestKind,
+            RouterRuntimeLabels, UpstreamAttemptContext,
         },
         router::RouterId,
     },
@@ -51,6 +52,7 @@ impl Dispatcher {
         upstream_attempt: Option<&UpstreamAttemptContext>,
         credential_id: Option<ProviderCredentialId>,
         provider_metrics_deferred: bool,
+        provider_attempt_policy: Option<ProviderAttemptPolicy>,
     ) {
         let deployment_target =
             self.app_state.config().deployment_target.clone();
@@ -79,6 +81,7 @@ impl Dispatcher {
                 .upstream_attempt(upstream_attempt.cloned())
                 .credential_id(credential_id.clone())
                 .provider_metrics_deferred(provider_metrics_deferred)
+                .provider_attempt_policy(provider_attempt_policy)
                 .build();
             let app_state = self.app_state.clone();
             tokio::spawn(
@@ -113,6 +116,7 @@ impl Dispatcher {
                     .get::<PendingRouteTrace>()
                     .cloned(),
                 provider_metrics_deferred,
+                provider_attempt_policy,
             });
         }
     }
@@ -136,6 +140,7 @@ impl Dispatcher {
             credential_id,
             pending_route_trace,
             provider_metrics_deferred,
+            provider_attempt_policy,
         } = context;
         let mapper_ctx = mapper_ctx.clone();
         let app_state = self.app_state.clone();
@@ -169,6 +174,12 @@ impl Dispatcher {
                     &provider_metric_attrs,
                 );
                 let duration_ms = start_instant.elapsed().as_secs_f64() * 1000.0;
+                let semantic_outcome =
+                    crate::metrics::provider::attempt_outcome_override(
+                        provider_attempt_policy.as_ref(),
+                        response_status,
+                        duration_ms,
+                    );
                 app_state.0.metrics.llm.provider_response_duration.record(
                     duration_ms,
                     &provider_metric_attrs,
@@ -215,7 +226,7 @@ impl Dispatcher {
                         reported_usage,
                         request_body: Some(&req_body_bytes),
                         failover_class: None,
-                        semantic_outcome: None,
+                        semantic_outcome,
                         agent_name: agent_name.as_deref(),
                     });
                 }
@@ -269,7 +280,7 @@ impl Dispatcher {
                             .observability
                             .estimate_tokens,
                         failover_class: None,
-                        semantic_outcome: None,
+                        semantic_outcome,
                         agent_name: agent_name.as_deref(),
                     });
                     let usage_source = match record.usage_source {
@@ -310,4 +321,5 @@ struct MetricsLoggingContext<'a> {
     credential_id: Option<ProviderCredentialId>,
     pending_route_trace: Option<PendingRouteTrace>,
     provider_metrics_deferred: bool,
+    provider_attempt_policy: Option<ProviderAttemptPolicy>,
 }

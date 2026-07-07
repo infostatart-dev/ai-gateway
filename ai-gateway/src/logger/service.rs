@@ -23,8 +23,8 @@ use crate::{
     types::{
         body::BodyReader,
         extensions::{
-            AuthContext, MapperContext, PromptContext, RequestKind,
-            RouterRuntimeLabels, UpstreamAttemptContext,
+            AuthContext, MapperContext, PromptContext, ProviderAttemptPolicy,
+            RequestKind, RouterRuntimeLabels, UpstreamAttemptContext,
         },
         logger::{
             HeliconeLogMetadata, Log, LogMessage, RequestLog, ResponseLog,
@@ -90,6 +90,8 @@ pub struct LoggerService {
     credential_id: Option<ProviderCredentialId>,
     #[builder(default)]
     provider_metrics_deferred: bool,
+    #[builder(default)]
+    provider_attempt_policy: Option<ProviderAttemptPolicy>,
 }
 
 impl LoggerService {
@@ -187,6 +189,14 @@ impl LoggerService {
         }
 
         if !self.provider_metrics_deferred {
+            let duration_ms =
+                self.start_instant.elapsed().as_secs_f64() * 1000.0;
+            let semantic_outcome =
+                crate::metrics::provider::attempt_outcome_override(
+                    self.provider_attempt_policy.as_ref(),
+                    self.response_status,
+                    duration_ms,
+                );
             crate::metrics::provider::record_upstream_attempt(
                 &crate::metrics::provider::DispatchMetricsInput {
                     app_state: &self.app_state,
@@ -198,13 +208,12 @@ impl LoggerService {
                     status: self.response_status,
                     stream: self.mapper_ctx.is_stream,
                     request_kind: self.request_kind,
-                    duration_ms: self.start_instant.elapsed().as_secs_f64()
-                        * 1000.0,
+                    duration_ms,
                     tfft_ms: Some(tfft_duration.as_secs_f64() * 1000.0),
                     reported_usage: usage,
                     request_body: Some(&self.request_body),
                     failover_class: None,
-                    semantic_outcome: None,
+                    semantic_outcome,
                     agent_name: None,
                 },
             );

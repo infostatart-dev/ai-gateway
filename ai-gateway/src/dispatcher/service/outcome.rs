@@ -14,8 +14,9 @@ use crate::{
     types::{
         body::{Body, BodyReader},
         extensions::{
-            MapperContext, PromptContext, RequestContext, RequestKind,
-            RouterRuntimeLabels, UpstreamAttemptContext,
+            MapperContext, PromptContext, ProviderAttemptPolicy,
+            RequestContext, RequestKind, RouterRuntimeLabels,
+            UpstreamAttemptContext,
         },
         provider::InferenceProvider,
         router::RouterId,
@@ -123,6 +124,7 @@ pub struct FinalizeDispatchContext<'a> {
     pub upstream_attempt: Option<UpstreamAttemptContext>,
     pub credential_id: Option<ProviderCredentialId>,
     pub provider_metrics_deferred: bool,
+    pub provider_attempt_policy: Option<ProviderAttemptPolicy>,
 }
 
 impl Dispatcher {
@@ -149,6 +151,7 @@ impl Dispatcher {
             upstream_attempt,
             credential_id,
             provider_metrics_deferred,
+            provider_attempt_policy,
         } = ctx;
 
         tracing::info!(
@@ -238,6 +241,13 @@ impl Dispatcher {
                 (body_reader, tfft_rx, reported_usage, tfft_ms)
             };
 
+        let duration_ms = start_instant.elapsed().as_secs_f64() * 1000.0;
+        let semantic_outcome =
+            crate::metrics::provider::attempt_outcome_override(
+                provider_attempt_policy.as_ref(),
+                response_status,
+                duration_ms,
+            );
         let usage_input = crate::metrics::provider::DispatchMetricsInput {
             app_state: &self.app_state,
             provider: &self.provider,
@@ -248,12 +258,12 @@ impl Dispatcher {
             status: response_status,
             stream: mapper_ctx.is_stream,
             request_kind,
-            duration_ms: start_instant.elapsed().as_secs_f64() * 1000.0,
+            duration_ms,
             tfft_ms,
             reported_usage,
             request_body: Some(&outcome.req_body_bytes),
             failover_class: None,
-            semantic_outcome: None,
+            semantic_outcome,
             agent_name: None,
         };
         crate::metrics::provider::attach_usage_header(
@@ -281,6 +291,7 @@ impl Dispatcher {
             upstream_attempt.as_ref(),
             credential_id,
             provider_metrics_deferred,
+            provider_attempt_policy,
         );
 
         Ok(outcome.response)
@@ -444,6 +455,7 @@ mod finalize_tests {
                     upstream_attempt: None,
                     credential_id: None,
                     provider_metrics_deferred: false,
+                    provider_attempt_policy: None,
                 },
             )
             .await

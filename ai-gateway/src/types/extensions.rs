@@ -126,6 +126,12 @@ pub struct UpstreamAttemptContext {
 #[derive(Debug, Clone, Copy)]
 pub struct DeferredProviderAttemptMetrics;
 
+/// Per-upstream attempt observability policy selected by the router.
+#[derive(Debug, Clone, Copy)]
+pub struct ProviderAttemptPolicy {
+    pub slow_success_threshold: Option<std::time::Duration>,
+}
+
 /// Terminal JSON header payload (`X-Gateway-Provider-Usage`).
 #[derive(Debug, Clone)]
 pub struct GatewayProviderUsageExtension(
@@ -224,11 +230,51 @@ pub struct PendingRouteTrace {
     pub plan_rebuilds: Option<u32>,
     pub route_memory_hit: Option<bool>,
     pub route_memory_invalidated: Option<bool>,
+    pub summary: RouteTraceSummary,
     pub source_model: Option<String>,
     pub json_schema_required: bool,
     pub estimated_usage: crate::metrics::llm::TokenUsage,
     pub replay: Option<PlanReplaySnapshot>,
     pub finalize: Option<RouteTraceFinalizeContext>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RouteTraceSummary {
+    pub route_memory_hit_binding: Option<String>,
+    pub route_memory_penalized_binding: Option<String>,
+    pub route_memory_recorded_binding: Option<String>,
+    pub route_memory_policy: &'static str,
+    pub attempts_total: u32,
+    pub failover_count: u32,
+    pub failed_attempts_total: u32,
+    pub attempt_statuses: String,
+    pub attempt_error_classes: String,
+    pub last_failover_class: Option<String>,
+    pub last_failover_error_class: Option<String>,
+    pub last_failed_provider: Option<String>,
+    pub last_failed_credential: Option<String>,
+    pub last_failed_model: Option<String>,
+}
+
+impl Default for RouteTraceSummary {
+    fn default() -> Self {
+        Self {
+            route_memory_hit_binding: None,
+            route_memory_penalized_binding: None,
+            route_memory_recorded_binding: None,
+            route_memory_policy: "none",
+            attempts_total: 0,
+            failover_count: 0,
+            failed_attempts_total: 0,
+            attempt_statuses: String::new(),
+            attempt_error_classes: String::new(),
+            last_failover_class: None,
+            last_failover_error_class: None,
+            last_failed_provider: None,
+            last_failed_credential: None,
+            last_failed_model: None,
+        }
+    }
 }
 
 /// Span handles and timing anchors kept until the final response body is
@@ -239,6 +285,8 @@ pub struct RouteTraceFinalizeContext {
     pub attempt_span: Option<tracing::Span>,
     pub route_started: std::time::Instant,
     pub attempt_started: Option<std::time::Instant>,
+    pub terminal_provider: Option<InferenceProvider>,
+    pub terminal_credential: Option<String>,
     pub terminal_model: Option<String>,
     pub stream: bool,
     pub failure_stage: Option<String>,
@@ -254,6 +302,8 @@ pub struct RoutePlanContext {
     pub estimated_tokens: u32,
     pub route_memory_key: crate::router::budget_aware::RouteMemoryKey,
     pub route_memory_hit: bool,
+    pub route_memory_hit_binding:
+        Option<crate::router::budget_aware::RouteBinding>,
     pub planned_hops: u32,
     pub source_model: Option<String>,
     pub stream: bool,

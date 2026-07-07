@@ -56,6 +56,10 @@ impl Dispatcher {
             .extensions()
             .get::<crate::types::extensions::DeferredProviderAttemptMetrics>()
             .is_some();
+        let provider_attempt_policy = req
+            .extensions()
+            .get::<crate::types::extensions::ProviderAttemptPolicy>()
+            .copied();
         let credential_id =
             req.extensions().get::<ProviderCredentialId>().cloned();
 
@@ -74,6 +78,7 @@ impl Dispatcher {
             upstream_attempt,
             credential_id: credential_id.clone(),
             provider_metrics_deferred,
+            provider_attempt_policy,
         };
 
         if let Some(ref api_endpoint) = api_endpoint {

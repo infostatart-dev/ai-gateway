@@ -17,14 +17,21 @@ mod test_hooks {
 
     use super::{ApiError, Response};
 
-    type CredentialMockQueue =
-        HashMap<String, VecDeque<Result<Response, ApiError>>>;
-    static MOCK_CALLS: OnceLock<Mutex<VecDeque<Result<Response, ApiError>>>> =
+    pub enum MockCallResponse {
+        Immediate(Result<Response, ApiError>),
+        #[cfg(test)]
+        Delayed(std::time::Duration, Result<Response, ApiError>),
+        #[cfg(test)]
+        Pending,
+    }
+
+    type CredentialMockQueue = HashMap<String, VecDeque<MockCallResponse>>;
+    static MOCK_CALLS: OnceLock<Mutex<VecDeque<MockCallResponse>>> =
         OnceLock::new();
     static CREDENTIAL_MOCK_CALLS: OnceLock<Mutex<CredentialMockQueue>> =
         OnceLock::new();
 
-    fn queue() -> &'static Mutex<VecDeque<Result<Response, ApiError>>> {
+    fn queue() -> &'static Mutex<VecDeque<MockCallResponse>> {
         MOCK_CALLS.get_or_init(|| Mutex::new(VecDeque::new()))
     }
 
@@ -33,7 +40,29 @@ mod test_hooks {
     }
 
     pub fn push(response: Result<Response, ApiError>) {
-        queue().lock().expect("mock call queue").push_back(response);
+        queue()
+            .lock()
+            .expect("mock call queue")
+            .push_back(MockCallResponse::Immediate(response));
+    }
+
+    #[cfg(test)]
+    pub fn push_delayed(
+        delay: std::time::Duration,
+        response: Result<Response, ApiError>,
+    ) {
+        queue()
+            .lock()
+            .expect("mock call queue")
+            .push_back(MockCallResponse::Delayed(delay, response));
+    }
+
+    #[cfg(test)]
+    pub fn push_pending() {
+        queue()
+            .lock()
+            .expect("mock call queue")
+            .push_back(MockCallResponse::Pending);
     }
 
     /// Deprecated: use [`install_upstream_mock`] from `gateway_tests`.
@@ -46,21 +75,18 @@ mod test_hooks {
             .expect("credential mock mutex")
             .entry(credential_id.to_string())
             .or_default()
-            .push_back(response);
+            .push_back(MockCallResponse::Immediate(response));
     }
 
     pub fn install_upstream_mock(script: gateway_tests::UpstreamMockScript) {
         gateway_tests::install_upstream_mock(script);
     }
 
-    pub fn pop(
-        credential_id: &str,
-        model: &str,
-    ) -> Option<Result<Response, ApiError>> {
+    pub fn pop(credential_id: &str, model: &str) -> Option<MockCallResponse> {
         if let Some(response) =
             gateway_tests::pop_upstream_response(credential_id, model)
         {
-            return Some(Ok(response));
+            return Some(MockCallResponse::Immediate(Ok(response)));
         }
         if let Some(response) = credential_queues()
             .lock()
@@ -84,6 +110,11 @@ mod test_hooks {
     }
 
     #[cfg(test)]
+    pub fn queued_len() -> usize {
+        queue().lock().expect("mock call queue").len()
+    }
+
+    #[cfg(test)]
     mod tests {
         use axum_core::body::Body;
         use http::StatusCode;
@@ -97,6 +128,16 @@ mod test_hooks {
                 .unwrap()
         }
 
+        fn unwrap_mock_response(mock: MockCallResponse) -> Response {
+            match mock {
+                MockCallResponse::Immediate(response) => response.expect("ok"),
+                MockCallResponse::Delayed(_, response) => response.expect("ok"),
+                MockCallResponse::Pending => {
+                    panic!("pending mock response has no value")
+                }
+            }
+        }
+
         #[test]
         fn script_precedes_legacy_fifo() {
             clear();
@@ -108,13 +149,14 @@ mod test_hooks {
                     vec![gateway_tests::upstream::ok_chat_completion],
                 ),
             );
-            let response = pop("gemini-free", "gemini-3.1-flash-lite")
-                .expect("script")
-                .expect("ok");
+            let response = unwrap_mock_response(
+                pop("gemini-free", "gemini-3.1-flash-lite").expect("script"),
+            );
             assert_eq!(response.status(), StatusCode::OK);
-            let legacy = pop("gemini-free", "other-model")
-                .expect("legacy fifo for same credential")
-                .expect("ok");
+            let legacy = unwrap_mock_response(
+                pop("gemini-free", "other-model")
+                    .expect("legacy fifo for same credential"),
+            );
             assert_eq!(legacy.status(), StatusCode::OK);
         }
     }
@@ -126,6 +168,12 @@ pub use test_hooks::{
     push as push_test_call_response,
     push_for_credential as push_test_call_response_for_credential,
 };
+#[cfg(all(test, feature = "testing"))]
+pub use test_hooks::{
+    push_delayed as push_delayed_test_call_response,
+    push_pending as push_pending_test_call_response,
+    queued_len as test_call_response_queue_len,
+};
 
 pub(super) async fn call_candidate(
     candidate: &BudgetCandidate,
@@ -136,7 +184,21 @@ pub(super) async fn call_candidate(
         candidate.credential_id.as_str(),
         &candidate.capability.model.to_string(),
     ) {
-        return response;
+        match response {
+            test_hooks::MockCallResponse::Immediate(response) => {
+                return response;
+            }
+            #[cfg(test)]
+            test_hooks::MockCallResponse::Delayed(delay, response) => {
+                tokio::time::sleep(delay).await;
+                return response;
+            }
+            #[cfg(test)]
+            test_hooks::MockCallResponse::Pending => {
+                std::future::pending::<()>().await;
+                unreachable!("pending mock call should not resolve");
+            }
+        }
     }
 
     candidate

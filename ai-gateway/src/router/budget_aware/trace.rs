@@ -22,7 +22,9 @@ use crate::{
     },
     types::{
         body::Body,
-        extensions::{PendingRouteTrace, RouteTraceFinalizeContext},
+        extensions::{
+            PendingRouteTrace, RouteTraceFinalizeContext, RouteTraceSummary,
+        },
         provider::InferenceProvider,
         response::Response,
         router::RouterId,
@@ -57,6 +59,94 @@ pub(super) struct FailureTraceFields {
     pub failure_stage: &'static str,
     pub error_source: &'static str,
     pub error_class: String,
+}
+
+impl FailureTraceFields {
+    pub(super) fn upstream_timeout() -> Self {
+        Self {
+            failure_stage: "transport",
+            error_source: "upstream_transport",
+            error_class: "upstream_timeout".to_string(),
+        }
+    }
+
+    pub(super) fn upstream_incomplete() -> Self {
+        Self {
+            failure_stage: "transport",
+            error_source: "upstream_transport",
+            error_class: "upstream_incomplete".to_string(),
+        }
+    }
+
+    pub(super) fn client_aborted() -> Self {
+        Self {
+            failure_stage: "response_body",
+            error_source: "client",
+            error_class: "client_aborted".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct RouteAttemptSummary {
+    failover_count: u32,
+    failed_attempts_total: u32,
+    attempt_statuses: Vec<u16>,
+    attempt_error_classes: Vec<String>,
+    last_failover_class: Option<String>,
+    last_failover_error_class: Option<String>,
+    last_failed_provider: Option<String>,
+    last_failed_credential: Option<String>,
+    last_failed_model: Option<String>,
+}
+
+impl RouteAttemptSummary {
+    fn record_failed_attempt(
+        &mut self,
+        provider: &InferenceProvider,
+        credential: &ProviderCredentialId,
+        model: &str,
+        status_code: u16,
+        failover_class: Option<&str>,
+        error_class: &str,
+    ) {
+        self.failed_attempts_total =
+            self.failed_attempts_total.saturating_add(1);
+        push_unique(&mut self.attempt_statuses, status_code);
+        push_unique_string(&mut self.attempt_error_classes, error_class);
+        self.last_failed_provider = Some(provider.to_string());
+        self.last_failed_credential = Some(credential.to_string());
+        self.last_failed_model = Some(model.to_string());
+        if let Some(class) = failover_class {
+            self.failover_count = self.failover_count.saturating_add(1);
+            self.last_failover_class = Some(class.to_string());
+            self.last_failover_error_class = Some(error_class.to_string());
+        }
+    }
+
+    fn attempt_statuses(&self) -> String {
+        self.attempt_statuses
+            .iter()
+            .map(u16::to_string)
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
+    fn attempt_error_classes(&self) -> String {
+        self.attempt_error_classes.join(",")
+    }
+}
+
+fn push_unique<T: PartialEq>(values: &mut Vec<T>, value: T) {
+    if !values.contains(&value) {
+        values.push(value);
+    }
+}
+
+fn push_unique_string(values: &mut Vec<String>, value: &str) {
+    if !values.iter().any(|existing| existing == value) {
+        values.push(value.to_string());
+    }
 }
 
 pub(super) fn failure_trace_fields(
@@ -102,6 +192,7 @@ pub(super) struct RouteTrace {
     failure_stage: Option<String>,
     error_source: Option<String>,
     error_class: Option<String>,
+    attempt_summary: RouteAttemptSummary,
     terminal: TerminalRouteContext,
     agent_name: Option<String>,
     work_unit_id: Option<String>,
@@ -110,12 +201,18 @@ pub(super) struct RouteTrace {
     plan_rebuilds: u32,
     route_memory_hit: Option<bool>,
     route_memory_invalidated: bool,
+    route_memory_hit_binding: Option<String>,
+    route_memory_penalized_binding: Option<String>,
+    route_memory_recorded_binding: Option<String>,
+    route_memory_policy: &'static str,
     source_model: Option<String>,
     json_schema_required: bool,
     replay: Option<crate::types::extensions::PlanReplaySnapshot>,
     repeat_429_violations: u32,
     terminal_attempt_span: Option<Span>,
     terminal_attempt_started: Option<Instant>,
+    terminal_provider: Option<InferenceProvider>,
+    terminal_credential: Option<String>,
     terminal_model: Option<String>,
     terminal_stream: bool,
     terminal_failure_stage: Option<String>,
@@ -154,6 +251,7 @@ impl RouteTrace {
             failure_stage: None,
             error_source: None,
             error_class: None,
+            attempt_summary: RouteAttemptSummary::default(),
             terminal: TerminalRouteContext::default(),
             agent_name: plan.map(|p| p.caller.agent_name.clone()),
             work_unit_id: plan.and_then(|p| p.caller.work_unit_id.clone()),
@@ -162,12 +260,22 @@ impl RouteTrace {
             plan_rebuilds: 0,
             route_memory_hit: plan.map(|p| p.route_memory_hit),
             route_memory_invalidated: false,
+            route_memory_hit_binding: plan.and_then(|p| {
+                p.route_memory_hit_binding
+                    .as_ref()
+                    .map(format_route_binding)
+            }),
+            route_memory_penalized_binding: None,
+            route_memory_recorded_binding: None,
+            route_memory_policy: "none",
             source_model: plan.and_then(|p| p.source_model.clone()),
             json_schema_required: plan.is_some_and(|p| p.json_schema_required),
             replay: plan.and_then(|p| p.replay.clone()),
             repeat_429_violations: 0,
             terminal_attempt_span: None,
             terminal_attempt_started: None,
+            terminal_provider: None,
+            terminal_credential: None,
             terminal_model: None,
             terminal_stream: false,
             terminal_failure_stage: None,
@@ -186,12 +294,36 @@ impl RouteTrace {
 
     pub(super) fn set_plan_rebuilds(&mut self, count: u32) {
         self.plan_rebuilds = count;
-        self.route_span.record("plan_rebuilds", count);
     }
 
     pub(super) fn record_route_memory_invalidated(&mut self) {
         self.route_memory_invalidated = true;
-        self.route_span.record("route_memory_invalidated", true);
+    }
+
+    pub(super) fn set_route_memory_hit_binding(
+        &mut self,
+        binding: Option<&crate::router::budget_aware::memory::RouteBinding>,
+    ) {
+        self.route_memory_hit = Some(binding.is_some());
+        self.route_memory_hit_binding = binding.map(format_route_binding);
+    }
+
+    pub(super) fn record_route_memory_penalized(
+        &mut self,
+        binding: &crate::router::budget_aware::memory::RouteBinding,
+    ) {
+        self.route_memory_penalized_binding =
+            Some(format_route_binding(binding));
+    }
+
+    pub(super) fn record_route_memory_recorded(
+        &mut self,
+        binding: &crate::router::budget_aware::memory::RouteBinding,
+        policy: &'static str,
+    ) {
+        self.route_memory_recorded_binding =
+            Some(format_route_binding(binding));
+        self.route_memory_policy = policy;
     }
 
     pub(super) fn record_terminal(
@@ -222,16 +354,33 @@ impl RouteTrace {
         stream: bool,
         failure: Option<&FailureTraceFields>,
     ) {
-        self.terminal_attempt_span = Some(attempt_span);
-        self.terminal_attempt_started = Some(attempt_started);
-        self.terminal_model = Some(candidate.capability.model.to_string());
-        self.terminal_stream = stream;
+        self.record_attempt_identity(
+            candidate,
+            attempt_span,
+            attempt_started,
+            stream,
+        );
         self.terminal_failure_stage =
             failure.map(|fields| fields.failure_stage.to_string());
         self.terminal_error_source =
             failure.map(|fields| fields.error_source.to_string());
         self.terminal_error_class =
             failure.map(|fields| fields.error_class.clone());
+    }
+
+    pub(super) fn record_attempt_identity(
+        &mut self,
+        candidate: &BudgetCandidate,
+        attempt_span: Span,
+        attempt_started: Instant,
+        stream: bool,
+    ) {
+        self.terminal_attempt_span = Some(attempt_span);
+        self.terminal_attempt_started = Some(attempt_started);
+        self.terminal_provider = Some(candidate.capability.provider.clone());
+        self.terminal_credential = Some(candidate.credential_id.to_string());
+        self.terminal_model = Some(candidate.capability.model.to_string());
+        self.terminal_stream = stream;
     }
 
     pub(super) fn record_failure_signal(
@@ -260,11 +409,62 @@ impl RouteTrace {
         self.failure_stage = Some(fields.failure_stage.to_string());
         self.error_source = Some(fields.error_source.to_string());
         self.error_class = Some(fields.error_class.clone());
-        self.route_span
-            .record("failure_stage", fields.failure_stage);
-        self.route_span.record("error_source", fields.error_source);
-        self.route_span
-            .record("error_class", fields.error_class.as_str());
+    }
+
+    pub(super) fn record_failed_attempt(
+        &mut self,
+        candidate: &BudgetCandidate,
+        status: http::StatusCode,
+        failover_class: Option<&str>,
+        fields: &FailureTraceFields,
+    ) {
+        self.record_failure_trace_fields(fields);
+        let model = candidate.capability.model.to_string();
+        self.record_failed_attempt_summary(
+            &candidate.capability.provider,
+            &candidate.credential_id,
+            &model,
+            status.as_u16(),
+            failover_class,
+            fields.error_class.as_str(),
+        );
+    }
+
+    pub(super) fn record_failed_attempt_without_status(
+        &mut self,
+        candidate: &BudgetCandidate,
+        failover_class: Option<&str>,
+        fields: &FailureTraceFields,
+    ) {
+        self.record_failure_trace_fields(fields);
+        let model = candidate.capability.model.to_string();
+        self.record_failed_attempt_summary(
+            &candidate.capability.provider,
+            &candidate.credential_id,
+            &model,
+            0,
+            failover_class,
+            fields.error_class.as_str(),
+        );
+    }
+
+    fn record_failed_attempt_summary(
+        &mut self,
+        provider: &InferenceProvider,
+        credential: &ProviderCredentialId,
+        model: &str,
+        status_code: u16,
+        failover_class: Option<&str>,
+        error_class: &str,
+    ) {
+        self.attempt_summary.record_failed_attempt(
+            provider,
+            credential,
+            model,
+            status_code,
+            failover_class,
+            error_class,
+        );
     }
 
     pub(super) fn record_attempt(&mut self) {
@@ -372,6 +572,8 @@ impl RouteTrace {
         outcome: &RouteOutcome<'_>,
         intent_context: Option<crate::types::extensions::RoutingIntentContext>,
     ) -> PendingRouteTrace {
+        let summary = self.route_summary();
+        self.record_route_summary_fields(&summary);
         PendingRouteTrace {
             router_id: router_id.clone(),
             strategy,
@@ -404,6 +606,7 @@ impl RouteTrace {
             plan_rebuilds: Some(self.plan_rebuilds),
             route_memory_hit: self.route_memory_hit,
             route_memory_invalidated: Some(self.route_memory_invalidated),
+            summary,
             source_model: self.source_model.clone(),
             json_schema_required: self.json_schema_required,
             estimated_usage: self.estimated_usage,
@@ -413,6 +616,8 @@ impl RouteTrace {
                 attempt_span: self.terminal_attempt_span.clone(),
                 route_started: self.started,
                 attempt_started: self.terminal_attempt_started,
+                terminal_provider: self.terminal_provider.clone(),
+                terminal_credential: self.terminal_credential.clone(),
                 terminal_model: self.terminal_model.clone(),
                 stream: self.terminal_stream,
                 failure_stage: self.terminal_failure_stage.clone(),
@@ -420,6 +625,107 @@ impl RouteTrace {
                 error_class: self.terminal_error_class.clone(),
             }),
         }
+    }
+
+    fn route_summary(&self) -> RouteTraceSummary {
+        RouteTraceSummary {
+            route_memory_hit_binding: self.route_memory_hit_binding.clone(),
+            route_memory_penalized_binding: self
+                .route_memory_penalized_binding
+                .clone(),
+            route_memory_recorded_binding: self
+                .route_memory_recorded_binding
+                .clone(),
+            route_memory_policy: self.route_memory_policy,
+            attempts_total: self.attempts,
+            failover_count: self.attempt_summary.failover_count,
+            failed_attempts_total: self.attempt_summary.failed_attempts_total,
+            attempt_statuses: self.attempt_summary.attempt_statuses(),
+            attempt_error_classes: self.attempt_summary.attempt_error_classes(),
+            last_failover_class: self
+                .attempt_summary
+                .last_failover_class
+                .clone(),
+            last_failover_error_class: self
+                .attempt_summary
+                .last_failover_error_class
+                .clone(),
+            last_failed_provider: self
+                .attempt_summary
+                .last_failed_provider
+                .clone(),
+            last_failed_credential: self
+                .attempt_summary
+                .last_failed_credential
+                .clone(),
+            last_failed_model: self.attempt_summary.last_failed_model.clone(),
+        }
+    }
+
+    fn record_route_summary_fields(&self, summary: &RouteTraceSummary) {
+        self.route_span.record("plan_rebuilds", self.plan_rebuilds);
+        self.route_span
+            .record("route_memory_hit", self.route_memory_hit.unwrap_or(false));
+        self.route_span
+            .record("route_memory_invalidated", self.route_memory_invalidated);
+        self.route_span.record(
+            "route_memory_hit_binding",
+            summary
+                .route_memory_hit_binding
+                .as_deref()
+                .unwrap_or("none"),
+        );
+        self.route_span.record(
+            "route_memory_penalized_binding",
+            summary
+                .route_memory_penalized_binding
+                .as_deref()
+                .unwrap_or("none"),
+        );
+        self.route_span.record(
+            "route_memory_recorded_binding",
+            summary
+                .route_memory_recorded_binding
+                .as_deref()
+                .unwrap_or("none"),
+        );
+        self.route_span
+            .record("route_memory_policy", summary.route_memory_policy);
+        self.route_span
+            .record("attempts_total", summary.attempts_total);
+        self.route_span
+            .record("failover_count", summary.failover_count);
+        self.route_span
+            .record("failed_attempts_total", summary.failed_attempts_total);
+        self.route_span
+            .record("attempt_statuses", summary.attempt_statuses.as_str());
+        self.route_span.record(
+            "attempt_error_classes",
+            summary.attempt_error_classes.as_str(),
+        );
+        self.route_span.record(
+            "last_failover_class",
+            summary.last_failover_class.as_deref().unwrap_or("none"),
+        );
+        self.route_span.record(
+            "last_failover_error_class",
+            summary
+                .last_failover_error_class
+                .as_deref()
+                .unwrap_or("none"),
+        );
+        self.route_span.record(
+            "last_failed_provider",
+            summary.last_failed_provider.as_deref().unwrap_or("none"),
+        );
+        self.route_span.record(
+            "last_failed_credential",
+            summary.last_failed_credential.as_deref().unwrap_or("none"),
+        );
+        self.route_span.record(
+            "last_failed_model",
+            summary.last_failed_model.as_deref().unwrap_or("none"),
+        );
     }
 
     pub(super) fn emit(
@@ -503,6 +809,12 @@ fn format_plan_hops(
         })
         .collect::<Vec<_>>()
         .join(" -> ")
+}
+
+fn format_route_binding(
+    binding: &crate::router::budget_aware::memory::RouteBinding,
+) -> String {
+    format!("{}/{}", binding.credential_id, binding.model)
 }
 
 type BoxedBodyDataStream = Pin<
@@ -687,6 +999,19 @@ impl RouteTraceBodyState {
             Some(usage_source),
         );
     }
+
+    fn finish_with_failure(
+        &mut self,
+        outcome_label: &'static str,
+        fields: FailureTraceFields,
+    ) {
+        self.pending.outcome_label = outcome_label;
+        self.pending.terminal_status = None;
+        self.finalize.failure_stage = Some(fields.failure_stage.to_string());
+        self.finalize.error_source = Some(fields.error_source.to_string());
+        self.finalize.error_class = Some(fields.error_class);
+        self.finish();
+    }
 }
 
 fn resolve_final_usage(
@@ -704,7 +1029,13 @@ fn resolve_final_usage(
 
 impl Drop for RouteTraceBodyState {
     fn drop(&mut self) {
-        self.finish();
+        if self.finished {
+            return;
+        }
+        self.finish_with_failure(
+            "client_aborted",
+            FailureTraceFields::client_aborted(),
+        );
     }
 }
 
@@ -718,7 +1049,10 @@ fn route_trace_body_stream(
                 Some((Ok(chunk), state))
             }
             Some(Err(error)) => {
-                state.finish();
+                state.finish_with_failure(
+                    "upstream_incomplete",
+                    FailureTraceFields::upstream_incomplete(),
+                );
                 Some((Err(error), state))
             }
             None => {
@@ -759,11 +1093,25 @@ fn record_terminal_route_fields(span: &Span, pending: &PendingRouteTrace) {
     let provider = pending
         .terminal_provider
         .as_ref()
+        .or_else(|| {
+            pending
+                .finalize
+                .as_ref()
+                .and_then(|finalize| finalize.terminal_provider.as_ref())
+        })
         .map_or_else(|| "none".to_string(), ToString::to_string);
     span.record("terminal_provider", provider.as_str());
     span.record(
         "terminal_credential",
-        pending.terminal_credential.as_deref().unwrap_or("none"),
+        pending
+            .terminal_credential
+            .as_deref()
+            .or_else(|| {
+                pending.finalize.as_ref().and_then(|finalize| {
+                    finalize.terminal_credential.as_deref()
+                })
+            })
+            .unwrap_or("none"),
     );
     span.record(
         "terminal_model",
@@ -778,6 +1126,19 @@ fn record_terminal_route_fields(span: &Span, pending: &PendingRouteTrace) {
         u64::from(pending.terminal_status.unwrap_or(0)),
     );
     span.record("terminal_outcome", pending.outcome_label);
+    span.record("terminal_error_class", terminal_error_class(pending));
+}
+
+fn terminal_error_class(pending: &PendingRouteTrace) -> &str {
+    if pending.outcome_label == "success" {
+        return "none";
+    }
+    pending
+        .finalize
+        .as_ref()
+        .and_then(|finalize| finalize.error_class.as_deref())
+        .or(pending.error_class.as_deref())
+        .unwrap_or("none")
 }
 
 #[allow(clippy::cast_precision_loss)]
@@ -813,6 +1174,11 @@ mod tests {
     use compact_str::CompactString;
     use http::StatusCode;
     use http_body_util::BodyExt as _;
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::{
+        error::OTelSdkResult,
+        trace::{SdkTracerProvider, SpanData, SpanExporter},
+    };
     use tracing::{
         Subscriber,
         field::{Field, Visit},
@@ -827,6 +1193,27 @@ mod tests {
 
     use super::*;
     use crate::types::{provider::InferenceProvider, router::RouterId};
+
+    #[derive(Clone, Debug, Default)]
+    struct CapturingSpanExporter {
+        spans: Arc<Mutex<Vec<SpanData>>>,
+    }
+
+    impl CapturingSpanExporter {
+        fn finished_spans(&self) -> Vec<SpanData> {
+            self.spans.lock().expect("finished spans").clone()
+        }
+    }
+
+    impl SpanExporter for CapturingSpanExporter {
+        async fn export(&self, mut batch: Vec<SpanData>) -> OTelSdkResult {
+            self.spans
+                .lock()
+                .expect("finished spans")
+                .append(&mut batch);
+            Ok(())
+        }
+    }
 
     #[derive(Clone, Default)]
     struct SpanRecordCapture {
@@ -909,6 +1296,145 @@ mod tests {
         }
     }
 
+    fn route_span_for_exporter_test() -> Span {
+        tracing::info_span!(
+            "gateway.route",
+            plan_rebuilds = tracing::field::Empty,
+            route_memory_hit = tracing::field::Empty,
+            route_memory_invalidated = tracing::field::Empty,
+            route_memory_hit_binding = tracing::field::Empty,
+            route_memory_penalized_binding = tracing::field::Empty,
+            route_memory_recorded_binding = tracing::field::Empty,
+            route_memory_policy = tracing::field::Empty,
+            attempts_total = tracing::field::Empty,
+            failover_count = tracing::field::Empty,
+            failed_attempts_total = tracing::field::Empty,
+            attempt_statuses = tracing::field::Empty,
+            attempt_error_classes = tracing::field::Empty,
+            last_failover_class = tracing::field::Empty,
+            last_failover_error_class = tracing::field::Empty,
+            last_failed_provider = tracing::field::Empty,
+            last_failed_credential = tracing::field::Empty,
+            last_failed_model = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+            terminal_provider = tracing::field::Empty,
+            terminal_credential = tracing::field::Empty,
+            terminal_model = tracing::field::Empty,
+            terminal_status = tracing::field::Empty,
+            terminal_outcome = tracing::field::Empty,
+            terminal_error_class = tracing::field::Empty,
+        )
+    }
+
+    fn attempt_span_for_exporter_test(
+        route_span: &Span,
+        index: u32,
+        provider: &str,
+        credential: &str,
+        model: &str,
+    ) -> Span {
+        tracing::info_span!(
+            parent: route_span,
+            "gateway.upstream.attempt",
+            attempt_index = index,
+            provider,
+            credential,
+            model,
+            status_code = tracing::field::Empty,
+            error_class = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+        )
+    }
+
+    fn span_attribute_values(span: &SpanData, key: &str) -> Vec<String> {
+        span.attributes
+            .iter()
+            .filter(|attribute| attribute.key.as_str() == key)
+            .map(|attribute| attribute.value.to_string())
+            .collect()
+    }
+
+    fn first_span<'a>(spans: &'a [SpanData], name: &str) -> &'a SpanData {
+        spans
+            .iter()
+            .find(|span| span.name == name)
+            .unwrap_or_else(|| panic!("missing exported span {name}"))
+    }
+
+    fn export_failover_success_trace() -> Vec<SpanData> {
+        let exporter = CapturingSpanExporter::default();
+        let provider = SdkTracerProvider::builder()
+            .with_simple_exporter(exporter.clone())
+            .with_max_attributes_per_span(128)
+            .build();
+        let tracer = provider.tracer("route-summary-test");
+        let subscriber = tracing_subscriber::registry()
+            .with(tracing_opentelemetry::layer().with_tracer(tracer));
+
+        tracing::subscriber::with_default(subscriber, || {
+            let route_span = route_span_for_exporter_test();
+            let mut route_trace = RouteTrace::new_with_plan(
+                4,
+                None,
+                route_span.clone(),
+                TokenUsage::default(),
+            );
+            let failed_provider =
+                InferenceProvider::Named(CompactString::new("llm7"));
+            let failures = [
+                (429u16, "http_429", "gpt-oss:20b"),
+                (503u16, "http_503", "gpt-oss:120b"),
+                (404u16, "http_404", "devstral-small"),
+            ];
+
+            for (index, (status, error_class, model)) in
+                failures.iter().enumerate()
+            {
+                route_trace.record_attempt();
+                let attempt_span = attempt_span_for_exporter_test(
+                    &route_span,
+                    u32::try_from(index).unwrap(),
+                    "llm7",
+                    "llm7-default",
+                    model,
+                );
+                attempt_span.record("status_code", u64::from(*status));
+                attempt_span.record("error_class", *error_class);
+                route_trace.record_failed_attempt_summary(
+                    &failed_provider,
+                    &ProviderCredentialId::new("llm7-default"),
+                    model,
+                    *status,
+                    Some("Transient"),
+                    error_class,
+                );
+                drop(attempt_span);
+            }
+
+            route_trace.record_attempt();
+            route_trace.terminal_provider =
+                Some(InferenceProvider::GoogleGemini);
+            route_trace.terminal_credential = Some("gemini-free-1".to_string());
+            route_trace.terminal_model = Some("gemini-2.5-flash".to_string());
+            route_trace.emit(
+                &RouterId::Named(CompactString::new("autodefault")),
+                "budget-aware-capability-after",
+                &RouteOutcome {
+                    label: "success",
+                    provider: None,
+                    credential: None,
+                    status: Some(200),
+                },
+                None,
+            );
+            drop(route_trace);
+            drop(route_span);
+        });
+
+        provider.force_flush().unwrap();
+        exporter.finished_spans()
+    }
+
     fn pending_with_finalize() -> PendingRouteTrace {
         let route_span = tracing::info_span!(
             "test.route",
@@ -923,6 +1449,24 @@ mod tests {
             terminal_model = tracing::field::Empty,
             terminal_status = tracing::field::Empty,
             terminal_outcome = tracing::field::Empty,
+            terminal_error_class = tracing::field::Empty,
+            plan_rebuilds = tracing::field::Empty,
+            route_memory_hit = tracing::field::Empty,
+            route_memory_invalidated = tracing::field::Empty,
+            route_memory_hit_binding = tracing::field::Empty,
+            route_memory_penalized_binding = tracing::field::Empty,
+            route_memory_recorded_binding = tracing::field::Empty,
+            route_memory_policy = tracing::field::Empty,
+            attempts_total = tracing::field::Empty,
+            failover_count = tracing::field::Empty,
+            failed_attempts_total = tracing::field::Empty,
+            attempt_statuses = tracing::field::Empty,
+            attempt_error_classes = tracing::field::Empty,
+            last_failover_class = tracing::field::Empty,
+            last_failover_error_class = tracing::field::Empty,
+            last_failed_provider = tracing::field::Empty,
+            last_failed_credential = tracing::field::Empty,
+            last_failed_model = tracing::field::Empty,
             response_body_bytes = tracing::field::Empty,
         );
         let attempt_span = tracing::info_span!(
@@ -965,6 +1509,7 @@ mod tests {
             plan_rebuilds: Some(0),
             route_memory_hit: Some(false),
             route_memory_invalidated: Some(false),
+            summary: RouteTraceSummary::default(),
             source_model: None,
             json_schema_required: false,
             estimated_usage: TokenUsage::default(),
@@ -974,6 +1519,8 @@ mod tests {
                 attempt_span: Some(attempt_span),
                 route_started: Instant::now(),
                 attempt_started: Some(Instant::now()),
+                terminal_provider: None,
+                terminal_credential: None,
                 terminal_model: Some("test-model".to_string()),
                 stream: false,
                 failure_stage: None,
@@ -1049,6 +1596,213 @@ mod tests {
         assert_eq!(
             fields.get("terminal_outcome").map(String::as_str),
             Some("success")
+        );
+        assert_eq!(
+            fields.get("terminal_error_class").map(String::as_str),
+            Some("none")
+        );
+    }
+
+    #[test]
+    fn exported_route_span_has_no_duplicate_error_class_after_failover_success()
+    {
+        let spans = export_failover_success_trace();
+        let route_span = first_span(&spans, "gateway.route");
+
+        assert!(span_attribute_values(route_span, "error_class").is_empty());
+        assert_eq!(
+            span_attribute_values(route_span, "terminal_outcome"),
+            vec!["success"]
+        );
+        assert_eq!(
+            span_attribute_values(route_span, "terminal_error_class"),
+            vec!["none"]
+        );
+    }
+
+    #[test]
+    fn route_summary_aggregates_failovers_while_attempts_keep_errors() {
+        let spans = export_failover_success_trace();
+        let route_span = first_span(&spans, "gateway.route");
+        let attempt_spans = spans
+            .iter()
+            .filter(|span| span.name == "gateway.upstream.attempt")
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            span_attribute_values(route_span, "failover_count"),
+            vec!["3"]
+        );
+        assert_eq!(
+            span_attribute_values(route_span, "failed_attempts_total"),
+            vec!["3"]
+        );
+        assert_eq!(
+            span_attribute_values(route_span, "attempt_statuses"),
+            vec!["429,503,404"]
+        );
+        assert_eq!(
+            span_attribute_values(route_span, "attempt_error_classes"),
+            vec!["http_429,http_503,http_404"]
+        );
+        assert_eq!(
+            span_attribute_values(route_span, "last_failover_class"),
+            vec!["Transient"]
+        );
+        assert_eq!(
+            span_attribute_values(route_span, "last_failover_error_class"),
+            vec!["http_404"]
+        );
+        assert_eq!(
+            span_attribute_values(route_span, "last_failed_provider"),
+            vec!["llm7"]
+        );
+        assert_eq!(
+            span_attribute_values(route_span, "last_failed_credential"),
+            vec!["llm7-default"]
+        );
+        assert_eq!(
+            span_attribute_values(route_span, "last_failed_model"),
+            vec!["devstral-small"]
+        );
+        assert_eq!(attempt_spans.len(), 3);
+        let mut attempt_errors = attempt_spans
+            .iter()
+            .flat_map(|span| span_attribute_values(span, "error_class"))
+            .collect::<Vec<_>>();
+        attempt_errors.sort();
+        assert_eq!(attempt_errors, vec!["http_404", "http_429", "http_503"]);
+    }
+
+    #[test]
+    fn route_memory_summary_records_binding_fields_and_policy() {
+        let capture = SpanRecordCapture::default();
+        let subscriber = tracing_subscriber::registry().with(capture.clone());
+
+        tracing::subscriber::with_default(subscriber, || {
+            let route_span = tracing::info_span!(
+                "test.route",
+                route_memory_hit = tracing::field::Empty,
+                route_memory_invalidated = tracing::field::Empty,
+                route_memory_hit_binding = tracing::field::Empty,
+                route_memory_penalized_binding = tracing::field::Empty,
+                route_memory_recorded_binding = tracing::field::Empty,
+                route_memory_policy = tracing::field::Empty,
+                plan_rebuilds = tracing::field::Empty,
+                attempts_total = tracing::field::Empty,
+                failover_count = tracing::field::Empty,
+                failed_attempts_total = tracing::field::Empty,
+                attempt_statuses = tracing::field::Empty,
+                attempt_error_classes = tracing::field::Empty,
+                last_failover_class = tracing::field::Empty,
+                last_failover_error_class = tracing::field::Empty,
+                last_failed_provider = tracing::field::Empty,
+                last_failed_credential = tracing::field::Empty,
+                last_failed_model = tracing::field::Empty,
+            );
+            let mut trace = RouteTrace::new_with_plan(
+                1,
+                None,
+                route_span,
+                TokenUsage::default(),
+            );
+            let binding = crate::router::budget_aware::memory::RouteBinding {
+                credential_id: ProviderCredentialId::new("gemini-free-1"),
+                model: "gemini-2.5-flash".to_string(),
+            };
+            trace.set_route_memory_hit_binding(Some(&binding));
+            trace.record_route_memory_penalized(&binding);
+            trace.record_route_memory_recorded(&binding, "degraded");
+
+            let outcome = RouteOutcome {
+                label: "success",
+                provider: None,
+                credential: None,
+                status: Some(200),
+            };
+            let _ = trace.attach_pending(
+                &RouterId::Named(CompactString::new("autodefault")),
+                "budget-aware-capability-after",
+                &outcome,
+                None,
+            );
+        });
+
+        let fields = capture.fields();
+        assert_eq!(
+            fields.get("route_memory_hit").map(String::as_str),
+            Some("true")
+        );
+        assert_eq!(
+            fields.get("route_memory_hit_binding").map(String::as_str),
+            Some("gemini-free-1/gemini-2.5-flash")
+        );
+        assert_eq!(
+            fields
+                .get("route_memory_penalized_binding")
+                .map(String::as_str),
+            Some("gemini-free-1/gemini-2.5-flash")
+        );
+        assert_eq!(
+            fields
+                .get("route_memory_recorded_binding")
+                .map(String::as_str),
+            Some("gemini-free-1/gemini-2.5-flash")
+        );
+        assert_eq!(
+            fields.get("route_memory_policy").map(String::as_str),
+            Some("degraded")
+        );
+    }
+
+    #[test]
+    fn no_status_terminal_records_zero_status_and_last_identity() {
+        let capture = SpanRecordCapture::default();
+        let subscriber = tracing_subscriber::registry().with(capture.clone());
+        let provider = InferenceProvider::Named(CompactString::new("llm7"));
+
+        tracing::subscriber::with_default(subscriber, || {
+            let mut pending = pending_with_finalize();
+            pending.outcome_label = "upstream_timeout";
+            pending.terminal_provider = Some(provider.clone());
+            pending.terminal_credential = Some("llm7-test".to_string());
+            pending.terminal_status = None;
+            let route_span = {
+                let finalize = pending.finalize.as_mut().expect("finalize");
+                finalize.terminal_provider = Some(provider.clone());
+                finalize.terminal_credential = Some("llm7-test".to_string());
+                finalize.terminal_model = Some("slow-model".to_string());
+                finalize.error_class = Some("upstream_timeout".to_string());
+                finalize.route_span.clone()
+            };
+            record_terminal_route_fields(&route_span, &pending);
+        });
+
+        let fields = capture.fields();
+        let provider_name = provider.to_string();
+        assert_eq!(
+            fields.get("terminal_provider").map(String::as_str),
+            Some(provider_name.as_str())
+        );
+        assert_eq!(
+            fields.get("terminal_credential").map(String::as_str),
+            Some("llm7-test")
+        );
+        assert_eq!(
+            fields.get("terminal_model").map(String::as_str),
+            Some("slow-model")
+        );
+        assert_eq!(
+            fields.get("terminal_status").map(String::as_str),
+            Some("0")
+        );
+        assert_eq!(
+            fields.get("terminal_outcome").map(String::as_str),
+            Some("upstream_timeout")
+        );
+        assert_eq!(
+            fields.get("terminal_error_class").map(String::as_str),
+            Some("upstream_timeout")
         );
     }
 

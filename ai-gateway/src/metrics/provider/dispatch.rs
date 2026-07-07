@@ -12,8 +12,9 @@ use crate::{
     router::retry_after::FailoverClass,
     types::{
         extensions::{
-            GatewayProviderUsageExtension, PendingRouteTrace, ReplayRecord,
-            RequestKind, UpstreamAttemptContext,
+            GatewayProviderUsageExtension, PendingRouteTrace,
+            ProviderAttemptPolicy, ReplayRecord, RequestKind,
+            UpstreamAttemptContext,
         },
         model_id::ModelId,
         provider::InferenceProvider,
@@ -38,6 +39,20 @@ pub struct DispatchMetricsInput<'a> {
     pub failover_class: Option<FailoverClass>,
     pub semantic_outcome: Option<super::attempt::CallOutcome>,
     pub agent_name: Option<&'a str>,
+}
+
+#[must_use]
+pub fn attempt_outcome_override(
+    policy: Option<&ProviderAttemptPolicy>,
+    status: StatusCode,
+    duration_ms: f64,
+) -> Option<super::attempt::CallOutcome> {
+    let threshold = policy?.slow_success_threshold?;
+    if status.is_success() && duration_ms > threshold.as_secs_f64() * 1000.0 {
+        Some(super::attempt::CallOutcome::SuccessDegraded)
+    } else {
+        None
+    }
 }
 
 pub fn record_upstream_attempt(input: &DispatchMetricsInput<'_>) {
@@ -314,6 +329,32 @@ mod tests {
         );
     }
 
+    #[test]
+    fn slow_success_policy_overrides_success_outcome_only_after_threshold() {
+        let policy = crate::types::extensions::ProviderAttemptPolicy {
+            slow_success_threshold: Some(std::time::Duration::from_millis(10)),
+        };
+
+        assert_eq!(
+            attempt_outcome_override(Some(&policy), StatusCode::OK, 11.0),
+            Some(
+                crate::metrics::provider::attempt::CallOutcome::SuccessDegraded
+            )
+        );
+        assert_eq!(
+            attempt_outcome_override(Some(&policy), StatusCode::OK, 10.0),
+            None
+        );
+        assert_eq!(
+            attempt_outcome_override(
+                Some(&policy),
+                StatusCode::SERVICE_UNAVAILABLE,
+                20.0,
+            ),
+            None
+        );
+    }
+
     fn pending_with_finalize_failure(
         finalize_failure: Option<(&str, &str, &str)>,
     ) -> PendingRouteTrace {
@@ -347,6 +388,7 @@ mod tests {
             plan_rebuilds: Some(0),
             route_memory_hit: Some(false),
             route_memory_invalidated: Some(false),
+            summary: crate::types::extensions::RouteTraceSummary::default(),
             source_model: None,
             json_schema_required: true,
             estimated_usage: TokenUsage::default(),
@@ -356,6 +398,8 @@ mod tests {
                 attempt_span: Some(tracing::Span::none()),
                 route_started: std::time::Instant::now(),
                 attempt_started: Some(std::time::Instant::now()),
+                terminal_provider: None,
+                terminal_credential: None,
                 terminal_model: Some("terminal-model".to_string()),
                 stream: false,
                 failure_stage: finalize_failure.map(|f| f.0.to_string()),

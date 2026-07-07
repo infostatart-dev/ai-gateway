@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, time::Duration};
 
 use indexmap::IndexMap;
 use serde::{
@@ -125,6 +125,63 @@ impl ProviderLimitCatalog {
             .and_then(|config| config.quota_profile)
             .unwrap_or_default()
     }
+
+    #[must_use]
+    pub fn slow_success_threshold(
+        &self,
+        provider: &InferenceProvider,
+        tier: &str,
+        model: &str,
+    ) -> Option<Duration> {
+        self.route_policy_ms(provider, tier, model, |provider, model| {
+            model
+                .and_then(|entry| entry.slow_success_threshold_ms)
+                .or(provider.slow_success_threshold_ms)
+        })
+        .map(Duration::from_millis)
+    }
+
+    #[must_use]
+    pub fn attempt_timeout(
+        &self,
+        provider: &InferenceProvider,
+        tier: &str,
+        model: &str,
+    ) -> Option<Duration> {
+        self.route_policy_ms(provider, tier, model, |provider, model| {
+            model
+                .and_then(|entry| entry.attempt_timeout_ms)
+                .or(provider.attempt_timeout_ms)
+        })
+        .map(Duration::from_millis)
+    }
+
+    fn route_policy_ms(
+        &self,
+        provider: &InferenceProvider,
+        tier: &str,
+        model: &str,
+        select: impl FnOnce(
+            &ProviderLimitConfig,
+            Option<&QuotaSubjectLimits>,
+        ) -> Option<u64>,
+    ) -> Option<u64> {
+        let provider_config = self.provider(provider)?;
+        let model_config = self.resolved_model_subject(provider, tier, model);
+        select(provider_config, model_config)
+    }
+
+    fn resolved_model_subject(
+        &self,
+        provider: &InferenceProvider,
+        tier: &str,
+        model: &str,
+    ) -> Option<&QuotaSubjectLimits> {
+        let resolved = catalog_limit_resolve(self, provider, tier, model)?;
+        self.provider(provider)?
+            .tier(&resolved.tier)?
+            .model(&resolved.catalog_model)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -142,6 +199,10 @@ pub struct ProviderLimitConfig {
     pub daily_reset_utc_hour: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_ttfb_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slow_success_threshold_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attempt_timeout_ms: Option<u64>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<String>,
     #[serde(
@@ -163,6 +224,8 @@ impl Default for ProviderLimitConfig {
             source: None,
             daily_reset_utc_hour: None,
             expected_ttfb_ms: None,
+            slow_success_threshold_ms: None,
+            attempt_timeout_ms: None,
             notes: Vec::new(),
             cooldown: ProviderCooldownOverrides::default(),
             runtime_sources: IndexMap::new(),
@@ -299,6 +362,10 @@ pub struct QuotaSubjectLimits {
     pub category: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tier: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slow_success_threshold_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attempt_timeout_ms: Option<u64>,
     pub limits: QuotaLimits,
 }
 
@@ -453,6 +520,73 @@ mod tests {
         assert_eq!(limits.tpm, QuotaValue::Limited(1_000_000));
         assert_eq!(limits.rpd, QuotaValue::Limited(1_500));
         assert_eq!(limits.tpd, QuotaValue::Unknown);
+    }
+
+    #[test]
+    fn route_policy_defaults_to_none_until_configured() {
+        let catalog = ProviderLimitCatalog::default();
+        assert_eq!(
+            catalog.slow_success_threshold(
+                &InferenceProvider::GoogleGemini,
+                "free",
+                "gemini-2.0-flash",
+            ),
+            None
+        );
+        assert_eq!(
+            catalog.attempt_timeout(
+                &InferenceProvider::GoogleGemini,
+                "free",
+                "gemini-2.0-flash",
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn route_policy_resolves_provider_default_and_model_override() {
+        let mut catalog = ProviderLimitCatalog::default();
+        let provider = InferenceProvider::GoogleGemini;
+        {
+            let config = catalog.providers.get_mut(&provider).unwrap();
+            config.slow_success_threshold_ms = Some(10_000);
+            config.attempt_timeout_ms = Some(60_000);
+            let model = config
+                .tiers
+                .get_mut("free")
+                .unwrap()
+                .models
+                .get_mut("gemini-2.0-flash")
+                .unwrap();
+            model.slow_success_threshold_ms = Some(2_500);
+            model.attempt_timeout_ms = Some(15_000);
+        }
+
+        assert_eq!(
+            catalog.slow_success_threshold(
+                &provider,
+                "free",
+                "gemini-2.0-flash",
+            ),
+            Some(Duration::from_millis(2_500))
+        );
+        assert_eq!(
+            catalog.attempt_timeout(&provider, "free", "gemini-2.0-flash"),
+            Some(Duration::from_millis(15_000))
+        );
+        assert_eq!(
+            catalog.slow_success_threshold(
+                &provider,
+                "free",
+                "gemini-2.0-flash-lite",
+            ),
+            Some(Duration::from_millis(10_000))
+        );
+        assert_eq!(
+            catalog
+                .attempt_timeout(&provider, "free", "gemini-2.0-flash-lite",),
+            Some(Duration::from_millis(60_000))
+        );
     }
 
     #[test]

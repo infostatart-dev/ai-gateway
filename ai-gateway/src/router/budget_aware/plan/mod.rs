@@ -12,8 +12,8 @@ use snapshot::QuotaSnapshot as Snapshot;
 use super::{
     CredentialHealthRegistry,
     memory::{
-        GatewayRouteMemory, RouteBindingPreference, RouteMemoryKey,
-        RouteStreamMode,
+        GatewayRouteMemory, RouteBinding, RouteBindingPreference,
+        RouteMemoryKey, RouteStreamMode,
     },
     types::{BudgetAwareRouter, BudgetCandidate},
 };
@@ -37,6 +37,7 @@ pub struct PlanResult {
     pub chain: Vec<BudgetCandidate>,
     pub memory_key: RouteMemoryKey,
     pub route_memory_hit: bool,
+    pub route_memory_hit_binding: Option<RouteBinding>,
     pub planned_hops: u32,
     pub replay: Option<crate::types::extensions::PlanReplaySnapshot>,
 }
@@ -105,18 +106,16 @@ pub async fn plan_route_chain(
             chain: Vec::new(),
             memory_key: memory_key.clone(),
             route_memory_hit: false,
+            route_memory_hit_binding: None,
             planned_hops: 0,
             replay: None,
         };
     }
 
     let memory_bindings = memory.preferred(ctx.memory_key).await;
-    let route_memory_hit = memory_bindings.iter().any(|binding| {
-        survivors
-            .iter()
-            .any(|c| score::binding_matches(c, &binding.binding))
-            && binding_viable(&ctx, binding)
-    });
+    let route_memory_hit_binding =
+        route_memory_hit_binding(&ctx, &survivors, &memory_bindings);
+    let route_memory_hit = route_memory_hit_binding.is_some();
     let chain = build_chain(router, &ctx, &survivors, &memory_bindings);
     let replay = chain.first().map(|hop0| {
         capture_replay(&ctx, router, &survivors, &memory_bindings, hop0, &chain)
@@ -126,8 +125,25 @@ pub async fn plan_route_chain(
         chain,
         memory_key: memory_key.clone(),
         route_memory_hit,
+        route_memory_hit_binding,
         replay,
     }
+}
+
+fn route_memory_hit_binding(
+    ctx: &PlanContext<'_>,
+    survivors: &[BudgetCandidate],
+    memory_bindings: &[RouteBindingPreference],
+) -> Option<RouteBinding> {
+    memory_bindings
+        .iter()
+        .find(|binding| {
+            survivors
+                .iter()
+                .any(|c| score::binding_matches(c, &binding.binding))
+                && binding_viable(ctx, binding)
+        })
+        .map(|preference| preference.binding.clone())
 }
 
 fn binding_viable(

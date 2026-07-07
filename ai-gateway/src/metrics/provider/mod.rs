@@ -7,8 +7,8 @@ pub mod runtime;
 pub mod usage_json;
 
 pub use dispatch::{
-    DispatchMetricsInput, attach_usage_header, build_replay_record,
-    emit_pending_route_trace, record_upstream_attempt,
+    DispatchMetricsInput, attach_usage_header, attempt_outcome_override,
+    build_replay_record, emit_pending_route_trace, record_upstream_attempt,
 };
 pub use recorder::{RecordAttemptInput, build_attempt_record};
 pub use runtime::{

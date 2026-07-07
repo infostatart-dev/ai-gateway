@@ -288,6 +288,7 @@ mod tests {
             plan_rebuilds: None,
             route_memory_hit: None,
             route_memory_invalidated: None,
+            summary: crate::types::extensions::RouteTraceSummary::default(),
             source_model: Some(source_model.to_string()),
             json_schema_required: false,
             estimated_usage: crate::metrics::llm::TokenUsage::default(),

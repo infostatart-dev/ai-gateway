@@ -13,24 +13,35 @@ mod structured_output_failover {
     use indexmap::IndexMap;
 
     use super::super::{
-        call::{clear_test_call_responses, push_test_call_response},
+        call::{
+            clear_test_call_responses, install_upstream_mock,
+            push_delayed_test_call_response, push_pending_test_call_response,
+            push_test_call_response, test_call_response_queue_len,
+        },
         failover_loop::run_failover_candidates,
         types::{BudgetAwareRouter, BudgetCandidate, CandidateSelectionMode},
     };
     use crate::{
+        app::App,
         app_state::AppState,
-        config::{credentials::ProviderCredentialId, router::RouterConfig},
+        config::{
+            credentials::ProviderCredentialId,
+            provider_limits::ProviderLimitConfig, router::RouterConfig,
+        },
         dispatcher::Dispatcher,
         endpoints::EndpointType,
+        error::api::ApiError,
         middleware::mapper::model::ModelMapper,
         router::{
             capability::{ModelCapability, RequestRequirements},
             provider_attempt::ModelCooldownKey,
             routed_identity::REAL_MODE_MODEL_AND_PROVIDER,
         },
+        tests::TestDefault,
         types::{
             extensions::{
-                CallerRequestContext, RoutePlanContext, WorkUnitSource,
+                CallerRequestContext, PendingRouteTrace, RoutePlanContext,
+                WorkUnitSource,
             },
             model_id::ModelId,
             provider::InferenceProvider,
@@ -148,6 +159,64 @@ mod structured_output_failover {
             credential_round_robin: super::super::credential_balance::CredentialRoundRobin::new_shared(),
             source_model_selection:
                 crate::config::router::SourceModelSelection::Strict,
+        }
+    }
+
+    async fn app_state_with_route_policy(
+        provider: InferenceProvider,
+        slow_success_threshold_ms: Option<u64>,
+        attempt_timeout_ms: Option<u64>,
+    ) -> AppState {
+        let mut config = crate::config::Config::test_default();
+        let provider_config = config
+            .provider_limits
+            .providers
+            .entry(provider)
+            .or_insert_with(ProviderLimitConfig::default);
+        provider_config.slow_success_threshold_ms = slow_success_threshold_ms;
+        provider_config.attempt_timeout_ms = attempt_timeout_ms;
+        App::new(config)
+            .await
+            .expect("test app with route policy")
+            .state
+    }
+
+    fn route_memory_key(
+        requirements: &RequestRequirements,
+    ) -> crate::router::budget_aware::RouteMemoryKey {
+        crate::router::budget_aware::RouteMemoryKey::for_route_class(
+            &crate::types::router::RouterId::Named(
+                "structured-output-test".into(),
+            ),
+            crate::endpoints::EndpointType::Chat,
+            requirements,
+            None,
+            None,
+            crate::router::budget_aware::RouteStreamMode::NonStreaming,
+        )
+    }
+
+    fn route_plan_context(
+        agent_name: &str,
+        key: crate::router::budget_aware::RouteMemoryKey,
+        candidates: Vec<BudgetCandidate>,
+    ) -> RoutePlanContext {
+        RoutePlanContext {
+            caller: CallerRequestContext {
+                agent_name: agent_name.to_string(),
+                work_unit_id: Some(format!("{agent_name}-unit")),
+                work_unit_source: WorkUnitSource::Explicit,
+            },
+            estimated_tokens: 0,
+            planned_hops: u32::try_from(candidates.len()).unwrap_or(u32::MAX),
+            route_memory_key: key,
+            route_memory_hit: false,
+            route_memory_hit_binding: None,
+            full_pool: candidates,
+            source_model: None,
+            stream: false,
+            json_schema_required: false,
+            replay: None,
         }
     }
 
@@ -631,6 +700,7 @@ mod structured_output_failover {
                     crate::router::budget_aware::RouteStreamMode::NonStreaming,
                 ),
             route_memory_hit: false,
+            route_memory_hit_binding: None,
             planned_hops: 2,
             source_model: None,
             stream: false,
@@ -730,6 +800,415 @@ mod structured_output_failover {
                 .and_then(|value| value.to_str().ok()),
             Some("llm7-test/fast")
         );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn slow_success_records_degraded_stats_and_route_memory() {
+        clear_test_call_responses();
+
+        let app_state =
+            app_state_with_route_policy(llm7(), Some(1), None).await;
+        let router = test_router(&app_state);
+        let candidate =
+            candidate(&app_state, llm7(), "fast", Some(32_000)).await;
+        clear_test_call_responses();
+        push_delayed_test_call_response(
+            Duration::from_millis(25),
+            Ok(chat_completion("slow but valid")),
+        );
+        let requirements = RequestRequirements::default();
+        let key = route_memory_key(&requirements);
+        let mut parts = request_parts();
+        parts.extensions.insert(RoutePlanContext {
+            caller: CallerRequestContext {
+                agent_name: "slow-success-regression".to_string(),
+                work_unit_id: Some("unit-slow".to_string()),
+                work_unit_source: WorkUnitSource::Explicit,
+            },
+            full_pool: vec![candidate.clone()],
+            estimated_tokens: 0,
+            route_memory_key: key.clone(),
+            route_memory_hit: false,
+            route_memory_hit_binding: None,
+            planned_hops: 1,
+            source_model: None,
+            stream: false,
+            json_schema_required: false,
+            replay: None,
+        });
+
+        let response = run_failover_candidates(
+            router,
+            parts,
+            Bytes::from(r#"{"model":"openai/gpt-5-mini","messages":[]}"#),
+            vec![candidate],
+            requirements,
+            None,
+        )
+        .await
+        .expect("slow success still serves the client");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let _ = response.into_body().collect().await.unwrap();
+
+        let preferred = app_state.route_memory().preferred(&key).await;
+        assert_eq!(preferred.len(), 1);
+        assert_eq!(
+            preferred[0].binding.credential_id,
+            ProviderCredentialId::new("llm7-test")
+        );
+        assert_eq!(preferred[0].binding.model, "fast");
+        assert_eq!(preferred[0].score, 0.25);
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn configured_attempt_timeout_falls_back_to_next_candidate() {
+        clear_test_call_responses();
+
+        let app_state =
+            app_state_with_route_policy(llm7(), None, Some(1)).await;
+        assert_eq!(
+            app_state.config().provider_limits.attempt_timeout(
+                &llm7(),
+                "free",
+                "slow-model",
+            ),
+            Some(Duration::from_millis(1))
+        );
+        let router = test_router(&app_state);
+        assert_eq!(
+            router.app_state.config().provider_limits.attempt_timeout(
+                &llm7(),
+                "free",
+                "slow-model",
+            ),
+            Some(Duration::from_millis(1))
+        );
+        let candidates = vec![
+            candidate(&app_state, llm7(), "slow-model", Some(32_000)).await,
+            candidate(&app_state, mistral(), "magistral-medium-latest", None)
+                .await,
+        ];
+        clear_test_call_responses();
+        install_upstream_mock(
+            gateway_tests::UpstreamMockScript::new().binding(
+                "mistral-test",
+                "magistral-medium-latest",
+                vec![gateway_tests::upstream::ok_chat_completion],
+            ),
+        );
+        push_pending_test_call_response();
+        assert_eq!(test_call_response_queue_len(), 1);
+        assert_eq!(
+            router.app_state.config().provider_limits.attempt_timeout(
+                &candidates[0].capability.provider,
+                candidates[0].credential_tier.as_str(),
+                &candidates[0].capability.model.to_string(),
+            ),
+            Some(Duration::from_millis(1))
+        );
+
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            Bytes::from(r#"{"model":"openai/gpt-5-mini","messages":[]}"#),
+            candidates,
+            RequestRequirements::default(),
+            None,
+        )
+        .await
+        .expect("timeout should fall back to next candidate");
+
+        assert_eq!(test_call_response_queue_len(), 0);
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(REAL_MODE_MODEL_AND_PROVIDER)
+                .and_then(|value| value.to_str().ok()),
+            Some("mistral-test/magistral-medium-latest")
+        );
+        let _ = response.into_body().collect().await.unwrap();
+        assert_eq!(
+            app_state.credential_health().model_success_rate(
+                &llm7(),
+                &ProviderCredentialId::new("llm7-test"),
+                "slow-model",
+            ),
+            0.0
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn configured_attempt_timeout_finalizes_no_status_terminal() {
+        clear_test_call_responses();
+
+        let app_state =
+            app_state_with_route_policy(llm7(), None, Some(1)).await;
+        assert_eq!(
+            app_state.config().provider_limits.attempt_timeout(
+                &llm7(),
+                "free",
+                "slow-model",
+            ),
+            Some(Duration::from_millis(1))
+        );
+        let router = test_router(&app_state);
+        assert_eq!(
+            router.app_state.config().provider_limits.attempt_timeout(
+                &llm7(),
+                "free",
+                "slow-model",
+            ),
+            Some(Duration::from_millis(1))
+        );
+        let candidates = vec![
+            candidate(&app_state, llm7(), "slow-model", Some(32_000)).await,
+        ];
+        clear_test_call_responses();
+        push_pending_test_call_response();
+        assert_eq!(test_call_response_queue_len(), 1);
+        assert_eq!(
+            router.app_state.config().provider_limits.attempt_timeout(
+                &candidates[0].capability.provider,
+                candidates[0].credential_tier.as_str(),
+                &candidates[0].capability.model.to_string(),
+            ),
+            Some(Duration::from_millis(1))
+        );
+
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            Bytes::from(r#"{"model":"openai/gpt-5-mini","messages":[]}"#),
+            candidates,
+            RequestRequirements::default(),
+            None,
+        )
+        .await
+        .expect("terminal timeout should return a gateway response");
+
+        assert_eq!(test_call_response_queue_len(), 0);
+        assert_eq!(response.status(), StatusCode::GATEWAY_TIMEOUT);
+        let pending = response
+            .extensions()
+            .get::<PendingRouteTrace>()
+            .expect("pending route trace");
+        assert_eq!(pending.outcome_label, "upstream_timeout");
+        assert_eq!(pending.terminal_status, None);
+        assert_eq!(pending.terminal_provider, Some(llm7()));
+        assert_eq!(pending.terminal_credential.as_deref(), Some("llm7-test"));
+        let _ = response.into_body().collect().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn timeout_then_http_failures_exhausts_route_without_stale_timeout_terminal()
+     {
+        clear_test_call_responses();
+
+        let app_state =
+            app_state_with_route_policy(llm7(), None, Some(1)).await;
+        let router = test_router(&app_state);
+        let candidates = vec![
+            candidate(&app_state, llm7(), "slow-model", Some(32_000)).await,
+            candidate(&app_state, mistral(), "magistral-medium-latest", None)
+                .await,
+            candidate(&app_state, cerebras(), "openai/gpt-oss-120b", None)
+                .await,
+        ];
+        clear_test_call_responses();
+        push_pending_test_call_response();
+        push_test_call_response(Ok(overload_503()));
+        push_test_call_response(Ok(overload_503()));
+
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            Bytes::from(r#"{"model":"openai/gpt-5-mini","messages":[]}"#),
+            candidates,
+            RequestRequirements::default(),
+            None,
+        )
+        .await
+        .expect("HTTP failures after timeout should exhaust the route");
+
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert!(
+            response
+                .headers()
+                .get(REAL_MODE_MODEL_AND_PROVIDER)
+                .is_none(),
+            "route exhaustion must not inherit the stale timeout candidate \
+             identity"
+        );
+        if let Some(pending) = response.extensions().get::<PendingRouteTrace>()
+        {
+            assert_ne!(
+                pending.outcome_label, "upstream_timeout",
+                "route exhaustion must not inherit stale no-status terminal \
+                 trace"
+            );
+        }
+        let _ = response.into_body().collect().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn call_candidate_error_falls_back_with_no_status_summary() {
+        clear_test_call_responses();
+        push_test_call_response(Err(ApiError::Panic(
+            "mock transport failure".to_string(),
+        )));
+        push_test_call_response(Ok(chat_completion("fallback")));
+
+        let app_state = AppState::test_default().await;
+        let router = test_router(&app_state);
+        let candidates = vec![
+            candidate(&app_state, llm7(), "fast", Some(32_000)).await,
+            candidate(&app_state, mistral(), "magistral-medium-latest", None)
+                .await,
+        ];
+
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            Bytes::from(r#"{"model":"openai/gpt-5-mini","messages":[]}"#),
+            candidates,
+            RequestRequirements::default(),
+            None,
+        )
+        .await
+        .expect("transport error should fall back to next candidate");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(REAL_MODE_MODEL_AND_PROVIDER)
+                .and_then(|value| value.to_str().ok()),
+            Some("mistral-test/magistral-medium-latest")
+        );
+        let pending = response
+            .extensions()
+            .get::<PendingRouteTrace>()
+            .cloned()
+            .expect("pending route trace");
+        assert_eq!(pending.outcome_label, "success");
+        assert_eq!(pending.terminal_status, Some(200));
+        assert_eq!(pending.summary.failed_attempts_total, 1);
+        assert_eq!(pending.summary.failover_count, 1);
+        assert_eq!(pending.summary.attempt_statuses, "0");
+        assert_eq!(
+            pending.summary.attempt_error_classes,
+            "upstream_incomplete"
+        );
+        assert_eq!(
+            pending.summary.last_failed_credential.as_deref(),
+            Some("llm7-test")
+        );
+        assert_eq!(pending.summary.last_failed_model.as_deref(), Some("fast"));
+        let _ = response.into_body().collect().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn route_memory_penalty_is_absent_when_binding_was_not_recorded() {
+        clear_test_call_responses();
+        push_test_call_response(Ok(overload_503()));
+        push_test_call_response(Ok(chat_completion("fallback")));
+
+        let app_state = AppState::test_default().await;
+        let router = test_router(&app_state);
+        let candidates = vec![
+            candidate(&app_state, llm7(), "fast", Some(32_000)).await,
+            candidate(&app_state, mistral(), "magistral-medium-latest", None)
+                .await,
+        ];
+        let requirements = RequestRequirements::default();
+        let key = route_memory_key(&requirements);
+        let mut parts = request_parts();
+        parts.extensions.insert(route_plan_context(
+            "route-memory-penalty-regression",
+            key,
+            candidates.clone(),
+        ));
+
+        let response = run_failover_candidates(
+            router,
+            parts,
+            Bytes::from(r#"{"model":"openai/gpt-5-mini","messages":[]}"#),
+            candidates,
+            requirements,
+            None,
+        )
+        .await
+        .expect("fallback should still serve the client");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let pending = response
+            .extensions()
+            .get::<PendingRouteTrace>()
+            .cloned()
+            .expect("pending route trace");
+        assert_eq!(pending.summary.failed_attempts_total, 1);
+        assert_eq!(pending.summary.failover_count, 1);
+        assert!(
+            pending.summary.route_memory_penalized_binding.is_none(),
+            "trace must not claim a route-memory penalty when registry had no \
+             binding"
+        );
+        assert_eq!(pending.route_memory_invalidated, Some(false));
+        assert_eq!(
+            pending.summary.route_memory_recorded_binding.as_deref(),
+            Some("mistral-test/magistral-medium-latest")
+        );
+        assert_eq!(pending.summary.route_memory_policy, "full");
+        let _ = response.into_body().collect().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn terminal_semantic_failure_does_not_increment_failover_count() {
+        clear_test_call_responses();
+        push_test_call_response(Ok(chat_completion("not json at all")));
+
+        let app_state = AppState::test_default().await;
+        let router = test_router(&app_state);
+        let candidates =
+            vec![candidate(&app_state, llm7(), "fast", Some(32_000)).await];
+
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            json_schema_request_body(""),
+            candidates,
+            RequestRequirements {
+                json_schema_required: true,
+                ..RequestRequirements::default()
+            },
+            None,
+        )
+        .await
+        .expect("terminal semantic failure should return gateway response");
+
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        let pending = response
+            .extensions()
+            .get::<PendingRouteTrace>()
+            .cloned()
+            .expect("pending route trace");
+        assert_eq!(pending.summary.failed_attempts_total, 1);
+        assert_eq!(pending.summary.failover_count, 0);
+        assert_eq!(pending.summary.attempt_statuses, "200");
+        assert_eq!(
+            pending.summary.attempt_error_classes,
+            "invalid_structured_json"
+        );
+        let _ = response.into_body().collect().await.unwrap();
     }
 
     #[tokio::test]
