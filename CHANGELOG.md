@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.6.8] - 2026-07-07
+
+**Adaptive provider planning and route-class memory** — budget-aware routing now
+scores and replans across the full configured provider, credential, and model
+pool while keeping health, route memory, and trace output aligned to concrete
+upstream candidates.
+
+### Features
+
+- **Full-pool route planning:** budget-aware routers build plans from all active
+  candidate providers and models, then replan over the remaining concrete
+  credential/model pairs after failoverable upstream failures
+- **Provider-model health:** routing health tracks observed success, failure,
+  latency, cooldown, and last failure metadata per provider, credential, and
+  model, so one failing model does not suppress unrelated models on the same
+  credential
+- **Route-class memory:** gateway-level route memory keys preferences by router,
+  endpoint, source model, strict JSON mode, stream mode, context bucket, and
+  stability class, then keeps the top preferred bindings for that route class
+- **Configured managed upstreams:** `/managed/{provider}/...` routes are built
+  from configured providers instead of a hard-coded provider list, matching the
+  provider catalog used by direct proxy routes
+
+### Fixed
+
+- **Model-scoped unavailable responses:** provider responses that identify an
+  unavailable model are classified at model scope, preserving other viable
+  models and credentials during the same route
+- **Strict JSON health updates:** valid structured-output responses now update
+  route and model health, while repaired responses apply a reduced route-memory
+  boost instead of being treated as a clean upstream success
+- **Terminal route outcomes:** exhausted structured-output retries now finalize
+  as typed route outcomes with retry metadata instead of surfacing as internal
+  errors
+- **Attempt accounting:** failoverable upstream failures are recorded once for
+  provider health and trace accounting, avoiding duplicate credential-health
+  penalties
+
+### Quality
+
+- Focused unit and routing-load tests cover full-pool planning, replan
+  exclusions, model-scoped health, route-class memory, route memory penalties,
+  strict JSON success handling, and configured managed upstream registration
+- Route trace metadata exposes planned candidate details, selected attempts,
+  skipped candidates, and terminal outcomes without attaching request or
+  response payloads
+- Embedded provider limit profiles cover model-scoped LLM7 quota behavior, and
+  keyless provider registration remains opt-in through secrets configuration
+- Provider attempt telemetry records semantic structured-output outcomes,
+  degraded repaired responses, and failover classes without double-counting the
+  same upstream attempt
+- Release and test automation now use portable `mise` tasks that detect
+  available parallelism, keep release flags consistent, and report warning and
+  failure summaries for local release validation
+
 ## [0.6.7] - 2026-07-06
 
 **Managed upstream routing and LLM7 catalog support** — the gateway can expose

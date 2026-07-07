@@ -5,7 +5,8 @@ use ai_gateway::{
     types::{
         extensions::{
             BlockedReason, PendingRouteTrace, PlanReplaySnapshot,
-            ReplayQuotaExcluded, ReplayScoreBreakdown, WorkUnitSource,
+            ReplayPlanHop, ReplayQuotaExcluded, ReplayScoreBreakdown,
+            WorkUnitSource,
         },
         provider::InferenceProvider,
         router::RouterId,
@@ -30,6 +31,12 @@ fn sample_snapshot() -> PlanReplaySnapshot {
             blocked_reason: None,
             next_available_at: None,
         },
+        planned_chain: vec![ReplayPlanHop {
+            position: 0,
+            provider: "gemini".to_string(),
+            credential: "gemini-free-9".to_string(),
+            model: "gemini-3.1-flash-lite".to_string(),
+        }],
         top_alternatives: vec![],
         quota_excluded: vec![],
     }
@@ -81,6 +88,7 @@ fn replay_record_serializes_winner_breakdown() {
     assert_eq!(json["winner_credential"], "gemini-free-9");
     assert_eq!(json["winner_score"]["quota_capacity"], 0.7);
     assert_eq!(json["winner_score"]["h_success"], 0.9);
+    assert_eq!(json["planned_chain"][0]["credential"], "gemini-free-9");
     assert_eq!(json["json_schema_required"], true);
     assert_eq!(json["route_memory_hit"], true);
     assert!(json["winner_score"].get("blocked_reason").is_none());
@@ -137,6 +145,12 @@ fn replay_record_serializes_quota_block_metadata() {
                 blocked_reason: Some(BlockedReason::Rpm),
                 next_available_at: Some("2026-06-18T12:00:30Z".to_string()),
             },
+            planned_chain: vec![ReplayPlanHop {
+                position: 0,
+                provider: "gemini".to_string(),
+                credential: "gemini-free-9".to_string(),
+                model: "gemini-3.1-flash-lite".to_string(),
+            }],
             top_alternatives: vec![],
             quota_excluded: vec![ReplayQuotaExcluded {
                 credential: "gemini-free-3".to_string(),

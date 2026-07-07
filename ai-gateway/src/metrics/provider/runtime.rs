@@ -63,6 +63,7 @@ struct CallTotals {
     attempts: u64,
     success: u64,
     success_degraded: u64,
+    semantic_error: u64,
     client_error: u64,
     server_error: u64,
 }
@@ -125,6 +126,7 @@ pub struct ProviderCallSnapshot {
     pub attempts: u64,
     pub success: u64,
     pub success_degraded: u64,
+    pub semantic_error: u64,
     pub client_error: u64,
     pub server_error: u64,
 }
@@ -373,6 +375,10 @@ impl ProviderRuntimeRegistry {
                 entry.calls.success_degraded =
                     entry.calls.success_degraded.saturating_add(1);
             }
+            CallOutcome::SemanticError => {
+                entry.calls.semantic_error =
+                    entry.calls.semantic_error.saturating_add(1);
+            }
             CallOutcome::ClientError | CallOutcome::RateLimited => {
                 entry.calls.client_error =
                     entry.calls.client_error.saturating_add(1);
@@ -404,7 +410,9 @@ impl ProviderRuntimeRegistry {
         let now = Utc::now();
         entry.last_call_at = Some(now);
         entry.last_status_code = Some(record.status_code);
-        if record.status_code >= 400 {
+        if record.status_code >= 400
+            || matches!(record.outcome, CallOutcome::SemanticError)
+        {
             entry.last_error_at = Some(now);
         }
     }
@@ -479,6 +487,7 @@ impl ProviderRuntimeEntry {
                 attempts: self.calls.attempts,
                 success: self.calls.success,
                 success_degraded: self.calls.success_degraded,
+                semantic_error: self.calls.semantic_error,
                 client_error: self.calls.client_error,
                 server_error: self.calls.server_error,
             },
@@ -559,6 +568,7 @@ fn idle_provider_row(provider: String, credential: String) -> ProviderStatsRow {
             attempts: 0,
             success: 0,
             success_degraded: 0,
+            semantic_error: 0,
             client_error: 0,
             server_error: 0,
         },
@@ -800,7 +810,7 @@ mod tests {
         );
         assert_eq!(usage.latency_ms.ttfb, Some(400.0));
         assert_eq!(usage.latency_ms.ttft, None);
-        assert_eq!(usage.latency_ms.total, 2283.0);
+        assert!((usage.latency_ms.total - 2283.0).abs() < f64::EPSILON);
         assert_eq!(
             usage.latency_ms.generation_per_output_token,
             Some(2283.0 / 43.0)

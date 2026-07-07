@@ -69,7 +69,7 @@ struct FieldCapture {
 }
 
 impl FieldCapture {
-    fn insert(&mut self, field: &Field, value: impl ToString) {
+    fn insert(&mut self, field: &Field, value: &impl ToString) {
         self.fields
             .insert(field.name().to_string(), value.to_string());
     }
@@ -77,23 +77,24 @@ impl FieldCapture {
 
 impl Visit for FieldCapture {
     fn record_bool(&mut self, field: &Field, value: bool) {
-        self.insert(field, value);
+        self.insert(field, &value);
     }
 
     fn record_i64(&mut self, field: &Field, value: i64) {
-        self.insert(field, value);
+        self.insert(field, &value);
     }
 
     fn record_u64(&mut self, field: &Field, value: u64) {
-        self.insert(field, value);
+        self.insert(field, &value);
     }
 
     fn record_str(&mut self, field: &Field, value: &str) {
-        self.insert(field, value);
+        self.insert(field, &value);
     }
 
     fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-        self.insert(field, format!("{value:?}"));
+        let debug = format!("{value:?}");
+        self.insert(field, &debug);
     }
 }
 

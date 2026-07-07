@@ -8,8 +8,8 @@ use crate::{
     router::budget_aware::plan::plan_route_chain,
     tests::routing::{
         BudgetAwareRouter, BudgetCandidate, CallerRequestContext,
-        RequestRequirements, Response, RoutePlanContext, RoutingIntent,
-        router_app_state, run_failover_candidates,
+        RequestRequirements, Response, RoutePlanContext, RouteStreamMode,
+        RoutingIntent, router_app_state, run_failover_candidates,
     },
 };
 
@@ -55,6 +55,8 @@ pub async fn run_planned_failover(
         router_app_state(&router).route_memory(),
         estimated_tokens,
         &HashSet::new(),
+        None,
+        RouteStreamMode::NonStreaming,
     )
     .await;
     if plan.chain.is_empty() {
@@ -78,9 +80,11 @@ pub async fn run_planned_failover(
         caller,
         full_pool,
         estimated_tokens,
+        route_memory_key: plan.memory_key.clone(),
         route_memory_hit: plan.route_memory_hit,
         planned_hops: plan.planned_hops,
         source_model: None,
+        stream: false,
         json_schema_required: requirements.json_schema_required,
         replay: plan.replay,
     });

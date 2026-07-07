@@ -318,13 +318,13 @@ mod tests {
             "openai/gpt-oss-120b:free",
         )
         .expect("wire model");
-        let mapper = ModelMapper::new_with_model_id(
+        let model_mapper = ModelMapper::new_with_model_id(
             app_state,
             router_config,
             wire.clone(),
         );
         let client = ModelId::from_str("openai/gpt-5.4-nano").expect("client");
-        let mapped = mapper
+        let mapped = model_mapper
             .map_model(&client, &InferenceProvider::OpenRouter)
             .expect("mapped");
         assert_eq!(mapped.to_string(), "openai/gpt-oss-120b:free");

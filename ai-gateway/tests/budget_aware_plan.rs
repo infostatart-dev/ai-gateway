@@ -1,11 +1,11 @@
-use std::{collections::HashSet, str::FromStr};
+use std::{collections::HashSet, str::FromStr, time::Duration};
 
 use ai_gateway::{
     app_state::AppState,
     tests::{
         budget_aware::{
-            CallOutcome, CredentialHealthRegistry, MAX_PLAN_HOPS,
-            RequestRequirements, chatgpt_candidate, deepseek_model_candidate,
+            CallOutcome, CredentialHealthRegistry, RequestRequirements,
+            RouteStreamMode, chatgpt_candidate, deepseek_model_candidate,
             empty_router, gemini_model_candidate, hash_bias,
             intent_autodefault_router, named_model_candidate,
             openrouter_model_candidate, ordered_candidates_for_source,
@@ -21,7 +21,7 @@ use ai_gateway::{
 };
 
 #[tokio::test]
-async fn plan_respects_max_hops() {
+async fn plan_includes_all_feasible_hops_without_hard_cap() {
     let app_state = AppState::test_default().await;
     let router = empty_router(&app_state);
     let mut pool = Vec::new();
@@ -50,9 +50,21 @@ async fn plan_respects_max_hops() {
         app_state.route_memory(),
         100,
         &HashSet::new(),
+        None,
+        RouteStreamMode::NonStreaming,
     )
     .await;
-    assert!(plan.chain.len() <= MAX_PLAN_HOPS);
+    assert_eq!(plan.chain.len(), 10);
+    for index in 1..=10 {
+        let expected = format!("gemini-free-{index}");
+        assert!(
+            plan.chain
+                .iter()
+                .any(|candidate| candidate.credential_id.as_str()
+                    == expected.as_str()),
+            "missing gemini-free-{index} from full plan"
+        );
+    }
 }
 
 #[tokio::test]
@@ -86,9 +98,69 @@ async fn dead_provider_excluded_from_plan() {
         app_state.route_memory(),
         0,
         &HashSet::new(),
+        None,
+        RouteStreamMode::NonStreaming,
     )
     .await;
     assert!(plan.chain.is_empty());
+}
+
+#[tokio::test]
+async fn model_health_penalty_does_not_block_sibling_model() {
+    let app_state = AppState::test_default().await;
+    let router = empty_router(&app_state);
+    let health = CredentialHealthRegistry::new();
+    let unavailable = named_model_candidate(
+        &app_state,
+        "llm7",
+        "llm7-default",
+        "gpt-oss:20b",
+        131_072,
+    )
+    .await;
+    let sibling = named_model_candidate(
+        &app_state,
+        "llm7",
+        "llm7-default",
+        "fast",
+        131_072,
+    )
+    .await;
+    for _ in 0..3 {
+        health.record_model_attempt(
+            &unavailable.capability.provider,
+            &unavailable.credential_id,
+            "gpt-oss:20b",
+            CallOutcome::ClientError,
+            400,
+            Duration::from_millis(50),
+        );
+    }
+    let caller = CallerRequestContext {
+        agent_name: "invoker".to_string(),
+        work_unit_id: Some("unit-llm7".to_string()),
+        work_unit_source: WorkUnitSource::Explicit,
+    };
+
+    let plan = plan_route_chain(
+        &router,
+        vec![unavailable, sibling],
+        &RequestRequirements::default(),
+        None,
+        &caller,
+        &health,
+        app_state.route_memory(),
+        100,
+        &HashSet::new(),
+        None,
+        RouteStreamMode::NonStreaming,
+    )
+    .await;
+
+    assert_eq!(plan.chain[0].capability.model.to_string(), "fast");
+    assert!(plan.chain.iter().any(|candidate| {
+        candidate.capability.model.to_string() == "gpt-oss:20b"
+    }));
 }
 
 #[tokio::test]
@@ -122,6 +194,8 @@ async fn stability_model_before_openrouter_deprioritized() {
         app_state.route_memory(),
         100,
         &HashSet::new(),
+        None,
+        RouteStreamMode::NonStreaming,
     )
     .await;
     assert!(!plan.chain.is_empty());
@@ -179,6 +253,8 @@ async fn circuit_open_credential_excluded_from_plan() {
         app_state.route_memory(),
         100,
         &HashSet::new(),
+        None,
+        RouteStreamMode::NonStreaming,
     )
     .await;
     assert!(!plan.chain.is_empty());
@@ -214,6 +290,8 @@ async fn plain_chat_widens_intent_floor_for_fast_upstream() {
         app_state.route_memory(),
         100,
         &HashSet::new(),
+        None,
+        RouteStreamMode::NonStreaming,
     )
     .await;
     assert!(!plan.chain.is_empty());
@@ -257,6 +335,8 @@ async fn sixteen_gemini_flash_lite_slots_are_plan_feasible() {
         app_state.route_memory(),
         100,
         &HashSet::new(),
+        None,
+        RouteStreamMode::NonStreaming,
     )
     .await;
     assert!(!plan.chain.is_empty());
@@ -295,6 +375,8 @@ async fn eight_work_units_spread_first_hop_across_sixteen_gemini_slots() {
             app_state.route_memory(),
             100,
             &HashSet::new(),
+            None,
+            RouteStreamMode::NonStreaming,
         )
         .await;
         assert!(
@@ -313,7 +395,7 @@ async fn eight_work_units_spread_first_hop_across_sixteen_gemini_slots() {
 fn hash_bias_differs_across_work_units() {
     let a = hash_bias("invoker", "unit-alpha", "gemini-free-9");
     let b = hash_bias("invoker", "unit-beta", "gemini-free-9");
-    assert_ne!(a, b);
+    assert!((a - b).abs() > f64::EPSILON);
 }
 
 #[tokio::test]
@@ -352,6 +434,8 @@ async fn replan_excludes_failed_hop() {
         app_state.route_memory(),
         100,
         &exclude,
+        None,
+        RouteStreamMode::NonStreaming,
     )
     .await;
     assert!(
@@ -362,7 +446,7 @@ async fn replan_excludes_failed_hop() {
 }
 
 #[tokio::test]
-async fn eight_gemini_accounts_plan_includes_openrouter_within_hop_cap() {
+async fn eight_gemini_accounts_plan_includes_openrouter_fallback() {
     const SLOTS: [&str; 8] = [
         "gemini-free",
         "gemini-free-2",
@@ -411,10 +495,16 @@ async fn eight_gemini_accounts_plan_includes_openrouter_within_hop_cap() {
         app_state.route_memory(),
         100,
         &HashSet::new(),
+        None,
+        RouteStreamMode::NonStreaming,
     )
     .await;
     assert!(!plan.chain.is_empty());
-    assert!(plan.chain.len() <= MAX_PLAN_HOPS);
+    assert_eq!(
+        plan.chain[0].capability.provider.to_string(),
+        "gemini",
+        "multi-account provider group should anchor before single fallback"
+    );
     assert!(
         plan.chain.iter().any(|candidate| {
             candidate.capability.provider.to_string() == "openrouter"
@@ -479,6 +569,8 @@ async fn strategic_fallbacks_try_browser_sessions_before_local_vllm() {
         app_state.route_memory(),
         100,
         &HashSet::new(),
+        None,
+        RouteStreamMode::NonStreaming,
     )
     .await;
     let providers: Vec<_> = plan
@@ -576,6 +668,8 @@ async fn plan_replay_lists_quota_excluded_candidates() {
         app_state.route_memory(),
         0,
         &HashSet::new(),
+        None,
+        RouteStreamMode::NonStreaming,
     )
     .await;
     let replay = plan.replay.expect("plan replay");

@@ -90,17 +90,17 @@ mod test_hooks {
 
         use super::*;
 
-        fn ok() -> Result<Response, ApiError> {
-            Ok(http::Response::builder()
+        fn ok() -> Response {
+            http::Response::builder()
                 .status(StatusCode::OK)
                 .body(Body::from("ok"))
-                .unwrap())
+                .unwrap()
         }
 
         #[test]
         fn script_precedes_legacy_fifo() {
             clear();
-            push_for_credential("gemini-free", ok());
+            push_for_credential("gemini-free", Ok(ok()));
             install_upstream_mock(
                 gateway_tests::UpstreamMockScript::new().binding(
                     "gemini-free",

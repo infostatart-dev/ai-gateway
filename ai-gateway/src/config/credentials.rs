@@ -19,6 +19,11 @@ use crate::{
 const CREDENTIALS_YAML: &str =
     include_str!("../../config/embedded/credentials.yaml");
 
+#[must_use]
+pub fn requires_keyless_secret_opt_in(provider: &InferenceProvider) -> bool {
+    matches!(provider, InferenceProvider::Named(name) if name == "vllm")
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ProviderCredentialId(pub CompactString);
@@ -262,6 +267,7 @@ mod tests {
             serde_yml::from_str(CREDENTIALS_YAML).unwrap();
         assert!(catalog.credentials.contains_key("gemini-free"));
         assert!(catalog.credentials.contains_key("gemini-free-16"));
+        assert!(catalog.credentials.contains_key("vllm-anonymous"));
         assert!(catalog.credentials.contains_key("deepseek-web-2"));
         assert!(catalog.credentials.contains_key("openrouter-default"));
         assert!(catalog.credentials.contains_key("longcat-default"));
@@ -308,13 +314,13 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let mut secrets = write_secrets(
             &dir,
-            r#"
+            r"
 credentials:
   gemini-free:
     api-key: free-1
   gemini-free-2:
     api-key: free-2
-"#,
+",
         );
         let registry = CredentialRegistry::build(&providers(), &mut secrets);
         let gemini: Vec<_> = registry
@@ -325,19 +331,41 @@ credentials:
     }
 
     #[test]
+    fn registry_loads_vllm_only_with_keyless_secret_opt_in() {
+        let mut empty = SecretsFile::default();
+        let registry = CredentialRegistry::build(&providers(), &mut empty);
+        let vllm = InferenceProvider::Named("vllm".into());
+        assert!(requires_keyless_secret_opt_in(&vllm));
+        assert!(!registry.has_for(&vllm));
+
+        let dir = std::env::temp_dir().join("ai-gw-cred-vllm");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut secrets = write_secrets(
+            &dir,
+            "credentials:\n  vllm-anonymous:\n    keyless: true\n",
+        );
+        let registry = CredentialRegistry::build(&providers(), &mut secrets);
+        let credential = registry.default_for(&vllm).expect("vllm credential");
+        assert_eq!(credential.id.as_str(), "vllm-anonymous");
+        assert_eq!(credential.key, ProviderKey::NotRequired);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn registry_loads_bedrock_from_integrations_aws() {
         let dir = std::env::temp_dir().join("ai-gw-cred-bedrock");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let mut secrets = write_secrets(
             &dir,
-            r#"
+            r"
 integrations:
   aws:
     access-key: AKIA
     secret-key: secret
     region: eu-central-1
-"#,
+",
         );
         let registry = CredentialRegistry::build(&providers(), &mut secrets);
         assert!(registry.has_for(&InferenceProvider::Bedrock));

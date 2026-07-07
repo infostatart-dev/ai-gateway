@@ -169,7 +169,7 @@ keys:
     }
 
     fn empty_keys_yaml() -> &'static str {
-        r#"
+        r"
 version: 1
 plans:
   starter:
@@ -179,7 +179,7 @@ plans:
       tokens:
         per-minute: 1000
 keys: {}
-"#
+"
     }
 
     async fn app_state_for_file(path: PathBuf) -> AppState {

@@ -50,6 +50,7 @@ impl Dispatcher {
         router_runtime_labels: Option<RouterRuntimeLabels>,
         upstream_attempt: Option<&UpstreamAttemptContext>,
         credential_id: Option<ProviderCredentialId>,
+        provider_metrics_deferred: bool,
     ) {
         let deployment_target =
             self.app_state.config().deployment_target.clone();
@@ -77,6 +78,7 @@ impl Dispatcher {
                 .router_runtime_labels(router_runtime_labels.clone())
                 .upstream_attempt(upstream_attempt.cloned())
                 .credential_id(credential_id.clone())
+                .provider_metrics_deferred(provider_metrics_deferred)
                 .build();
             let app_state = self.app_state.clone();
             tokio::spawn(
@@ -110,6 +112,7 @@ impl Dispatcher {
                     .extensions()
                     .get::<PendingRouteTrace>()
                     .cloned(),
+                provider_metrics_deferred,
             });
         }
     }
@@ -132,6 +135,7 @@ impl Dispatcher {
             upstream_attempt,
             credential_id,
             pending_route_trace,
+            provider_metrics_deferred,
         } = context;
         let mapper_ctx = mapper_ctx.clone();
         let app_state = self.app_state.clone();
@@ -195,23 +199,26 @@ impl Dispatcher {
                         .record(dur.as_secs_f64() * 1000.0, &attrs);
                 }
 
-                record_upstream_attempt(&DispatchMetricsInput {
-                    app_state: &app_state,
-                    provider: &provider,
-                    credential: credential_id.as_ref(),
-                    model: mapper_ctx.model.as_ref(),
-                    router_id: router_id.as_ref(),
-                    attempt: upstream_attempt.as_ref(),
-                    status: response_status,
-                    stream: is_stream,
-                    request_kind,
-                    duration_ms,
-                    tfft_ms: tfft_ok_ms,
-                    reported_usage,
-                    request_body: Some(&req_body_bytes),
-                    failover_class: None,
-                    agent_name: agent_name.as_deref(),
-                });
+                if !provider_metrics_deferred {
+                    record_upstream_attempt(&DispatchMetricsInput {
+                        app_state: &app_state,
+                        provider: &provider,
+                        credential: credential_id.as_ref(),
+                        model: mapper_ctx.model.as_ref(),
+                        router_id: router_id.as_ref(),
+                        attempt: upstream_attempt.as_ref(),
+                        status: response_status,
+                        stream: is_stream,
+                        request_kind,
+                        duration_ms,
+                        tfft_ms: tfft_ok_ms,
+                        reported_usage,
+                        request_body: Some(&req_body_bytes),
+                        failover_class: None,
+                        semantic_outcome: None,
+                        agent_name: agent_name.as_deref(),
+                    });
+                }
 
                 if matches!(
                     request_kind,
@@ -262,6 +269,7 @@ impl Dispatcher {
                             .observability
                             .estimate_tokens,
                         failover_class: None,
+                        semantic_outcome: None,
                         agent_name: agent_name.as_deref(),
                     });
                     let usage_source = match record.usage_source {
@@ -301,4 +309,5 @@ struct MetricsLoggingContext<'a> {
     upstream_attempt: Option<UpstreamAttemptContext>,
     credential_id: Option<ProviderCredentialId>,
     pending_route_trace: Option<PendingRouteTrace>,
+    provider_metrics_deferred: bool,
 }

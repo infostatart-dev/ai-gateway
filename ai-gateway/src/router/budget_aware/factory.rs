@@ -14,8 +14,10 @@ use super::{
 use crate::{
     app_state::AppState,
     config::{
-        cost_class::CostClass, credentials::ProviderCredentialId,
-        providers::GlobalProviderConfig, router::RouterConfig,
+        cost_class::CostClass,
+        credentials::{ProviderCredentialId, requires_keyless_secret_opt_in},
+        providers::GlobalProviderConfig,
+        router::RouterConfig,
     },
     dispatcher::Dispatcher,
     endpoints::EndpointType,
@@ -90,6 +92,9 @@ pub(super) async fn build(
             credentials.for_provider(provider).collect();
 
         if provider_credentials.is_empty() {
+            if requires_keyless_secret_opt_in(provider) {
+                continue;
+            }
             push_anonymous_candidates(
                 &mut candidates,
                 app_state.clone(),

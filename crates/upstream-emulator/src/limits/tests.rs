@@ -3,7 +3,6 @@ use ai_gateway::{
     types::provider::InferenceProvider,
 };
 
-use super::resolve::resolve_limits;
 use crate::limits::{LimitRegistry, RateLimitVerdict};
 
 #[test]

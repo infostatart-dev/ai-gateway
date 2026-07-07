@@ -131,6 +131,15 @@ impl RouteTrace {
         route_span: Span,
         estimated_usage: TokenUsage,
     ) -> Self {
+        if let Some(replay) = plan.and_then(|p| p.replay.as_ref()) {
+            tracing::event!(
+                parent: &route_span,
+                Level::INFO,
+                planned_hops = replay.planned_chain.len(),
+                planned_chain = %format_plan_hops(&replay.planned_chain),
+                "gateway.route.plan"
+            );
+        }
         Self {
             started: Instant::now(),
             route_span,
@@ -238,6 +247,12 @@ impl RouteTrace {
         }
     }
 
+    pub(super) fn record_semantic_failure_signal(&mut self) {
+        self.failover_class = Some("semantic_error".to_string());
+        self.upstream_failure_kind = Some("none".to_string());
+        self.restricted_until = None;
+    }
+
     pub(super) fn record_failure_trace_fields(
         &mut self,
         fields: &FailureTraceFields,
@@ -267,9 +282,14 @@ impl RouteTrace {
         plan_rebuilds: u32,
         excluded_candidates: usize,
         status: &'static str,
+        replay: Option<&crate::types::extensions::PlanReplaySnapshot>,
     ) {
         self.set_plan_rebuilds(plan_rebuilds);
         self.candidates = self.candidates.saturating_add(new_candidates);
+        let planned_chain = replay.map_or_else(
+            || "none".to_string(),
+            |replay| format_plan_hops(&replay.planned_chain),
+        );
         tracing::event!(
             parent: &self.route_span,
             Level::INFO,
@@ -281,6 +301,7 @@ impl RouteTrace {
             attempts = self.attempts,
             skipped = self.skipped,
             excluded_candidates,
+            planned_chain = planned_chain.as_str(),
             "gateway.route.replan"
         );
     }
@@ -465,6 +486,20 @@ pub(super) fn wrap_response_with_route_trace(
         parts,
         Body::from_stream(route_trace_body_stream(state)),
     )
+}
+
+fn format_plan_hops(
+    hops: &[crate::types::extensions::ReplayPlanHop],
+) -> String {
+    hops.iter()
+        .map(|hop| {
+            format!(
+                "{}:{}/{}/{}",
+                hop.position, hop.provider, hop.credential, hop.model
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" -> ")
 }
 
 type BoxedBodyDataStream = Pin<
@@ -849,7 +884,7 @@ mod tests {
         );
         trace.record_attempt();
         trace.record_skipped(2);
-        trace.record_replan(1, 2, 1, 1, "applied");
+        trace.record_replan(1, 2, 1, 1, "applied", None);
 
         let outcome = RouteOutcome {
             label: "success",

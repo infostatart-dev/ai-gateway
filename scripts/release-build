@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+append_rustflag() {
+  local flag="$1"
+  if [[ " ${RUSTFLAGS:-} " != *" ${flag} "* ]]; then
+    export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }${flag}"
+  fi
+}
+
+truthy() {
+  case "${1:-0}" in
+    1 | true | TRUE | yes | YES | on | ON) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# shellcheck source=scripts/cargo-env
+. "$ROOT/scripts/cargo-env"
+JOBS="$CARGO_BUILD_JOBS"
+
+native=0
+if truthy "${NATIVE:-0}" || truthy "${AI_GATEWAY_RELEASE_NATIVE:-0}"; then
+  native=1
+  append_rustflag "-C target-cpu=native"
+fi
+
+mold=0
+if [[ "${AI_GATEWAY_RELEASE_MOLD:-auto}" != "0" ]] \
+  && [[ "$(uname -s)" == "Linux" ]] \
+  && command -v mold >/dev/null 2>&1; then
+  mold=1
+  append_rustflag "-C link-arg=-fuse-ld=mold"
+fi
+
+fast=0
+if truthy "${FAST_LOCAL:-0}" || truthy "${AI_GATEWAY_RELEASE_FAST:-0}"; then
+  fast=1
+  export CARGO_PROFILE_RELEASE_LTO="${CARGO_PROFILE_RELEASE_LTO:-thin}"
+  export CARGO_PROFILE_RELEASE_CODEGEN_UNITS="${CARGO_PROFILE_RELEASE_CODEGEN_UNITS:-$JOBS}"
+fi
+
+log="${AI_GATEWAY_RELEASE_LOG:-target/release-build.log}"
+mkdir -p "$(dirname "$log")"
+
+echo "release-build: jobs=$CARGO_BUILD_JOBS native=$native mold=$mold fast_local=$fast"
+echo "release-build: rustflags=${RUSTFLAGS:-<unset>}"
+echo "release-build: log=$log"
+if truthy "${AI_GATEWAY_RELEASE_DRY_RUN:-0}"; then
+  echo "release-build: dry-run cargo build --color never --workspace --all-features --release --jobs $CARGO_BUILD_JOBS $*"
+  exit 0
+fi
+
+set +e
+cargo build --color never --workspace --all-features --release --jobs "$CARGO_BUILD_JOBS" "$@" 2>&1 | tee "$log"
+status=${PIPESTATUS[0]}
+set -e
+
+warnings="$(grep -c '^warning' "$log" || true)"
+echo "release-build: status=$status warnings=$warnings"
+if (( warnings > 0 )); then
+  echo "release-build: warnings:"
+  grep -n '^warning' "$log" || true
+fi
+exit "$status"

@@ -3,7 +3,7 @@ use http::StatusCode;
 use serde_json::Value;
 
 use super::{
-    attempt::{classify_outcome, resolve_usage},
+    attempt::{CallOutcome, classify_outcome, resolve_usage},
     runtime::AttemptRecord,
 };
 use crate::{
@@ -35,6 +35,7 @@ pub struct RecordAttemptInput<'a> {
     pub request_body: Option<&'a Bytes>,
     pub estimate_tokens: bool,
     pub failover_class: Option<FailoverClass>,
+    pub semantic_outcome: Option<CallOutcome>,
     pub agent_name: Option<&'a str>,
 }
 
@@ -52,7 +53,9 @@ pub fn build_attempt_record(input: &RecordAttemptInput<'_>) -> AttemptRecord {
         input.estimate_tokens,
     );
     let overload = input.failover_class == Some(FailoverClass::Overload);
-    let outcome = classify_outcome(input.status, usage_source, overload);
+    let outcome = input.semantic_outcome.unwrap_or_else(|| {
+        classify_outcome(input.status, usage_source, overload)
+    });
     AttemptRecord {
         provider: input.provider.to_string(),
         credential: input.credential.to_string(),
@@ -112,10 +115,35 @@ mod tests {
             request_body: Some(&body),
             estimate_tokens: true,
             failover_class: None,
+            semantic_outcome: None,
             agent_name: None,
         });
         assert_eq!(record.usage_source, UsageSource::Estimated);
         assert_eq!(record.outcome, CallOutcome::SuccessDegraded);
         assert!(record.usage.input.unwrap_or(0) > 0);
+    }
+
+    #[test]
+    fn semantic_outcome_overrides_http_success() {
+        let record = build_attempt_record(&RecordAttemptInput {
+            provider: &InferenceProvider::OpenAI,
+            credential: "default",
+            model: None,
+            router_id: None,
+            attempt: None,
+            status: StatusCode::OK,
+            stream: false,
+            request_kind: RequestKind::Router,
+            duration_ms: 100.0,
+            tfft_ms: None,
+            reported_usage: TokenUsage::default(),
+            request_body: None,
+            estimate_tokens: false,
+            failover_class: None,
+            semantic_outcome: Some(CallOutcome::SemanticError),
+            agent_name: None,
+        });
+
+        assert_eq!(record.outcome, CallOutcome::SemanticError);
     }
 }

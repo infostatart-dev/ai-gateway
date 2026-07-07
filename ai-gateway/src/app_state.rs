@@ -107,7 +107,7 @@ impl AppState {
     #[must_use]
     pub fn route_memory(
         &self,
-    ) -> &Arc<crate::router::budget_aware::WorkUnitRouteMemory> {
+    ) -> &Arc<crate::router::budget_aware::GatewayRouteMemory> {
         &self.0.route_memory
     }
 
@@ -192,7 +192,7 @@ pub struct InnerAppState {
     pub policy_store: Arc<dyn crate::middleware::decision::policy::PolicyStore>,
     pub upstream_pacing: Arc<crate::router::pacing::PacingRegistry>,
     pub budget_probe: Arc<crate::router::budget_probe::BudgetProbeRegistry>,
-    pub route_memory: Arc<crate::router::budget_aware::WorkUnitRouteMemory>,
+    pub route_memory: Arc<crate::router::budget_aware::GatewayRouteMemory>,
     pub route_leases: Arc<crate::router::budget_aware::InFlightRouteRegistry>,
 }
 

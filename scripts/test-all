@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+truthy() {
+  case "${1:-0}" in
+    1 | true | TRUE | yes | YES | on | ON) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# shellcheck source=scripts/cargo-env
+. "$ROOT/scripts/cargo-env"
+
+log="${AI_GATEWAY_TEST_LOG:-target/test-all.log}"
+mkdir -p "$(dirname "$log")"
+
+echo "test-all: jobs=$CARGO_BUILD_JOBS"
+echo "test-all: bindgen_extra_clang_args=${BINDGEN_EXTRA_CLANG_ARGS:-<unset>}"
+echo "test-all: libclang_path=${LIBCLANG_PATH:-<unset>}"
+echo "test-all: log=$log"
+if truthy "${AI_GATEWAY_TEST_DRY_RUN:-0}"; then
+  echo "test-all: dry-run cargo test --color never --workspace --all-features --jobs $CARGO_BUILD_JOBS $*"
+  exit 0
+fi
+
+set +e
+cargo test --color never --workspace --all-features --jobs "$CARGO_BUILD_JOBS" "$@" 2>&1 | tee "$log"
+status=${PIPESTATUS[0]}
+set -e
+
+warnings="$(grep -c '^warning' "$log" || true)"
+failures="$(grep -c '^test .* FAILED$' "$log" || true)"
+echo "test-all: status=$status warnings=$warnings failed_tests=$failures"
+if (( warnings > 0 )); then
+  echo "test-all: warnings:"
+  grep -n '^warning' "$log" || true
+fi
+if (( failures > 0 )); then
+  echo "test-all: failed tests:"
+  grep -n '^test .* FAILED$' "$log" || true
+fi
+exit "$status"

@@ -42,10 +42,12 @@ mod tests {
 
     #[test]
     fn sidecar_helicone_features_all_omits_control_plane_client() {
-        let mut config = Config::default();
-        config.helicone = HeliconeConfig {
-            features: HeliconeFeatures::All,
-            ..HeliconeConfig::default()
+        let config = Config {
+            helicone: HeliconeConfig {
+                features: HeliconeFeatures::All,
+                ..HeliconeConfig::default()
+            },
+            ..Config::default()
         };
 
         let names = meltdown_service_names(&config);

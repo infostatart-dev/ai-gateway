@@ -7,7 +7,10 @@ use std::time::Duration;
 use super::types::BudgetAwareRouter;
 use crate::{
     config::credentials::ProviderCredentialId,
-    metrics::router::{CooldownEvent, FailoverEvent},
+    metrics::{
+        provider::attempt::CallOutcome,
+        router::{CooldownEvent, FailoverEvent},
+    },
     router::retry_after::{
         ExhaustionScope, FailoverClass, classify_and_cooldown,
         quota_metric_label,
@@ -59,6 +62,24 @@ pub(super) async fn record_classified_failure(
         class,
         scope,
     );
+    router.app_state.credential_health().record_model_attempt(
+        provider,
+        credential_id,
+        model,
+        outcome_for_status(status, class),
+        status.as_u16(),
+        elapsed,
+    );
+    router
+        .app_state
+        .credential_health()
+        .record_model_failover_class(
+            provider,
+            credential_id,
+            model,
+            class,
+            status.as_u16(),
+        );
     if status == http::StatusCode::PAYMENT_REQUIRED
         && scope == ExhaustionScope::Project
     {
@@ -93,6 +114,22 @@ pub(super) async fn record_classified_failure(
         );
     }
     (response, class, scope)
+}
+
+fn outcome_for_status(
+    status: http::StatusCode,
+    class: FailoverClass,
+) -> CallOutcome {
+    if status == http::StatusCode::TOO_MANY_REQUESTS {
+        return CallOutcome::RateLimited;
+    }
+    if class == FailoverClass::Overload {
+        return CallOutcome::Overload;
+    }
+    if status.is_server_error() {
+        return CallOutcome::ServerError;
+    }
+    CallOutcome::ClientError
 }
 
 pub(super) fn record_failover_metric(

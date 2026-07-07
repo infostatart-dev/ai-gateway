@@ -445,6 +445,7 @@ async fn attempt_record_includes_agent_name_attribute() {
         request_body: None,
         estimate_tokens: false,
         failover_class: None,
+        semantic_outcome: None,
         agent_name: Some("invoker-alpha"),
     });
     assert_eq!(record.agent_name.as_deref(), Some("invoker-alpha"));

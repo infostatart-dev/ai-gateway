@@ -202,6 +202,7 @@ fn is_available_for_autodefault(
     }
     if crate::config::chatgpt_web::is_chatgpt_web(provider)
         || crate::config::deepseek_web::is_deepseek_web(provider)
+        || crate::config::credentials::requires_keyless_secret_opt_in(provider)
     {
         return credentials.has_for(provider);
     }
@@ -325,7 +326,7 @@ mod tests {
         assert!(!is_available_for_autodefault(&github, &providers, &empty));
 
         let credentials = registry_from_secrets(
-            r#"
+            r"
 credentials:
   openrouter-default:
     api-key: sk-or-test
@@ -333,7 +334,7 @@ credentials:
     api-key: ghp_test
   mistral-default:
     api-key: mistral-test
-"#,
+",
         );
         assert!(is_available_for_autodefault(
             &github,
@@ -376,13 +377,13 @@ credentials:
     fn autodefault_longcat_ranks_after_openrouter_when_configured() {
         let providers = ProvidersConfig::default();
         let credentials = registry_from_secrets(
-            r#"
+            r"
 credentials:
   longcat-default:
     api-key: lc-test
   openrouter-default:
     api-key: sk-or-test
-"#,
+",
         );
         let longcat = InferenceProvider::Named("longcat".into());
         assert!(is_available_for_autodefault(
@@ -421,11 +422,11 @@ credentials:
     fn autodefault_includes_llm7_when_configured() {
         let providers = ProvidersConfig::default();
         let credentials = registry_from_secrets(
-            r#"
+            r"
 credentials:
   llm7-default:
     api-key: llm7-test
-"#,
+",
         );
         let llm7 = InferenceProvider::Named("llm7".into());
         assert!(is_available_for_autodefault(
@@ -453,9 +454,30 @@ credentials:
     }
 
     #[test]
-    fn autodefault_with_empty_secrets_includes_only_keyless_vllm() {
+    fn autodefault_with_empty_secrets_excludes_vllm_without_opt_in() {
         let providers = ProvidersConfig::default();
         let credentials = registry_from_secrets("credentials: {}\n");
+        let vllm = InferenceProvider::Named("vllm".into());
+        assert!(!is_available_for_autodefault(
+            &vllm,
+            &providers,
+            &credentials,
+        ));
+
+        let config = Config {
+            providers,
+            credentials,
+            ..Config::default()
+        };
+        assert!(build_autodefault_router(&config).is_none());
+    }
+
+    #[test]
+    fn autodefault_includes_vllm_with_keyless_secret_opt_in() {
+        let providers = ProvidersConfig::default();
+        let credentials = registry_from_secrets(
+            "credentials:\n  vllm-anonymous:\n    keyless: true\n",
+        );
         let vllm = InferenceProvider::Named("vllm".into());
         assert!(is_available_for_autodefault(
             &vllm,
@@ -480,8 +502,7 @@ credentials:
             panic!("expected BudgetAwareCapabilityAfter");
         };
 
-        let actual: Vec<_> = providers.iter().cloned().collect();
-        assert_eq!(actual, vec![vllm.clone()]);
+        assert!(providers.contains(&vllm));
         assert_eq!(provider_priorities.get(&vllm), Some(&0));
     }
 

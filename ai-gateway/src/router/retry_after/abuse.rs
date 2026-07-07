@@ -7,6 +7,15 @@ pub fn looks_like_unsupported_model(body: Option<&[u8]>) -> bool {
 }
 
 #[must_use]
+pub fn looks_like_model_unavailable(body: Option<&[u8]>) -> bool {
+    let text = body_to_lower_text(body);
+    text.contains("model")
+        && (text.contains("currently unavailable")
+            || text.contains("temporarily unavailable")
+            || text.contains("not currently available"))
+}
+
+#[must_use]
 pub fn looks_like_unpaid_route(body: Option<&[u8]>) -> bool {
     let text = body_to_lower_text(body);
     text.contains("never purchased")
@@ -65,6 +74,13 @@ mod tests {
     fn unsupported_model_body_triggers_auth_cooldown() {
         let body = br#"{"error":{"message":"Unsupported model (model=LongCat-Flash-Lite)"}}"#;
         assert!(looks_like_unsupported_model(Some(body)));
+    }
+
+    #[test]
+    fn model_currently_unavailable_is_model_specific() {
+        let body = br#"{"error":{"message":"Model 'gpt-oss:20b' is currently unavailable"}}"#;
+        assert!(looks_like_model_unavailable(Some(body)));
+        assert!(!looks_like_unsupported_model(Some(body)));
     }
 
     #[test]

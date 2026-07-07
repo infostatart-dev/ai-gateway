@@ -123,9 +123,10 @@ async fn snapshot_capture_matches_direct_admission_verdict() {
         snapshot.blocked_reason("gemini-free-4", "gemini-2.5-flash-lite"),
         verdict.blocked_reason
     );
-    assert_eq!(
-        snapshot.headroom_score("gemini-free-4", "gemini-2.5-flash-lite"),
-        verdict.headroom_score()
+    let snapshot_headroom =
+        snapshot.headroom_score("gemini-free-4", "gemini-2.5-flash-lite");
+    assert!(
+        (snapshot_headroom - verdict.headroom_score()).abs() < f64::EPSILON
     );
     assert!(
         snapshot
@@ -170,9 +171,10 @@ async fn strict_admission_zero_headroom_on_subsecond_rpm_wait() {
     )
     .await;
 
-    assert_eq!(
-        snapshot.headroom_score("gemini-free-3", "gemini-2.5-flash-lite"),
-        0.0,
+    let headroom =
+        snapshot.headroom_score("gemini-free-3", "gemini-2.5-flash-lite");
+    assert!(
+        headroom.abs() < f64::EPSILON,
         "rpm-saturated model scope must have zero headroom"
     );
 }

@@ -1,4 +1,4 @@
-//! CI gate: embedded OpenRouter wire slugs must exist in frozen ListModels
+//! CI gate: embedded `OpenRouter` wire slugs must exist in frozen `ListModels`
 //! fixture.
 
 use std::collections::HashSet;

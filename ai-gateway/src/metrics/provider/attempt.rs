@@ -13,6 +13,7 @@ pub enum UsageSource {
 pub enum CallOutcome {
     Success,
     SuccessDegraded,
+    SemanticError,
     ClientError,
     ServerError,
     RateLimited,
@@ -25,6 +26,7 @@ impl CallOutcome {
         match self {
             Self::Success => "success",
             Self::SuccessDegraded => "success_degraded",
+            Self::SemanticError => "semantic_error",
             Self::ClientError => "client_error",
             Self::ServerError => "server_error",
             Self::RateLimited => "rate_limited",

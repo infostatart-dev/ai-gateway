@@ -88,6 +88,8 @@ pub struct LoggerService {
     upstream_attempt: Option<UpstreamAttemptContext>,
     #[builder(default)]
     credential_id: Option<ProviderCredentialId>,
+    #[builder(default)]
+    provider_metrics_deferred: bool,
 }
 
 impl LoggerService {
@@ -184,26 +186,29 @@ impl LoggerService {
             );
         }
 
-        crate::metrics::provider::record_upstream_attempt(
-            &crate::metrics::provider::DispatchMetricsInput {
-                app_state: &self.app_state,
-                provider: &self.provider,
-                credential: self.credential_id.as_ref(),
-                model: self.mapper_ctx.model.as_ref(),
-                router_id: self.router_id.as_ref(),
-                attempt: self.upstream_attempt.as_ref(),
-                status: self.response_status,
-                stream: self.mapper_ctx.is_stream,
-                request_kind: self.request_kind,
-                duration_ms: self.start_instant.elapsed().as_secs_f64()
-                    * 1000.0,
-                tfft_ms: Some(tfft_duration.as_secs_f64() * 1000.0),
-                reported_usage: usage,
-                request_body: Some(&self.request_body),
-                failover_class: None,
-                agent_name: None,
-            },
-        );
+        if !self.provider_metrics_deferred {
+            crate::metrics::provider::record_upstream_attempt(
+                &crate::metrics::provider::DispatchMetricsInput {
+                    app_state: &self.app_state,
+                    provider: &self.provider,
+                    credential: self.credential_id.as_ref(),
+                    model: self.mapper_ctx.model.as_ref(),
+                    router_id: self.router_id.as_ref(),
+                    attempt: self.upstream_attempt.as_ref(),
+                    status: self.response_status,
+                    stream: self.mapper_ctx.is_stream,
+                    request_kind: self.request_kind,
+                    duration_ms: self.start_instant.elapsed().as_secs_f64()
+                        * 1000.0,
+                    tfft_ms: Some(tfft_duration.as_secs_f64() * 1000.0),
+                    reported_usage: usage,
+                    request_body: Some(&self.request_body),
+                    failover_class: None,
+                    semantic_outcome: None,
+                    agent_name: None,
+                },
+            );
+        }
 
         let s3_client = if self.app_state.config().deployment_target.is_cloud()
         {

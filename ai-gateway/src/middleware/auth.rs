@@ -323,10 +323,12 @@ mod tests {
         expires_at: Option<&str>,
     ) -> String {
         let hash = ClientAccessKeyHash::from_bearer_token(token);
-        let scopes = scopes
-            .iter()
-            .map(|scope| format!("      - \"{scope}\"\n"))
-            .collect::<String>();
+        let mut scopes_yaml = String::new();
+        for scope in scopes {
+            use std::fmt::Write as _;
+            writeln!(&mut scopes_yaml, "      - \"{scope}\"")
+                .expect("write scope yaml");
+        }
         let expires = expires_at
             .map(|value| format!("    expires-at: \"{value}\"\n"))
             .unwrap_or_default();
@@ -351,7 +353,7 @@ keys:
     status: {status}
     plan: starter
 {expires}    scopes:
-{scopes}"#
+{scopes_yaml}"#
         )
     }
 

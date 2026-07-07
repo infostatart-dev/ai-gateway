@@ -9,7 +9,7 @@ pub use crate::{
     router::{
         budget_aware::{
             BudgetAwareRouter, BudgetCandidate, CredentialHealthRegistry,
-            RouteBinding, WorkUnitRouteMemory, balance_ranked,
+            GatewayRouteMemory, RouteBinding, RouteStreamMode, balance_ranked,
             chatgpt_candidate, clear_test_call_responses, deep_paid_candidate,
             deepseek_model_candidate, deepseek_slots, empty_router,
             gemini_candidate, gemini_model_candidate, gemini_slots,

@@ -119,10 +119,9 @@ async fn rpm_blocked_snapshot_exposes_reason_and_next_available_at() {
         Instant::now(),
     )
     .await;
-    assert_eq!(
-        snapshot.headroom_score("gemini-free-3", "gemini-2.5-flash-lite"),
-        0.0
-    );
+    let headroom =
+        snapshot.headroom_score("gemini-free-3", "gemini-2.5-flash-lite");
+    assert!(headroom.abs() < f64::EPSILON);
     assert_ne!(
         snapshot.blocked_reason("gemini-free-3", "gemini-2.5-flash-lite"),
         BlockedReason::None

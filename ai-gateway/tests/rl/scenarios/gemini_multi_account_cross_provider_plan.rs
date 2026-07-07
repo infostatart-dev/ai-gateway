@@ -1,6 +1,6 @@
 //! Reproduces the dev monoprovider failure: eight Gemini accounts plus
-//! OpenRouter must not fill all plan hops with intra-slot ladders before
-//! cross-provider failover.
+//! `OpenRouter` must all stay present in the plan so cross-provider failover
+//! is guaranteed after Gemini ladder exhaustion.
 
 use ai_gateway::{
     app_state::AppState,
@@ -97,9 +97,9 @@ pub async fn run() {
         format!("openrouter-default/{OPENROUTER_MODEL}"),
         "eight gemini accounts must not block cross-provider failover"
     );
-    assert!(
-        planned.planned_hops <= 7,
-        "failover must stay within hop budget, got {}",
-        planned.planned_hops
+    assert_eq!(
+        planned.planned_hops,
+        u32::try_from(GEMINI_SLOTS.len() * LADDER_MODELS.len() + 1).unwrap(),
+        "plan must include every feasible Gemini account/model plus OpenRouter"
     );
 }

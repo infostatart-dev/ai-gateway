@@ -9,13 +9,14 @@ use crate::{
     config::credentials::ProviderCredentialId,
     router::{
         budget_aware::{
-            memory::RouteBinding,
+            memory::RouteBindingPreference,
             types::{BudgetAwareRouter, BudgetCandidate},
         },
         quota_admission::BlockedReason,
     },
     types::extensions::{
-        PlanReplaySnapshot, ReplayAlternative, ReplayQuotaExcluded,
+        PlanReplaySnapshot, ReplayAlternative, ReplayPlanHop,
+        ReplayQuotaExcluded,
     },
 };
 
@@ -30,7 +31,7 @@ pub fn rank_survivors(
     router: &BudgetAwareRouter,
     ctx: &PlanContext<'_>,
     survivors: &[BudgetCandidate],
-    memory_binding: Option<&RouteBinding>,
+    memory_bindings: &[RouteBindingPreference],
 ) -> Vec<ScoredCandidate> {
     let mut scored: Vec<_> = survivors
         .iter()
@@ -39,7 +40,7 @@ pub fn rank_survivors(
                 router,
                 ctx,
                 candidate,
-                memory_binding,
+                memory_bindings,
             ));
             ScoredCandidate {
                 breakdown,
@@ -62,10 +63,11 @@ pub fn capture_replay(
     ctx: &PlanContext<'_>,
     router: &BudgetAwareRouter,
     survivors: &[BudgetCandidate],
-    memory_binding: Option<&RouteBinding>,
+    memory_bindings: &[RouteBindingPreference],
     hop0: &BudgetCandidate,
+    chain: &[BudgetCandidate],
 ) -> PlanReplaySnapshot {
-    let scored = rank_survivors(router, ctx, survivors, memory_binding);
+    let scored = rank_survivors(router, ctx, survivors, memory_bindings);
     let hop_key = plan_key(hop0);
     let winner = scored
         .iter()
@@ -73,7 +75,10 @@ pub fn capture_replay(
         .map_or_else(
             || {
                 score_breakdown(&score_input_for_candidate(
-                    router, ctx, hop0, None,
+                    router,
+                    ctx,
+                    hop0,
+                    memory_bindings,
                 ))
             },
             |entry| entry.breakdown.clone(),
@@ -93,9 +98,24 @@ pub fn capture_replay(
         winner_credential: hop0.credential_id.to_string(),
         winner_model: hop0.capability.model.to_string(),
         winner,
+        planned_chain: capture_planned_chain(chain),
         top_alternatives,
         quota_excluded: capture_quota_excluded(ctx, ctx.pool),
     }
+}
+
+#[must_use]
+pub fn capture_planned_chain(chain: &[BudgetCandidate]) -> Vec<ReplayPlanHop> {
+    chain
+        .iter()
+        .enumerate()
+        .map(|(index, candidate)| ReplayPlanHop {
+            position: u32::try_from(index).unwrap_or(u32::MAX),
+            provider: candidate.capability.provider.to_string(),
+            credential: candidate.credential_id.to_string(),
+            model: candidate.capability.model.to_string(),
+        })
+        .collect()
 }
 
 #[must_use]
@@ -164,15 +184,14 @@ fn score_input_for_candidate<'a>(
     router: &BudgetAwareRouter,
     ctx: &'a PlanContext<'_>,
     candidate: &'a BudgetCandidate,
-    memory_binding: Option<&RouteBinding>,
+    memory_bindings: &[RouteBindingPreference],
 ) -> ScoreInput<'a> {
     let model = candidate.capability.model.to_string();
     let credential = candidate.credential_id.as_str();
     let headroom = ctx.snapshot.headroom_score(credential, &model);
     let (quota_blocked_reason, quota_next_available_at) =
         quota_block_fields(ctx, credential, &model, headroom);
-    let affinity = memory_binding
-        .is_some_and(|binding| binding_matches(candidate, binding));
+    let route_preference = route_preference(candidate, memory_bindings);
     let hash = ctx.caller.work_unit_id.as_deref().map_or(0.0, |work_unit| {
         hash_bias(&ctx.caller.agent_name, work_unit, credential)
     });
@@ -180,12 +199,34 @@ fn score_input_for_candidate<'a>(
         candidate,
         health: ctx.health,
         headroom,
-        affinity,
-        hash_bias: hash,
+        route_preference,
+        client_affinity: hash,
         cooldown_secs: planner_cooldown_secs(router, ctx, candidate),
         quota_blocked_reason,
         quota_next_available_at,
     }
+}
+
+fn route_preference(
+    candidate: &BudgetCandidate,
+    memory_bindings: &[RouteBindingPreference],
+) -> f64 {
+    let model = candidate.capability.model.to_string();
+    let mut same_model_memory = 0.0_f64;
+    for preference in memory_bindings {
+        let binding_score = memory_preference_score(preference.score);
+        if binding_matches(candidate, &preference.binding) {
+            return binding_score;
+        }
+        if preference.binding.model == model {
+            same_model_memory = same_model_memory.max(binding_score * 0.7);
+        }
+    }
+    same_model_memory
+}
+
+fn memory_preference_score(score: f64) -> f64 {
+    score.clamp(0.0, 1.0)
 }
 
 fn quota_block_fields(

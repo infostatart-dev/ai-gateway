@@ -75,7 +75,7 @@ pub async fn build_app_state(config: Config) -> Result<AppState, InitError> {
             config.provider_limits.clone(),
         ));
     let route_memory =
-        Arc::new(crate::router::budget_aware::WorkUnitRouteMemory::new());
+        Arc::new(crate::router::budget_aware::GatewayRouteMemory::new());
     let route_leases =
         Arc::new(crate::router::budget_aware::InFlightRouteRegistry::new());
 

@@ -195,11 +195,11 @@ mod tests {
     #[test]
     fn parses_human_body_size() {
         let cfg: ClientAccessConfig = serde_yml::from_str(
-            r#"
+            r"
 enabled: true
 file: ./client-access.yaml
 max-body-bytes: 4MiB
-"#,
+",
         )
         .unwrap();
         assert_eq!(cfg.max_body_bytes, 4 * 1024 * 1024);

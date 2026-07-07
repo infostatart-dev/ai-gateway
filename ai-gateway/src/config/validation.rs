@@ -272,7 +272,7 @@ mod tests {
             )
             .unwrap()]);
         // Invalid model name for OpenAI provider id parsing
-        let source_model = ModelName::owned("".to_string());
+        let source_model = ModelName::owned(String::new());
 
         let result = config.can_map_model(
             &source_model,

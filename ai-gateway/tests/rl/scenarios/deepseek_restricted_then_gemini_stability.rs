@@ -25,15 +25,30 @@ pub async fn run() {
                 vec![credential_restricted_default],
             )
             .credential("deepseek-web-2", vec![credential_restricted_default])
-            .credential(
+            .binding(
                 "gemini-free-8",
-                vec![
-                    daily_quota_exhausted,
-                    daily_quota_exhausted,
-                    daily_quota_exhausted,
-                    daily_quota_exhausted,
-                    ok_chat_completion,
-                ],
+                "gemini-3-flash-preview",
+                vec![daily_quota_exhausted],
+            )
+            .binding(
+                "gemini-free-8",
+                "gemini-3.5-flash",
+                vec![daily_quota_exhausted],
+            )
+            .binding(
+                "gemini-free-8",
+                "gemini-3.1-flash-lite",
+                vec![daily_quota_exhausted],
+            )
+            .binding(
+                "gemini-free-8",
+                "gemini-2.5-flash",
+                vec![daily_quota_exhausted],
+            )
+            .binding(
+                "gemini-free-8",
+                "gemini-2.5-flash-lite",
+                vec![ok_chat_completion],
             ),
     );
 

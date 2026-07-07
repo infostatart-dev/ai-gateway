@@ -8,8 +8,8 @@ use crate::{
     error::{api::ApiError, internal::InternalError},
     router::{
         capability::{
-            apply_payload_estimate, extract_requirements_from_value,
-            extract_source_model_from_value,
+            RequestRequirements, apply_payload_estimate,
+            extract_requirements_from_value, extract_source_model_from_value,
         },
         token_estimate::{PayloadBudgetConfig, estimate_from_value},
     },
@@ -17,6 +17,15 @@ use crate::{
         extensions::CallerRequestContext, request::Request, response::Response,
     },
 };
+
+struct RequestRouteContext {
+    requirements: RequestRequirements,
+    routing_intent: Option<crate::router::intent::RoutingIntent>,
+    source_model: Option<crate::types::model_id::ModelId>,
+    source_model_label: Option<String>,
+    stream: bool,
+    stream_mode: super::RouteStreamMode,
+}
 
 pub(super) fn budget_aware_call(
     this: BudgetAwareRouter,
@@ -30,27 +39,12 @@ pub(super) fn budget_aware_call(
             .map_err(InternalError::CollectBodyError)?
             .to_bytes();
 
-        let parsed: Option<Value> = serde_json::from_slice(&body_bytes).ok();
-        let budget = PayloadBudgetConfig::default();
-        let mut requirements = parsed
-            .as_ref()
-            .map(extract_requirements_from_value)
-            .unwrap_or_default();
-        if let Some(value) = parsed.as_ref()
-            && let Some(estimate) = estimate_from_value(value, budget)
-        {
-            apply_payload_estimate(&mut requirements, estimate);
-        }
-        let source_model = parsed.as_ref().and_then(|value| {
-            extract_managed_source_model(&parts, value)
-                .or_else(|| extract_source_model_from_value(value))
-        });
-        let routing_intent = source_model
-            .as_ref()
-            .map(crate::router::intent::extract_routing_intent);
+        let route_ctx = request_route_context(&parts, &body_bytes);
 
-        let mut pool =
-            this.ordered_candidates(&requirements, source_model.as_ref())?;
+        let mut pool = this.ordered_candidates(
+            &route_ctx.requirements,
+            route_ctx.source_model.as_ref(),
+        )?;
         if let Some(credential_id) = managed_credential_id(&parts) {
             pool.retain(|candidate| &candidate.credential_id == credential_id);
         }
@@ -72,17 +66,20 @@ pub(super) fn budget_aware_call(
                     work_unit_source,
                 }
             });
-        let estimated_tokens = requirements.min_context_tokens.unwrap_or(0);
+        let estimated_tokens =
+            route_ctx.requirements.min_context_tokens.unwrap_or(0);
         let plan = super::plan::plan_route_chain(
             &this,
             pool.clone(),
-            &requirements,
-            routing_intent,
+            &route_ctx.requirements,
+            route_ctx.routing_intent,
             &caller,
             this.app_state.credential_health(),
             this.app_state.route_memory(),
             estimated_tokens,
             &std::collections::HashSet::new(),
+            route_ctx.source_model_label.as_deref(),
+            route_ctx.stream_mode,
         )
         .await;
         if plan.chain.is_empty() {
@@ -101,10 +98,14 @@ pub(super) fn budget_aware_call(
                 caller: caller.clone(),
                 full_pool: pool,
                 estimated_tokens,
+                route_memory_key: plan.memory_key.clone(),
                 route_memory_hit: plan.route_memory_hit,
                 planned_hops: plan.planned_hops,
-                source_model: source_model.as_ref().map(ToString::to_string),
-                json_schema_required: requirements.json_schema_required,
+                source_model: route_ctx.source_model_label,
+                stream: route_ctx.stream,
+                json_schema_required: route_ctx
+                    .requirements
+                    .json_schema_required,
                 replay: plan.replay,
             });
 
@@ -113,11 +114,51 @@ pub(super) fn budget_aware_call(
             parts,
             body_bytes,
             candidates,
-            requirements,
-            routing_intent,
+            route_ctx.requirements,
+            route_ctx.routing_intent,
         )
         .await
     })
+}
+
+fn request_route_context(
+    parts: &http::request::Parts,
+    body_bytes: &bytes::Bytes,
+) -> RequestRouteContext {
+    let parsed: Option<Value> = serde_json::from_slice(body_bytes).ok();
+    let mut requirements = parsed
+        .as_ref()
+        .map(extract_requirements_from_value)
+        .unwrap_or_default();
+    if let Some(value) = parsed.as_ref()
+        && let Some(estimate) =
+            estimate_from_value(value, PayloadBudgetConfig::default())
+    {
+        apply_payload_estimate(&mut requirements, estimate);
+    }
+    let source_model = parsed.as_ref().and_then(|value| {
+        extract_managed_source_model(parts, value)
+            .or_else(|| extract_source_model_from_value(value))
+    });
+    let routing_intent = source_model
+        .as_ref()
+        .map(crate::router::intent::extract_routing_intent);
+    let source_model_label = source_model.as_ref().map(ToString::to_string);
+    let stream = super::structured_output::request_is_stream(body_bytes);
+    let stream_mode = if stream {
+        super::RouteStreamMode::Streaming
+    } else {
+        super::RouteStreamMode::NonStreaming
+    };
+
+    RequestRouteContext {
+        requirements,
+        routing_intent,
+        source_model,
+        source_model_label,
+        stream,
+        stream_mode,
+    }
 }
 
 fn managed_credential_id(

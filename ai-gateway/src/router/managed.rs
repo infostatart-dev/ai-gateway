@@ -32,10 +32,9 @@ pub struct ManagedUpstreams {
 impl ManagedUpstreams {
     pub async fn new(app_state: &AppState) -> Result<Self, InitError> {
         let mut services = HashMap::new();
-        for provider in managed_providers() {
-            if !app_state.config().providers.contains_key(&provider) {
-                continue;
-            }
+        let providers =
+            configured_managed_providers(&app_state.config().providers);
+        for provider in providers {
             let router_id = managed_router_id(&provider);
             let router_config = Arc::new(managed_router_config(&provider));
             let router =
@@ -58,15 +57,10 @@ impl ManagedUpstreams {
     }
 }
 
-fn managed_providers() -> Vec<InferenceProvider> {
-    vec![
-        InferenceProvider::Named("chatgpt-web".into()),
-        InferenceProvider::Named("deepseek-web".into()),
-        InferenceProvider::Named("longcat".into()),
-        InferenceProvider::Named("llm7".into()),
-        InferenceProvider::GoogleGemini,
-        InferenceProvider::OpenAI,
-    ]
+fn configured_managed_providers(
+    providers: &crate::config::providers::ProvidersConfig,
+) -> Vec<InferenceProvider> {
+    providers.keys().cloned().collect()
 }
 
 fn managed_router_id(provider: &InferenceProvider) -> RouterId {
@@ -94,7 +88,14 @@ fn managed_router_config(provider: &InferenceProvider) -> RouterConfig {
 
 #[cfg(test)]
 mod tests {
+    use indexmap::{IndexMap, IndexSet};
+    use url::Url;
+
     use super::*;
+    use crate::{
+        config::providers::{GlobalProviderConfig, ProvidersConfig},
+        types::model_id::ModelId,
+    };
 
     #[test]
     fn managed_router_config_pins_single_provider() {
@@ -115,21 +116,59 @@ mod tests {
     }
 
     #[test]
-    fn managed_mode_is_enabled_for_browser_and_api_upstreams() {
-        let providers = managed_providers();
-        assert_eq!(providers.len(), 6);
-        assert!(
-            providers.contains(&InferenceProvider::Named("chatgpt-web".into()))
+    fn managed_mode_uses_configured_providers_without_allowlist() {
+        let custom = InferenceProvider::Named("custom-managed".into());
+        let llm7 = InferenceProvider::Named("llm7".into());
+        let providers = ProvidersConfig::from_iter([
+            (custom.clone(), provider_config(&custom)),
+            (llm7.clone(), provider_config(&llm7)),
+        ]);
+
+        assert_eq!(
+            configured_managed_providers(&providers),
+            vec![custom, llm7]
         );
-        assert!(
-            providers
-                .contains(&InferenceProvider::Named("deepseek-web".into()))
-        );
-        assert!(
-            providers.contains(&InferenceProvider::Named("longcat".into()))
-        );
-        assert!(providers.contains(&InferenceProvider::Named("llm7".into())));
-        assert!(providers.contains(&InferenceProvider::GoogleGemini));
-        assert!(providers.contains(&InferenceProvider::OpenAI));
+    }
+
+    #[cfg(feature = "testing")]
+    #[tokio::test]
+    async fn managed_upstreams_build_for_each_configured_provider() {
+        use crate::{
+            app::state::build_app_state, config::Config, tests::TestDefault,
+        };
+
+        let custom = InferenceProvider::Named("custom-managed".into());
+        let llm7 = InferenceProvider::Named("llm7".into());
+        let mut config = Config::test_default();
+        config.providers = ProvidersConfig::from_iter([
+            (custom.clone(), provider_config(&custom)),
+            (llm7.clone(), provider_config(&llm7)),
+        ]);
+
+        let app_state = build_app_state(config).await.unwrap();
+        let upstreams = ManagedUpstreams::new(&app_state).await.unwrap();
+
+        assert_eq!(upstreams.services.len(), 2);
+        assert!(upstreams.get(&custom).is_some());
+        assert!(upstreams.get(&llm7).is_some());
+    }
+
+    fn provider_config(provider: &InferenceProvider) -> GlobalProviderConfig {
+        let model = ModelId::from_str_and_provider(
+            provider.clone(),
+            "managed-test-model",
+        )
+        .unwrap();
+        GlobalProviderConfig {
+            models: IndexSet::from([model]),
+            base_url: Url::parse("http://managed.test/").unwrap(),
+            version: None,
+            gzip_decompress_responses: None,
+            model_capabilities: IndexMap::new(),
+            request_headers: IndexMap::new(),
+            model_catalog_keys: IndexMap::new(),
+            last_verified_at: None,
+            verify_source: None,
+        }
     }
 }

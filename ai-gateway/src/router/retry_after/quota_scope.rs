@@ -45,7 +45,8 @@ pub fn classify_exhaustion_scope(
             return ExhaustionScope::Model;
         }
         if matches!(status, StatusCode::BAD_REQUEST)
-            && super::abuse::looks_like_unsupported_model(body)
+            && (super::abuse::looks_like_unsupported_model(body)
+                || super::abuse::looks_like_model_unavailable(body))
         {
             return ExhaustionScope::Model;
         }
@@ -174,6 +175,36 @@ mod tests {
             ProviderQuotaProfile::PerModel,
         );
         assert_eq!(scope, ExhaustionScope::Model);
+    }
+
+    #[test]
+    fn per_model_400_currently_unavailable_is_model_scope() {
+        let body = br#"{"error":{"message":"Model 'gpt-oss:20b' is currently unavailable"}}"#;
+        let scope = classify_exhaustion_scope(
+            StatusCode::BAD_REQUEST,
+            Some(body.as_ref()),
+            FailoverClass::Transient,
+            ProviderQuotaProfile::PerModel,
+        );
+        assert_eq!(scope, ExhaustionScope::Model);
+        assert!(!phantom_model_cooldown_applies(
+            StatusCode::BAD_REQUEST,
+            Some(body.as_ref()),
+            scope,
+            ProviderQuotaProfile::PerModel,
+        ));
+    }
+
+    #[test]
+    fn per_slot_400_currently_unavailable_is_slot_scope() {
+        let body = br#"{"error":{"message":"Model 'gpt-oss:20b' is currently unavailable"}}"#;
+        let scope = classify_exhaustion_scope(
+            StatusCode::BAD_REQUEST,
+            Some(body.as_ref()),
+            FailoverClass::Transient,
+            ProviderQuotaProfile::PerSlot,
+        );
+        assert_eq!(scope, ExhaustionScope::Slot);
     }
 
     #[test]

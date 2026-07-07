@@ -68,8 +68,7 @@ gpt-5-mini:
         );
         assert!(
             first.to_string().contains("gpt-oss-120b"),
-            "first openrouter fallback must follow yaml order, got {}",
-            first
+            "first openrouter fallback must follow yaml order, got {first}"
         );
     }
 
@@ -139,7 +138,7 @@ gpt-5-mini:
                 model.inference_provider()
                     == Some(InferenceProvider::OpenRouter)
             })
-            .map(|model| model.to_string())
+            .map(ToString::to_string)
             .collect();
 
         let first_openrouter =

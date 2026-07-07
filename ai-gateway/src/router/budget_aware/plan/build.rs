@@ -1,6 +1,9 @@
-use std::{collections::HashSet, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
-use super::{PlanContext, replay::rank_survivors, score::binding_matches};
+use super::{PlanContext, replay::rank_survivors};
 use crate::{
     config::{
         credentials::ProviderCredentialId,
@@ -8,7 +11,7 @@ use crate::{
     },
     router::{
         budget_aware::{
-            memory::RouteBinding,
+            memory::RouteBindingPreference,
             types::{BudgetAwareRouter, BudgetCandidate},
         },
         intent::{IntentTier, RoutingIntent},
@@ -19,7 +22,6 @@ use crate::{
     types::{extensions::CallerRequestContext, provider::InferenceProvider},
 };
 
-pub const MAX_PLAN_HOPS: usize = 7;
 const STRATEGIC_FALLBACKS: [(&str, usize); 4] = [
     ("deepseek-web", 2),
     ("chatgpt-web", 1),
@@ -31,35 +33,91 @@ pub fn build_chain(
     router: &BudgetAwareRouter,
     ctx: &PlanContext<'_>,
     survivors: &[BudgetCandidate],
-    memory_binding: Option<&RouteBinding>,
+    memory_bindings: &[RouteBindingPreference],
 ) -> Vec<BudgetCandidate> {
     if survivors.is_empty() {
         return Vec::new();
     }
     let scored: Vec<(f64, BudgetCandidate)> =
-        rank_survivors(router, ctx, survivors, memory_binding)
+        rank_survivors(router, ctx, survivors, memory_bindings)
             .into_iter()
             .map(|entry| (entry.breakdown.score, entry.candidate))
             .collect();
 
     let mut plan = Vec::new();
     let mut used = HashSet::new();
-    if let Some(binding) = memory_binding
-        && let Some((_, candidate)) =
-            scored.iter().find(|(_, c)| binding_matches(c, binding))
-    {
-        let key = plan_key(candidate);
-        if used.insert(key) {
-            plan.push(candidate.clone());
-        }
-    }
 
+    append_top_scored_hop(&scored, &mut plan, &mut used);
     append_strategic_fallback_hops(&scored, &mut plan, &mut used);
     append_intra_slot_ladder(router, ctx, &scored, &mut plan, &mut used);
     append_scored_hops(&scored, &mut plan, &mut used);
-    plan.truncate(MAX_PLAN_HOPS);
     apply_spread(&mut plan, ctx.caller, &scored);
     plan
+}
+
+fn append_top_scored_hop(
+    scored: &[(f64, BudgetCandidate)],
+    plan: &mut Vec<BudgetCandidate>,
+    used: &mut HashSet<(ProviderCredentialId, String)>,
+) {
+    let Some(candidate) = first_hop_anchor(scored) else {
+        return;
+    };
+    let key = plan_key(&candidate);
+    if used.insert(key) {
+        plan.push(candidate);
+    }
+}
+
+fn first_hop_anchor(
+    scored: &[(f64, BudgetCandidate)],
+) -> Option<BudgetCandidate> {
+    const MAX_GROUP_ANCHOR_SCORE_DELTA: f64 = 0.12;
+
+    let (top_score, top_candidate) = scored.first()?;
+    let group_sizes = provider_model_group_sizes(scored);
+    if group_size(&group_sizes, top_candidate) > 1 {
+        return Some(top_candidate.clone());
+    }
+    for (score, candidate) in scored {
+        if group_size(&group_sizes, candidate) <= 1 {
+            continue;
+        }
+        if top_score - score > MAX_GROUP_ANCHOR_SCORE_DELTA {
+            return Some(top_candidate.clone());
+        }
+        return Some(candidate.clone());
+    }
+    Some(top_candidate.clone())
+}
+
+fn provider_model_group_sizes(
+    scored: &[(f64, BudgetCandidate)],
+) -> HashMap<(String, String), usize> {
+    let mut group_sizes = HashMap::new();
+    for (_, candidate) in scored {
+        *group_sizes
+            .entry(provider_model_key(candidate))
+            .or_insert(0) += 1;
+    }
+    group_sizes
+}
+
+fn group_size(
+    group_sizes: &HashMap<(String, String), usize>,
+    candidate: &BudgetCandidate,
+) -> usize {
+    group_sizes
+        .get(&provider_model_key(candidate))
+        .copied()
+        .unwrap_or(0)
+}
+
+fn provider_model_key(candidate: &BudgetCandidate) -> (String, String) {
+    (
+        candidate.capability.provider.to_string(),
+        candidate.capability.model.to_string(),
+    )
 }
 
 fn append_strategic_fallback_hops(
@@ -70,7 +128,7 @@ fn append_strategic_fallback_hops(
     for (provider_name, max_slots) in STRATEGIC_FALLBACKS {
         let mut added = 0;
         for (_, candidate) in scored {
-            if plan.len() >= MAX_PLAN_HOPS || added >= max_slots {
+            if added >= max_slots {
                 break;
             }
             if !is_named_provider(candidate, provider_name) {
@@ -122,9 +180,6 @@ fn append_scored_hops_pass(
     include: impl Fn(&BudgetCandidate) -> bool,
 ) {
     for (_, candidate) in scored {
-        if plan.len() >= MAX_PLAN_HOPS {
-            break;
-        }
         if !include(candidate) {
             continue;
         }
@@ -164,14 +219,11 @@ fn append_intra_slot_ladder(
         return;
     };
     // Ladder escalation is per primary slot only; other accounts enter via
-    // scored cross-provider hops so multi-account pools cannot monopolize
-    // MAX_PLAN_HOPS.
+    // scored cross-provider hops so multi-account pools keep broad fallback
+    // coverage instead of being hidden behind the primary slot ladder.
     let slots = [anchor];
 
     for slot in slots {
-        if plan.len() >= MAX_PLAN_HOPS {
-            break;
-        }
         let slot_candidates: Vec<_> = scored
             .iter()
             .filter(|(_, c)| c.credential_id == slot)
@@ -187,9 +239,6 @@ fn append_intra_slot_ladder(
             LadderBand::Capacity,
             LadderBand::Stability,
         ] {
-            if plan.len() >= MAX_PLAN_HOPS {
-                break;
-            }
             let models = ladders.models_in_band(provider, tier, band);
             for model in models {
                 if let Some(candidate) = slot_candidates.iter().find(|c| {
@@ -300,6 +349,8 @@ fn apply_spread(
     caller: &CallerRequestContext,
     scored: &[(f64, BudgetCandidate)],
 ) {
+    const MAX_SPREAD_SCORE_DELTA: f64 = 0.10;
+
     let Some(work_unit) = caller.work_unit_id.as_deref() else {
         return;
     };
@@ -329,11 +380,24 @@ fn apply_spread(
         work_unit,
         &spread_pool,
     );
+    let current_score = score_for_candidate(scored, &plan[0]).unwrap_or(0.0);
     if let Some(candidate) = feasible_peers
         .iter()
         .find(|candidate| candidate.credential_id.as_str() == spread_pool[idx])
     {
-        plan[0] = candidate.clone();
+        let selected_score =
+            score_for_candidate(scored, candidate).unwrap_or(current_score);
+        if current_score - selected_score > MAX_SPREAD_SCORE_DELTA {
+            return;
+        }
+        let selected_key = plan_key(candidate);
+        if let Some(position) =
+            plan.iter().position(|hop| plan_key(hop) == selected_key)
+        {
+            plan.swap(0, position);
+        } else {
+            plan[0] = candidate.clone();
+        }
     }
 
     let peer_positions: Vec<usize> = plan
@@ -364,6 +428,17 @@ fn apply_spread(
     for (position, candidate) in peer_positions.into_iter().zip(rotated) {
         plan[position] = candidate;
     }
+}
+
+fn score_for_candidate(
+    scored: &[(f64, BudgetCandidate)],
+    candidate: &BudgetCandidate,
+) -> Option<f64> {
+    let key = plan_key(candidate);
+    scored
+        .iter()
+        .find(|(_, scored_candidate)| plan_key(scored_candidate) == key)
+        .map(|(score, _)| *score)
 }
 
 fn plan_key(candidate: &BudgetCandidate) -> (ProviderCredentialId, String) {

@@ -3,7 +3,7 @@ use std::time::Duration;
 use super::types::BudgetAwareRouter;
 use crate::{
     config::credentials::ProviderCredentialId,
-    metrics::router::CooldownEvent,
+    metrics::{provider::attempt::CallOutcome, router::CooldownEvent},
     router::{
         provider_attempt::{
             ModelCooldownKey, lock_credential_states, lock_model_states,
@@ -22,6 +22,15 @@ impl BudgetAwareRouter {
         model: &str,
         elapsed: Duration,
     ) {
+        self.app_state.credential_health().record_model_attempt(
+            provider,
+            credential_id,
+            model,
+            CallOutcome::Success,
+            http::StatusCode::OK.as_u16(),
+            elapsed,
+        );
+
         let mut states = lock_credential_states(&self.states);
         let state = states.entry(credential_id.clone()).or_default();
         let had_cooldown = state.cooldown_until.is_some();
@@ -51,6 +60,23 @@ impl BudgetAwareRouter {
         }
     }
 
+    pub(super) fn record_success_degraded(
+        &self,
+        credential_id: &ProviderCredentialId,
+        provider: &InferenceProvider,
+        model: &str,
+        elapsed: Duration,
+    ) {
+        self.app_state.credential_health().record_model_attempt(
+            provider,
+            credential_id,
+            model,
+            CallOutcome::SuccessDegraded,
+            http::StatusCode::OK.as_u16(),
+            elapsed,
+        );
+    }
+
     /// Terminal failure on the last candidate (no further failover).
     pub(super) async fn record_failure(
         &self,
@@ -60,6 +86,15 @@ impl BudgetAwareRouter {
         response: Response,
         elapsed: Duration,
     ) -> Response {
+        let status = response.status();
+        self.app_state.credential_health().record_model_attempt(
+            provider,
+            credential_id,
+            model,
+            failure_outcome(status),
+            status.as_u16(),
+            elapsed,
+        );
         let config = self
             .app_state
             .config()
@@ -139,4 +174,14 @@ impl BudgetAwareRouter {
         state.cooldown_until = Some(std::time::Instant::now() + cooldown);
         prev_cooldown.is_none()
     }
+}
+
+fn failure_outcome(status: http::StatusCode) -> CallOutcome {
+    if status == http::StatusCode::TOO_MANY_REQUESTS {
+        return CallOutcome::RateLimited;
+    }
+    if status.is_server_error() {
+        return CallOutcome::ServerError;
+    }
+    CallOutcome::ClientError
 }

@@ -1,9 +1,14 @@
 use ai_gateway::{
     app_state::AppState,
-    tests::routing::{
-        RequestRequirements, clear_test_call_responses, empty_router,
-        gemini_model_candidate, install_upstream_mock,
+    endpoints::EndpointType,
+    tests::{
+        budget_aware::RouteMemoryKey,
+        routing::{
+            RequestRequirements, RouteStreamMode, clear_test_call_responses,
+            empty_router, gemini_model_candidate, install_upstream_mock,
+        },
     },
+    types::router::RouterId,
 };
 use gateway_tests::{UpstreamMockScript, upstream::ok_chat_completion};
 
@@ -72,9 +77,17 @@ pub async fn run() {
         routed_identity(&after_429.response),
         format!("{CRED_TEN}/{MODEL}")
     );
+    let key = RouteMemoryKey::for_route_class(
+        &RouterId::Named("routing-load".into()),
+        EndpointType::Chat,
+        &RequestRequirements::default(),
+        None,
+        None,
+        RouteStreamMode::NonStreaming,
+    );
     let stored = app_state
         .route_memory()
-        .get(AGENT, UNIT)
+        .get(&key)
         .await
         .expect("success records new binding");
     assert_eq!(stored.credential_id.as_str(), CRED_TEN);

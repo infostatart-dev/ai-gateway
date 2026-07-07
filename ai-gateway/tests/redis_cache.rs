@@ -1,4 +1,7 @@
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::HashMap,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use ai_gateway::{
     config::{
@@ -12,6 +15,14 @@ use http::{Method, Request, StatusCode};
 use http_body_util::BodyExt;
 use serde_json::json;
 use tower::Service;
+
+fn cache_test_seed(name: &str) -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock before Unix epoch")
+        .as_nanos();
+    format!("{name}-{}-{nanos}", std::process::id())
+}
 
 /// Helper function to make a POST request to the specified URL
 fn make_request(
@@ -59,7 +70,7 @@ fn make_request(
 async fn cache_enabled_globally() {
     let mut config = Config::test_default();
     let cache = CacheConfig {
-        seed: Some("redis-cache-enabled-globally".to_string()),
+        seed: Some(cache_test_seed("redis-cache-enabled-globally")),
         ..CacheConfig::test_default()
     };
     config.global.cache = Some(cache);
@@ -326,7 +337,7 @@ async fn cache_enabled_per_router() {
                 cache: Some(CacheConfig {
                     directive: None,
                     buckets: 1,
-                    seed: Some("router-cached-seed".to_string()),
+                    seed: Some(cache_test_seed("router-cached")),
                 }),
                 load_balance:
                     ai_gateway::config::balance::BalanceConfig::openai_chat(),

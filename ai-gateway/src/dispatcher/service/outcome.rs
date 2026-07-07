@@ -122,6 +122,7 @@ pub struct FinalizeDispatchContext<'a> {
     pub extracted_path_and_query: http::uri::PathAndQuery,
     pub upstream_attempt: Option<UpstreamAttemptContext>,
     pub credential_id: Option<ProviderCredentialId>,
+    pub provider_metrics_deferred: bool,
 }
 
 impl Dispatcher {
@@ -147,6 +148,7 @@ impl Dispatcher {
             extracted_path_and_query,
             upstream_attempt,
             credential_id,
+            provider_metrics_deferred,
         } = ctx;
 
         tracing::info!(
@@ -251,6 +253,7 @@ impl Dispatcher {
             reported_usage,
             request_body: Some(&outcome.req_body_bytes),
             failover_class: None,
+            semantic_outcome: None,
             agent_name: None,
         };
         crate::metrics::provider::attach_usage_header(
@@ -277,6 +280,7 @@ impl Dispatcher {
             router_runtime_labels,
             upstream_attempt.as_ref(),
             credential_id,
+            provider_metrics_deferred,
         );
 
         Ok(outcome.response)
@@ -439,6 +443,7 @@ mod finalize_tests {
                     extracted_path_and_query: path.clone(),
                     upstream_attempt: None,
                     credential_id: None,
+                    provider_metrics_deferred: false,
                 },
             )
             .await

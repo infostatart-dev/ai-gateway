@@ -55,7 +55,7 @@ pub use health_registry::{CredentialHealthRegistry, RoutingHealthSnapshot};
 pub use lease::InFlightRouteRegistry;
 #[cfg(feature = "testing")]
 pub use memory::RouteBinding;
-pub use memory::WorkUnitRouteMemory;
+pub use memory::{GatewayRouteMemory, RouteMemoryKey, RouteStreamMode};
 pub(crate) use rank::default_provider_budget_rank;
 #[cfg(feature = "testing")]
 pub use test_support::{

@@ -10,7 +10,9 @@ use gateway_tests::{UpstreamMockScript, upstream::ok_chat_completion};
 use crate::rl::support::*;
 
 const AGENT: &str = "memory-agent";
+const OTHER_AGENT: &str = "other-memory-agent";
 const UNIT: &str = "unit-47";
+const OTHER_UNIT: &str = "unit-99";
 const MODEL: &str = "gemini-3.1-flash-lite";
 const CRED: &str = "gemini-free-9";
 
@@ -42,7 +44,7 @@ pub async fn run() {
 
     let second = run_planned_failover(
         router,
-        caller_parts(AGENT, Some(UNIT)),
+        caller_parts(OTHER_AGENT, Some(OTHER_UNIT)),
         body,
         pool,
         RequestRequirements::default(),

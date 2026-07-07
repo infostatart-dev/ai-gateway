@@ -26,7 +26,7 @@ mod acceptance {
         },
     };
 
-    async fn intent_router(
+    fn intent_router(
         app_state: &AppState,
         candidates: Vec<BudgetCandidate>,
     ) -> BudgetAwareRouter {
@@ -146,8 +146,7 @@ mod acceptance {
                 candidate(&app_state, deep(), "anthropic-test").await,
                 candidate(&app_state, scout(), "groq-test").await,
             ],
-        )
-        .await;
+        );
         let requirements = RequestRequirements {
             json_schema_required: true,
             ..RequestRequirements::default()
@@ -170,8 +169,7 @@ mod acceptance {
                 candidate(&app_state, plain_fast(), "cloudflare-test").await,
                 candidate(&app_state, scout(), "groq-test").await,
             ],
-        )
-        .await;
+        );
         let ordered = router
             .ordered_candidates(
                 &RequestRequirements::default(),
@@ -194,8 +192,7 @@ mod acceptance {
                 candidate(&app_state, deep(), "anthropic-test").await,
                 candidate(&app_state, scout(), "groq-test").await,
             ],
-        )
-        .await;
+        );
         let requirements = RequestRequirements {
             json_schema_required: true,
             ..RequestRequirements::default()
@@ -218,8 +215,7 @@ mod acceptance {
                 candidate(&app_state, plain_fast(), "cloudflare-test").await,
                 candidate(&app_state, scout(), "groq-test").await,
             ],
-        )
-        .await;
+        );
         let ordered = router
             .ordered_candidates(
                 &RequestRequirements::default(),
@@ -238,8 +234,7 @@ mod acceptance {
                 candidate(&app_state, scout(), "groq-test").await,
                 candidate(&app_state, deep(), "anthropic-test").await,
             ],
-        )
-        .await;
+        );
         let ordered = router
             .ordered_candidates(
                 &RequestRequirements::default(),
@@ -262,8 +257,7 @@ mod acceptance {
                 candidate(&app_state, plain_fast(), "cloudflare-test").await,
                 candidate(&app_state, scout(), "groq-test").await,
             ],
-        )
-        .await;
+        );
         let requirements = RequestRequirements {
             json_schema_required: true,
             ..RequestRequirements::default()
@@ -286,8 +280,7 @@ mod acceptance {
                 candidate(&app_state, scout(), "groq-test").await,
                 candidate(&app_state, deep(), "anthropic-test").await,
             ],
-        )
-        .await;
+        );
         let requirements = RequestRequirements {
             json_schema_required: true,
             ..RequestRequirements::default()
@@ -405,8 +398,7 @@ mod acceptance {
                 .await,
                 scout_candidate(&app_state, "groq-test").await,
             ],
-        )
-        .await;
+        );
         let body = nano_json_strict_body();
         let parsed: serde_json::Value =
             serde_json::from_slice(&body).expect("body");
@@ -486,8 +478,7 @@ mod acceptance {
                 gpt_oss,
                 scout_candidate(&app_state, "groq-test").await,
             ],
-        )
-        .await;
+        );
         let body = nano_json_strict_body();
         let parsed: serde_json::Value =
             serde_json::from_slice(&body).expect("body");
@@ -583,7 +574,7 @@ mod acceptance {
         gpt_oss.capability.intent_tier = IntentTier::FastThinking;
         let groq = scout_candidate(&app_state, "groq-test").await;
         let try_order = vec![nemotron, gpt_oss, groq];
-        let router = intent_router(&app_state, try_order.clone()).await;
+        let router = intent_router(&app_state, try_order.clone());
         let body = nano_json_strict_body();
         let parsed: serde_json::Value =
             serde_json::from_slice(&body).expect("body");

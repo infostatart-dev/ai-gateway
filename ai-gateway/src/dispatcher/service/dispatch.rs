@@ -52,6 +52,10 @@ impl Dispatcher {
         let target_provider = &self.provider;
         let upstream_attempt =
             req.extensions().get::<UpstreamAttemptContext>().cloned();
+        let provider_metrics_deferred = req
+            .extensions()
+            .get::<crate::types::extensions::DeferredProviderAttemptMetrics>()
+            .is_some();
         let credential_id =
             req.extensions().get::<ProviderCredentialId>().cloned();
 
@@ -69,6 +73,7 @@ impl Dispatcher {
             extracted_path_and_query: extracted_path_and_query.clone(),
             upstream_attempt,
             credential_id: credential_id.clone(),
+            provider_metrics_deferred,
         };
 
         if let Some(ref api_endpoint) = api_endpoint {

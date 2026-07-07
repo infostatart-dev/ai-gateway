@@ -1,4 +1,4 @@
-//! CI gate: embedded Gemini upstream slugs must exist in frozen ListModels
+//! CI gate: embedded Gemini upstream slugs must exist in frozen `ListModels`
 //! fixture.
 
 use std::collections::HashSet;

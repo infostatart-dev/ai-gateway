@@ -36,6 +36,7 @@ pub struct DispatchMetricsInput<'a> {
     pub reported_usage: TokenUsage,
     pub request_body: Option<&'a Bytes>,
     pub failover_class: Option<FailoverClass>,
+    pub semantic_outcome: Option<super::attempt::CallOutcome>,
     pub agent_name: Option<&'a str>,
 }
 
@@ -60,6 +61,7 @@ pub fn record_upstream_attempt(input: &DispatchMetricsInput<'_>) {
         request_body: input.request_body,
         estimate_tokens: input.app_state.config().observability.estimate_tokens,
         failover_class: input.failover_class,
+        semantic_outcome: input.semantic_outcome,
         agent_name: input.agent_name,
     });
     input.app_state.0.metrics.provider.record_attempt(&record);
@@ -93,6 +95,7 @@ pub fn attach_usage_header(
         request_body: input.request_body,
         estimate_tokens: app_state.config().observability.estimate_tokens,
         failover_class: input.failover_class,
+        semantic_outcome: input.semantic_outcome,
         agent_name: input.agent_name,
     });
     let generation_ms = generation_ms_per_output_token(&record);
@@ -107,155 +110,6 @@ pub fn attach_usage_header(
             ),
             value,
         );
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use compact_str::CompactString;
-
-    use super::*;
-    use crate::{
-        metrics::llm::TokenUsage,
-        types::{
-            body::Body,
-            extensions::{
-                GatewayProviderUsageExtension, RouteTraceFinalizeContext,
-            },
-            provider::InferenceProvider,
-        },
-    };
-
-    #[tokio::test]
-    async fn attach_usage_header_materializes_x_gateway_provider_usage() {
-        let app_state = AppState::test_default().await;
-        let input = DispatchMetricsInput {
-            app_state: &app_state,
-            provider: &InferenceProvider::OpenAI,
-            credential: None,
-            model: None,
-            router_id: None,
-            attempt: None,
-            status: StatusCode::OK,
-            stream: false,
-            request_kind: RequestKind::Router,
-            duration_ms: 120.0,
-            tfft_ms: None,
-            reported_usage: TokenUsage {
-                input: Some(10),
-                output: Some(5),
-                total: Some(15),
-                ..TokenUsage::default()
-            },
-            request_body: None,
-            failover_class: None,
-            agent_name: None,
-        };
-
-        let mut response = http::Response::builder()
-            .status(StatusCode::OK)
-            .body(Body::empty())
-            .unwrap();
-        attach_usage_header(&app_state, &mut response, &input);
-
-        let header_name = HeaderName::from_static(
-            crate::metrics::provider::usage_json::GATEWAY_PROVIDER_USAGE_HEADER,
-        );
-        let header = response
-            .headers()
-            .get(&header_name)
-            .expect("x-gateway-provider-usage must be on response headers");
-        let extension = response
-            .extensions()
-            .get::<GatewayProviderUsageExtension>()
-            .expect("usage extension must be attached");
-        assert_eq!(
-            header.to_str().unwrap(),
-            extension.0.to_header_value().unwrap().to_str().unwrap()
-        );
-        let usage: serde_json::Value =
-            serde_json::from_str(header.to_str().unwrap()).unwrap();
-        assert_eq!(
-            usage.get("provider").and_then(serde_json::Value::as_str),
-            Some("openai")
-        );
-    }
-
-    fn pending_with_finalize_failure(
-        finalize_failure: Option<(&str, &str, &str)>,
-    ) -> PendingRouteTrace {
-        PendingRouteTrace {
-            router_id: RouterId::Named(CompactString::new("autodefault")),
-            strategy: "budget-aware-capability-after",
-            hops: 2,
-            candidates: 2,
-            skipped: 0,
-            outcome_label: "success",
-            terminal_provider: None,
-            terminal_credential: None,
-            terminal_status: Some(200),
-            deepseek_web: None,
-            chatgpt_web: None,
-            intent_tier: None,
-            selection_phase: None,
-            quota_scope: None,
-            model_ladder_band: None,
-            model_ladder_position: None,
-            upstream_failure_kind: None,
-            restricted_until: None,
-            failover_class: Some("Transient".to_string()),
-            failure_stage: Some("structured_output".to_string()),
-            error_source: Some("gateway".to_string()),
-            error_class: Some("invalid_structured_json".to_string()),
-            agent_name: None,
-            work_unit_id: None,
-            work_unit_source: None,
-            planned_hops: Some(2),
-            plan_rebuilds: Some(0),
-            route_memory_hit: Some(false),
-            route_memory_invalidated: Some(false),
-            source_model: None,
-            json_schema_required: true,
-            estimated_usage: TokenUsage::default(),
-            replay: None,
-            finalize: Some(RouteTraceFinalizeContext {
-                route_span: tracing::Span::none(),
-                attempt_span: Some(tracing::Span::none()),
-                route_started: std::time::Instant::now(),
-                attempt_started: Some(std::time::Instant::now()),
-                terminal_model: Some("terminal-model".to_string()),
-                stream: false,
-                failure_stage: finalize_failure.map(|f| f.0.to_string()),
-                error_source: finalize_failure.map(|f| f.1.to_string()),
-                error_class: finalize_failure.map(|f| f.2.to_string()),
-            }),
-        }
-    }
-
-    #[test]
-    fn summary_failure_fields_prefer_clean_terminal_success() {
-        let pending = pending_with_finalize_failure(None);
-
-        let fields = terminal_failure_fields(&pending);
-
-        assert_eq!(fields.failure_stage, "none");
-        assert_eq!(fields.error_source, "none");
-        assert_eq!(fields.error_class, "none");
-    }
-
-    #[test]
-    fn summary_failure_fields_keep_terminal_failure() {
-        let pending = pending_with_finalize_failure(Some((
-            "upstream",
-            "upstream_provider",
-            "http_429",
-        )));
-
-        let fields = terminal_failure_fields(&pending);
-
-        assert_eq!(fields.failure_stage, "upstream");
-        assert_eq!(fields.error_source, "upstream_provider");
-        assert_eq!(fields.error_class, "http_429");
     }
 }
 
@@ -382,7 +236,158 @@ pub fn build_replay_record(
         winner_credential: Some(snapshot.winner_credential.clone()),
         winner_model: Some(snapshot.winner_model.clone()),
         winner_score: Some(snapshot.winner.clone()),
+        planned_chain: snapshot.planned_chain.clone(),
         top_alternatives: snapshot.top_alternatives.clone(),
         quota_excluded: snapshot.quota_excluded.clone(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use compact_str::CompactString;
+
+    use super::*;
+    use crate::{
+        metrics::llm::TokenUsage,
+        types::{
+            body::Body,
+            extensions::{
+                GatewayProviderUsageExtension, RouteTraceFinalizeContext,
+            },
+            provider::InferenceProvider,
+        },
+    };
+
+    #[tokio::test]
+    async fn attach_usage_header_materializes_x_gateway_provider_usage() {
+        let app_state = AppState::test_default().await;
+        let input = DispatchMetricsInput {
+            app_state: &app_state,
+            provider: &InferenceProvider::OpenAI,
+            credential: None,
+            model: None,
+            router_id: None,
+            attempt: None,
+            status: StatusCode::OK,
+            stream: false,
+            request_kind: RequestKind::Router,
+            duration_ms: 120.0,
+            tfft_ms: None,
+            reported_usage: TokenUsage {
+                input: Some(10),
+                output: Some(5),
+                total: Some(15),
+                ..TokenUsage::default()
+            },
+            request_body: None,
+            failover_class: None,
+            semantic_outcome: None,
+            agent_name: None,
+        };
+
+        let mut response = http::Response::builder()
+            .status(StatusCode::OK)
+            .body(Body::empty())
+            .unwrap();
+        attach_usage_header(&app_state, &mut response, &input);
+
+        let header_name = HeaderName::from_static(
+            crate::metrics::provider::usage_json::GATEWAY_PROVIDER_USAGE_HEADER,
+        );
+        let header = response
+            .headers()
+            .get(&header_name)
+            .expect("x-gateway-provider-usage must be on response headers");
+        let extension = response
+            .extensions()
+            .get::<GatewayProviderUsageExtension>()
+            .expect("usage extension must be attached");
+        assert_eq!(
+            header.to_str().unwrap(),
+            extension.0.to_header_value().unwrap().to_str().unwrap()
+        );
+        let usage: serde_json::Value =
+            serde_json::from_str(header.to_str().unwrap()).unwrap();
+        assert_eq!(
+            usage.get("provider").and_then(serde_json::Value::as_str),
+            Some("openai")
+        );
+    }
+
+    fn pending_with_finalize_failure(
+        finalize_failure: Option<(&str, &str, &str)>,
+    ) -> PendingRouteTrace {
+        PendingRouteTrace {
+            router_id: RouterId::Named(CompactString::new("autodefault")),
+            strategy: "budget-aware-capability-after",
+            hops: 2,
+            candidates: 2,
+            skipped: 0,
+            outcome_label: "success",
+            terminal_provider: None,
+            terminal_credential: None,
+            terminal_status: Some(200),
+            deepseek_web: None,
+            chatgpt_web: None,
+            intent_tier: None,
+            selection_phase: None,
+            quota_scope: None,
+            model_ladder_band: None,
+            model_ladder_position: None,
+            upstream_failure_kind: None,
+            restricted_until: None,
+            failover_class: Some("Transient".to_string()),
+            failure_stage: Some("structured_output".to_string()),
+            error_source: Some("gateway".to_string()),
+            error_class: Some("invalid_structured_json".to_string()),
+            agent_name: None,
+            work_unit_id: None,
+            work_unit_source: None,
+            planned_hops: Some(2),
+            plan_rebuilds: Some(0),
+            route_memory_hit: Some(false),
+            route_memory_invalidated: Some(false),
+            source_model: None,
+            json_schema_required: true,
+            estimated_usage: TokenUsage::default(),
+            replay: None,
+            finalize: Some(RouteTraceFinalizeContext {
+                route_span: tracing::Span::none(),
+                attempt_span: Some(tracing::Span::none()),
+                route_started: std::time::Instant::now(),
+                attempt_started: Some(std::time::Instant::now()),
+                terminal_model: Some("terminal-model".to_string()),
+                stream: false,
+                failure_stage: finalize_failure.map(|f| f.0.to_string()),
+                error_source: finalize_failure.map(|f| f.1.to_string()),
+                error_class: finalize_failure.map(|f| f.2.to_string()),
+            }),
+        }
+    }
+
+    #[test]
+    fn summary_failure_fields_prefer_clean_terminal_success() {
+        let pending = pending_with_finalize_failure(None);
+
+        let fields = terminal_failure_fields(&pending);
+
+        assert_eq!(fields.failure_stage, "none");
+        assert_eq!(fields.error_source, "none");
+        assert_eq!(fields.error_class, "none");
+    }
+
+    #[test]
+    fn summary_failure_fields_keep_terminal_failure() {
+        let pending = pending_with_finalize_failure(Some((
+            "upstream",
+            "upstream_provider",
+            "http_429",
+        )));
+
+        let fields = terminal_failure_fields(&pending);
+
+        assert_eq!(fields.failure_stage, "upstream");
+        assert_eq!(fields.error_source, "upstream_provider");
+        assert_eq!(fields.error_class, "http_429");
+    }
 }

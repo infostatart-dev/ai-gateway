@@ -19,7 +19,7 @@ opentelemetry-appender-tracing = { workspace = true }
 opentelemetry-http = { workspace = true }
 prometheus = { workspace = true }
 serde = { workspace = true }
-tower-http = { workspace = true, features = ['request-id'] }
+tower-http = { workspace = true, features = ['request-id', 'trace'] }
 tower = { workspace = true}
 tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }

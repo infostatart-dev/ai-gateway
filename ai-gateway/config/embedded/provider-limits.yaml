@@ -717,6 +717,7 @@ opencode:
                 rpd: 200
 
 llm7:
+  quota-profile: per-model
   cooldown:
     provider-error: 20s
     quota-exhausted: 24h

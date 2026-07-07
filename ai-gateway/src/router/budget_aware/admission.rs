@@ -116,6 +116,28 @@ fn pacing_block_reason(
     }
 }
 
+fn daily_block_reason(
+    limits: &crate::config::provider_limits::ProviderLimitCatalog,
+    candidate: &BudgetCandidate,
+) -> BlockedReason {
+    let resolved = crate::config::catalog_limit_resolve::catalog_limit_resolve(
+        limits,
+        &candidate.capability.provider,
+        candidate.credential_tier.as_str(),
+        &candidate.capability.model.to_string(),
+    );
+    if resolved.as_ref().is_some_and(|r| {
+        matches!(
+            r.limits.tpd,
+            crate::config::provider_limits::QuotaValue::Limited(_)
+        )
+    }) {
+        BlockedReason::Tpd
+    } else {
+        BlockedReason::Rpd
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::{Duration, Instant};
@@ -155,27 +177,5 @@ mod tests {
         gate.apply_upstream_reconcile(Instant::now() + Duration::from_secs(30))
             .await;
         assert!(gate.peek_next_wait(0).await > Duration::from_secs(25));
-    }
-}
-
-fn daily_block_reason(
-    limits: &crate::config::provider_limits::ProviderLimitCatalog,
-    candidate: &BudgetCandidate,
-) -> BlockedReason {
-    let resolved = crate::config::catalog_limit_resolve::catalog_limit_resolve(
-        limits,
-        &candidate.capability.provider,
-        candidate.credential_tier.as_str(),
-        &candidate.capability.model.to_string(),
-    );
-    if resolved.as_ref().is_some_and(|r| {
-        matches!(
-            r.limits.tpd,
-            crate::config::provider_limits::QuotaValue::Limited(_)
-        )
-    }) {
-        BlockedReason::Tpd
-    } else {
-        BlockedReason::Rpd
     }
 }

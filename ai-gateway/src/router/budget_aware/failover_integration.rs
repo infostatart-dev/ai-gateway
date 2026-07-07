@@ -22,14 +22,19 @@ mod structured_output_failover {
         config::{credentials::ProviderCredentialId, router::RouterConfig},
         dispatcher::Dispatcher,
         endpoints::EndpointType,
-        error::{api::ApiError, internal::InternalError},
         middleware::mapper::model::ModelMapper,
         router::{
             capability::{ModelCapability, RequestRequirements},
+            provider_attempt::ModelCooldownKey,
             routed_identity::REAL_MODE_MODEL_AND_PROVIDER,
         },
         types::{
-            model_id::ModelId, provider::InferenceProvider, router::RouterId,
+            extensions::{
+                CallerRequestContext, RoutePlanContext, WorkUnitSource,
+            },
+            model_id::ModelId,
+            provider::InferenceProvider,
+            router::RouterId,
         },
     };
 
@@ -49,6 +54,14 @@ mod structured_output_failover {
         InferenceProvider::Named("llm7".into())
     }
 
+    fn vllm() -> InferenceProvider {
+        InferenceProvider::Named("vllm".into())
+    }
+
+    fn named_provider(name: &str) -> InferenceProvider {
+        InferenceProvider::Named(name.into())
+    }
+
     fn chat_completion(content: &str) -> crate::types::response::Response {
         http::Response::builder()
             .status(StatusCode::OK)
@@ -58,6 +71,29 @@ mod structured_output_failover {
                     "choices": [{"message": {"content": content}}]
                 })
                 .to_string(),
+            ))
+            .unwrap()
+    }
+
+    fn overload_503() -> crate::types::response::Response {
+        http::Response::builder()
+            .status(StatusCode::SERVICE_UNAVAILABLE)
+            .body(Body::from("model is overloaded"))
+            .unwrap()
+    }
+
+    fn provider_bad_request() -> crate::types::response::Response {
+        http::Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from("model is not supported by this upstream"))
+            .unwrap()
+    }
+
+    fn model_currently_unavailable() -> crate::types::response::Response {
+        http::Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from(
+                r#"{"error":{"message":"Model 'gpt-oss:20b' is currently unavailable"}}"#,
             ))
             .unwrap()
     }
@@ -91,7 +127,7 @@ mod structured_output_failover {
         )
     }
 
-    async fn test_router(app_state: AppState) -> BudgetAwareRouter {
+    fn test_router(app_state: &AppState) -> BudgetAwareRouter {
         let router_config = Arc::new(RouterConfig::default());
         BudgetAwareRouter {
             app_state: app_state.clone(),
@@ -137,8 +173,7 @@ mod structured_output_failover {
 
         BudgetCandidate {
             credential_id: ProviderCredentialId::new(format!(
-                "{}-test",
-                provider
+                "{provider}-test"
             )),
             credential_budget_rank: 0,
             credential_cost_class: crate::config::cost_class::CostClass::Free,
@@ -178,7 +213,7 @@ mod structured_output_failover {
         )));
 
         let app_state = AppState::test_default().await;
-        let router = test_router(app_state.clone()).await;
+        let router = test_router(&app_state);
         let candidates = vec![
             candidate(
                 &app_state,
@@ -234,9 +269,8 @@ mod structured_output_failover {
             states
                 .get(&groq_credential)
                 .and_then(|state| state.cooldown_until)
-                .is_some(),
-            "first credential must be marked faulty after invalid structured \
-             output"
+                .is_none(),
+            "invalid structured output must not poison the whole credential"
         );
         assert!(
             states
@@ -244,6 +278,19 @@ mod structured_output_failover {
                 .and_then(|state| state.cooldown_until)
                 .is_none(),
             "winning credential must not stay in cooldown"
+        );
+        drop(states);
+
+        let model_states = router.model_states.lock().expect("model states");
+        assert!(
+            model_states
+                .get(&ModelCooldownKey {
+                    credential_id: groq_credential,
+                    model: "llama-4-scout-17b-16e-instruct".to_string(),
+                })
+                .and_then(|state| state.cooldown_until)
+                .is_some(),
+            "invalid structured output must cool down only the failed model"
         );
     }
 
@@ -259,7 +306,7 @@ mod structured_output_failover {
         )));
 
         let app_state = AppState::test_default().await;
-        let router = test_router(app_state.clone()).await;
+        let router = test_router(&app_state);
         let candidates =
             vec![candidate(&app_state, llm7(), "fast", Some(32_000)).await];
 
@@ -315,7 +362,7 @@ mod structured_output_failover {
         )));
 
         let app_state = AppState::test_default().await;
-        let router = test_router(app_state.clone()).await;
+        let router = test_router(&app_state);
         let candidates =
             vec![candidate(&app_state, llm7(), "fast", Some(32_000)).await];
 
@@ -344,7 +391,7 @@ mod structured_output_failover {
 
     #[tokio::test]
     #[serial_test::serial]
-    async fn structured_output_failover_returns_provider_not_found_when_all_invalid()
+    async fn structured_output_failover_returns_route_exhausted_when_all_invalid()
      {
         clear_test_call_responses();
         push_test_call_response(Ok(chat_completion("not json at all")));
@@ -352,7 +399,7 @@ mod structured_output_failover {
         push_test_call_response(Ok(chat_completion("still not json")));
 
         let app_state = AppState::test_default().await;
-        let router = test_router(app_state.clone()).await;
+        let router = test_router(&app_state);
         let candidates = vec![
             candidate(
                 &app_state,
@@ -367,7 +414,7 @@ mod structured_output_failover {
                 .await,
         ];
 
-        let error = run_failover_candidates(
+        let response = run_failover_candidates(
             router,
             request_parts(),
             json_schema_request_body(""),
@@ -379,14 +426,9 @@ mod structured_output_failover {
             None,
         )
         .await
-        .expect_err("all syntax-invalid outputs must not return HTTP 200");
+        .expect("all syntax-invalid outputs must return terminal response");
 
-        assert!(matches!(
-            error,
-            ApiError::Internal(
-                InternalError::InvalidStructuredJsonAfterReflection
-            )
-        ));
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
     }
 
     #[tokio::test]
@@ -402,7 +444,7 @@ mod structured_output_failover {
 
         let dossier = "x".repeat(120_000);
         let app_state = AppState::test_default().await;
-        let router = test_router(app_state.clone()).await;
+        let router = test_router(&app_state);
         let candidates = vec![
             candidate(
                 &app_state,
@@ -453,5 +495,221 @@ mod structured_output_failover {
                 .and_then(|value| value.to_str().ok()),
             Some("cerebras-test/openai/gpt-oss-120b")
         );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn replan_reaches_full_pool_after_current_plan_slot_exhaustion() {
+        clear_test_call_responses();
+        push_test_call_response(Ok(overload_503()));
+        push_test_call_response(Ok(chat_completion("replanned fallback")));
+
+        let app_state = AppState::test_default().await;
+        let router = test_router(&app_state);
+        let vllm_primary =
+            candidate(&app_state, vllm(), "model-a", Some(32_000)).await;
+        let vllm_same_slot =
+            candidate(&app_state, vllm(), "model-b", Some(32_000)).await;
+        let fallback =
+            candidate(&app_state, cerebras(), "openai/gpt-oss-120b", None)
+                .await;
+        let full_pool = vec![
+            vllm_primary.clone(),
+            vllm_same_slot.clone(),
+            fallback.clone(),
+        ];
+        let initial_plan = vec![vllm_primary, vllm_same_slot];
+        let requirements = RequestRequirements::default();
+        let caller = CallerRequestContext {
+            agent_name: "replan-regression".to_string(),
+            work_unit_id: Some("unit-replan".to_string()),
+            work_unit_source: WorkUnitSource::Explicit,
+        };
+        let mut parts = request_parts();
+        parts.extensions.insert(RoutePlanContext {
+            caller,
+            full_pool,
+            estimated_tokens: 0,
+            route_memory_key:
+                crate::router::budget_aware::RouteMemoryKey::for_route_class(
+                    &crate::types::router::RouterId::Named(
+                        "structured-output-test".into(),
+                    ),
+                    crate::endpoints::EndpointType::Chat,
+                    &requirements,
+                    None,
+                    None,
+                    crate::router::budget_aware::RouteStreamMode::NonStreaming,
+                ),
+            route_memory_hit: false,
+            planned_hops: 2,
+            source_model: None,
+            stream: false,
+            json_schema_required: false,
+            replay: None,
+        });
+
+        let response = run_failover_candidates(
+            router,
+            parts,
+            Bytes::from(r#"{"model":"openai/gpt-5-mini","messages":[]}"#),
+            initial_plan,
+            requirements,
+            None,
+        )
+        .await
+        .expect("replan should reach fallback outside exhausted current plan");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(REAL_MODE_MODEL_AND_PROVIDER)
+                .and_then(|value| value.to_str().ok()),
+            Some("cerebras-test/openai/gpt-oss-120b")
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn failover_continues_after_provider_bad_request() {
+        clear_test_call_responses();
+        push_test_call_response(Ok(provider_bad_request()));
+        push_test_call_response(Ok(chat_completion("recovered after 400")));
+
+        let app_state = AppState::test_default().await;
+        let router = test_router(&app_state);
+        let candidates = vec![
+            candidate(&app_state, llm7(), "model-a", Some(32_000)).await,
+            candidate(&app_state, mistral(), "magistral-medium-latest", None)
+                .await,
+        ];
+
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            Bytes::from(r#"{"model":"openai/gpt-5-mini","messages":[]}"#),
+            candidates,
+            RequestRequirements::default(),
+            None,
+        )
+        .await
+        .expect("provider 400 should fail over to the next candidate");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(REAL_MODE_MODEL_AND_PROVIDER)
+                .and_then(|value| value.to_str().ok()),
+            Some("mistral-test/magistral-medium-latest")
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn llm7_currently_unavailable_model_keeps_same_slot_model_fallback() {
+        clear_test_call_responses();
+        push_test_call_response(Ok(model_currently_unavailable()));
+        push_test_call_response(Ok(chat_completion(
+            "recovered on another llm7 model",
+        )));
+
+        let app_state = AppState::test_default().await;
+        let router = test_router(&app_state);
+        let candidates = vec![
+            candidate(&app_state, llm7(), "gpt-oss:20b", Some(32_000)).await,
+            candidate(&app_state, llm7(), "fast", Some(32_000)).await,
+        ];
+
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            Bytes::from(r#"{"model":"openai/gpt-5-mini","messages":[]}"#),
+            candidates,
+            RequestRequirements::default(),
+            None,
+        )
+        .await
+        .expect("unavailable llm7 model should not kill the credential slot");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(REAL_MODE_MODEL_AND_PROVIDER)
+                .and_then(|value| value.to_str().ok()),
+            Some("llm7-test/fast")
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn failover_walks_every_planned_hop_before_route_exhaustion() {
+        let provider_names = [
+            "groq",
+            "mistral",
+            "cerebras",
+            "llm7",
+            "vllm",
+            "longcat",
+            "hyperbolic",
+            "opencode",
+            "sambanova",
+        ];
+
+        clear_test_call_responses();
+        for _ in 0..provider_names.len() {
+            push_test_call_response(Ok(overload_503()));
+        }
+
+        let app_state = AppState::test_default().await;
+        let router = test_router(&app_state);
+        let mut plan = Vec::new();
+        for provider in provider_names {
+            plan.push(
+                candidate(
+                    &app_state,
+                    named_provider(provider),
+                    "model-a",
+                    Some(32_000),
+                )
+                .await,
+            );
+        }
+
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            Bytes::from(r#"{"model":"openai/gpt-5-mini","messages":[]}"#),
+            plan,
+            RequestRequirements::default(),
+            None,
+        )
+        .await
+        .expect("all failoverable hops should exhaust the route");
+
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        for provider in provider_names {
+            let credential = format!("{provider}-test");
+            let credential_id = ProviderCredentialId::new(credential.as_str());
+            let provider = named_provider(provider);
+            assert!(
+                app_state
+                    .credential_health()
+                    .model_latency_ms(&provider, &credential_id, "model-a")
+                    .is_some(),
+                "expected a recorded model attempt for {credential}"
+            );
+            assert_eq!(
+                app_state.credential_health().model_success_rate(
+                    &provider,
+                    &credential_id,
+                    "model-a",
+                ),
+                0.0,
+                "expected failed model health for {credential}"
+            );
+        }
     }
 }

@@ -92,7 +92,13 @@ pub async fn run() {
     }
     assert!(
         healthy.len() >= 2,
-        "expected spread across healthy credentials, got {healthy:?}"
+        "expected spread across healthy credentials, got {healthy:?}; \
+         identities={}",
+        results
+            .iter()
+            .map(|result| routed_identity(&result.response))
+            .collect::<Vec<_>>()
+            .join(",")
     );
     assert_eq!(
         credential_attempts(&app_state, "gemini-free-2"),

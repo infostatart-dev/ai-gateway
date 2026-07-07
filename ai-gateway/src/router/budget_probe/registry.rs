@@ -130,6 +130,10 @@ impl BudgetProbeRegistry {
     }
 }
 
+fn secret_key(key: &ProviderKey) -> Option<&Secret<String>> {
+    key.as_secret()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,8 +175,4 @@ mod tests {
                 .await
         );
     }
-}
-
-fn secret_key(key: &ProviderKey) -> Option<&Secret<String>> {
-    key.as_secret()
 }

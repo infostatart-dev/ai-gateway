@@ -88,7 +88,7 @@ mod tests {
         )
         .await;
         let ladders = ModelLadderRegistry::default();
-        let mut ranked = vec![stability.clone(), lite.clone(), flash.clone()];
+        let mut ranked = [stability.clone(), lite.clone(), flash.clone()];
         ranked.sort_by(|left, right| ladder_cmp(&ladders, left, right));
         assert_eq!(
             ranked[0].capability.model.to_string(),

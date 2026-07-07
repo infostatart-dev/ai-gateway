@@ -37,6 +37,8 @@ pub struct CredentialSecret {
     pub api_key_file: Option<String>,
     #[serde(default)]
     pub session_file: Option<String>,
+    #[serde(default)]
+    pub keyless: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -164,6 +166,9 @@ impl SecretsFile {
         provider: &InferenceProvider,
     ) -> Option<ProviderKey> {
         let entry = self.credentials.get(credential_id)?.clone();
+        if entry.keyless {
+            return provider.is_keyless().then_some(ProviderKey::NotRequired);
+        }
         if let Some(path) = entry.session_file.as_deref() {
             let resolved = resolve_path(&self.base_dir, path);
             if !session_path_valid(provider, &resolved) {
@@ -274,7 +279,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = write_secrets(
             &dir,
-            r#"
+            r"
 credentials:
   openrouter-default:
     api-key: sk-or-test
@@ -285,7 +290,7 @@ integrations:
     access-key: AKIA
     secret-key: secret
     region: eu-central-1
-"#,
+",
         );
         let secrets = SecretsFile::load(&path).unwrap();
         assert_eq!(
@@ -354,6 +359,34 @@ integrations:
         unsafe {
             std::env::remove_var("AI_GATEWAY_CREDENTIAL_OPENROUTER_DEFAULT");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn keyless_secret_enables_keyless_provider_only() {
+        let dir = std::env::temp_dir().join("ai-gw-secrets-keyless");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = write_secrets(
+            &dir,
+            "credentials:\n  vllm-anonymous:\n    keyless: true\n",
+        );
+        let mut secrets = SecretsFile::load(&path).unwrap();
+        assert_eq!(
+            secrets.resolve_provider_key(
+                "vllm-anonymous",
+                &InferenceProvider::Named("vllm".into()),
+            ),
+            Some(ProviderKey::NotRequired)
+        );
+        assert!(
+            secrets
+                .resolve_provider_key(
+                    "vllm-anonymous",
+                    &InferenceProvider::OpenRouter,
+                )
+                .is_none()
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

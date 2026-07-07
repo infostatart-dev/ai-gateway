@@ -15,8 +15,8 @@ pub struct ScoreInput<'a> {
     pub candidate: &'a BudgetCandidate,
     pub health: &'a CredentialHealthRegistry,
     pub headroom: f64,
-    pub affinity: bool,
-    pub hash_bias: f64,
+    pub route_preference: f64,
+    pub client_affinity: f64,
     pub cooldown_secs: f64,
     pub quota_blocked_reason: Option<BlockedReason>,
     pub quota_next_available_at: Option<String>,
@@ -24,22 +24,23 @@ pub struct ScoreInput<'a> {
 
 const W_HEALTH: f64 = 0.30;
 const W_HEADROOM: f64 = 0.25;
-const W_AFFINITY: f64 = 0.20;
-const W_HASH: f64 = 0.10;
+const W_ROUTE_PREFERENCE: f64 = 0.16;
+const W_CLIENT_AFFINITY: f64 = 0.04;
 const W_COST: f64 = 0.10;
 const W_COOLDOWN: f64 = 0.15;
 const W_LADDER: f64 = 0.05;
 
 #[must_use]
 pub fn score_breakdown(input: &ScoreInput<'_>) -> ReplayScoreBreakdown {
-    let h_success = input.health.success_rate(
+    let h_success = input.health.model_success_rate(
         &input.candidate.capability.provider,
         &input.candidate.credential_id,
+        &input.candidate.capability.model.to_string(),
     );
     let quota_capacity = input.headroom;
     let q_cooldown_secs = input.cooldown_secs;
-    let m_affinity = if input.affinity { 1.0 } else { 0.0 };
-    let hash_bias = input.hash_bias;
+    let m_affinity = input.route_preference;
+    let hash_bias = input.client_affinity;
     let l_band = ladder_band_index(
         &input.candidate.capability.provider,
         &input.candidate.credential_tier,
@@ -49,8 +50,8 @@ pub fn score_breakdown(input: &ScoreInput<'_>) -> ReplayScoreBreakdown {
     let cost = f64::from(input.candidate.credential_cost_class.rank_base());
     let score = W_HEALTH * h_success
         + W_HEADROOM * quota_capacity
-        + W_AFFINITY * m_affinity
-        + W_HASH * hash_bias
+        + W_ROUTE_PREFERENCE * m_affinity
+        + W_CLIENT_AFFINITY * hash_bias
         + W_COST * (1.0 / (1.0 + cost))
         - W_COOLDOWN * norm_cooldown(q_cooldown_secs)
         - W_LADDER * f64::from(l_band);

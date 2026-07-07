@@ -121,6 +121,11 @@ pub struct UpstreamAttemptContext {
     pub admit_feasible: bool,
 }
 
+/// Router attempts that still need gateway-level semantic validation should not
+/// be counted as terminal provider attempts by the dispatcher.
+#[derive(Debug, Clone, Copy)]
+pub struct DeferredProviderAttemptMetrics;
+
 /// Terminal JSON header payload (`X-Gateway-Provider-Usage`).
 #[derive(Debug, Clone)]
 pub struct GatewayProviderUsageExtension(
@@ -247,9 +252,11 @@ pub struct RoutePlanContext {
     pub caller: CallerRequestContext,
     pub full_pool: Vec<crate::router::budget_aware::BudgetCandidate>,
     pub estimated_tokens: u32,
+    pub route_memory_key: crate::router::budget_aware::RouteMemoryKey,
     pub route_memory_hit: bool,
     pub planned_hops: u32,
     pub source_model: Option<String>,
+    pub stream: bool,
     pub json_schema_required: bool,
     pub replay: Option<PlanReplaySnapshot>,
 }
@@ -263,6 +270,7 @@ pub struct PlanReplaySnapshot {
     pub winner_credential: String,
     pub winner_model: String,
     pub winner: ReplayScoreBreakdown,
+    pub planned_chain: Vec<ReplayPlanHop>,
     pub top_alternatives: Vec<ReplayAlternative>,
     pub quota_excluded: Vec<ReplayQuotaExcluded>,
 }
@@ -289,6 +297,8 @@ pub struct ReplayRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub winner_score: Option<ReplayScoreBreakdown>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub planned_chain: Vec<ReplayPlanHop>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub top_alternatives: Vec<ReplayAlternative>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub quota_excluded: Vec<ReplayQuotaExcluded>,
@@ -309,6 +319,14 @@ pub struct ReplayScoreBreakdown {
     pub blocked_reason: Option<BlockedReason>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_available_at: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ReplayPlanHop {
+    pub position: u32,
+    pub provider: String,
+    pub credential: String,
+    pub model: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

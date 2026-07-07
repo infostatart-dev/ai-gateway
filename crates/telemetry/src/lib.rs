@@ -44,6 +44,8 @@ pub struct Config {
     #[serde(default = "default_otlp_endpoint")]
     pub otlp_endpoint: String,
     #[serde(default = "default_true")]
+    pub otlp_logs: bool,
+    #[serde(default = "default_true")]
     pub propagate: bool,
     #[serde(default)]
     pub format: Format,
@@ -56,6 +58,7 @@ impl Default for Config {
             service_name: default_service_name(),
             exporter: Exporter::default(),
             otlp_endpoint: default_otlp_endpoint(),
+            otlp_logs: default_true(),
             propagate: default_true(),
             format: Format::default(),
         }
@@ -163,20 +166,12 @@ pub fn init_telemetry(
         Exporter::Otlp => {
             let (logger_provider, tracer_provider, metrics_provider) =
                 init_otlp(config)?;
-            Ok((
-                Some(logger_provider),
-                tracer_provider,
-                Some(metrics_provider),
-            ))
+            Ok((logger_provider, tracer_provider, Some(metrics_provider)))
         }
         Exporter::Both => {
             let (logger_provider, tracer_provider, metrics_provider) =
                 init_otlp_with_stdout(config)?;
-            Ok((
-                Some(logger_provider),
-                tracer_provider,
-                Some(metrics_provider),
-            ))
+            Ok((logger_provider, tracer_provider, Some(metrics_provider)))
         }
     }
 }
@@ -184,7 +179,11 @@ pub fn init_telemetry(
 fn init_otlp(
     config: &Config,
 ) -> Result<
-    (SdkLoggerProvider, SdkTracerProvider, SdkMeterProvider),
+    (
+        Option<SdkLoggerProvider>,
+        SdkTracerProvider,
+        SdkMeterProvider,
+    ),
     TelemetryError,
 > {
     init_otlp_pipeline(config, false)
@@ -193,7 +192,11 @@ fn init_otlp(
 fn init_otlp_with_stdout(
     config: &Config,
 ) -> Result<
-    (SdkLoggerProvider, SdkTracerProvider, SdkMeterProvider),
+    (
+        Option<SdkLoggerProvider>,
+        SdkTracerProvider,
+        SdkMeterProvider,
+    ),
     TelemetryError,
 > {
     init_otlp_pipeline(config, true)
@@ -203,19 +206,28 @@ fn init_otlp_pipeline(
     config: &Config,
     with_stdout: bool,
 ) -> Result<
-    (SdkLoggerProvider, SdkTracerProvider, SdkMeterProvider),
+    (
+        Option<SdkLoggerProvider>,
+        SdkTracerProvider,
+        SdkMeterProvider,
+    ),
     TelemetryError,
 > {
     let resource = resource(config);
 
     // logging
-    let logger_provider = logger_provider(config, resource.clone())
-        .map_err(TelemetryError::LogExporterBuild)?;
-    let otel_layer =
-        opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(
-            &logger_provider,
-        )
-        .with_filter(env_filter(config)?);
+    let (logger_provider, otel_layer) = if config.otlp_logs {
+        let logger_provider = logger_provider(config, resource.clone())
+            .map_err(TelemetryError::LogExporterBuild)?;
+        let otel_layer =
+            opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(
+                &logger_provider,
+            )
+            .with_filter(env_filter(config)?);
+        (Some(logger_provider), Some(otel_layer))
+    } else {
+        (None, None)
+    };
 
     // tracing
     let tracer_provider = tracer_provider(config, resource.clone())
@@ -450,5 +462,15 @@ impl IdGenerator for UuidGenerator {
 
     fn new_span_id(&self) -> opentelemetry::SpanId {
         opentelemetry::SpanId::from(Uuid::new_v4().as_u64_pair().0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    #[test]
+    fn otlp_logs_default_enabled_for_backward_compatibility() {
+        assert!(Config::default().otlp_logs);
     }
 }

@@ -40,8 +40,20 @@ struct CredentialHealthEntry {
 }
 
 #[derive(Debug)]
+struct ProviderModelHealthEntry {
+    window: WindowCounts,
+    window_started: Instant,
+    ewma_latency: Option<Duration>,
+    last_failover_class: Option<FailoverClass>,
+    last_status_code: Option<u16>,
+    last_error: Option<String>,
+}
+
+#[derive(Debug)]
 pub struct CredentialHealthRegistry {
     entries: Mutex<HashMap<(String, String), CredentialHealthEntry>>,
+    model_entries:
+        Mutex<HashMap<(String, String, String), ProviderModelHealthEntry>>,
 }
 
 impl Default for CredentialHealthRegistry {
@@ -55,6 +67,7 @@ impl CredentialHealthRegistry {
     pub fn new() -> Self {
         Self {
             entries: Mutex::new(HashMap::new()),
+            model_entries: Mutex::new(HashMap::new()),
         }
     }
 
@@ -126,6 +139,83 @@ impl CredentialHealthRegistry {
         }
     }
 
+    pub fn record_model_attempt(
+        &self,
+        provider: &InferenceProvider,
+        credential: &ProviderCredentialId,
+        model: &str,
+        outcome: CallOutcome,
+        status_code: u16,
+        elapsed: Duration,
+    ) {
+        let now = Instant::now();
+        let mut entries =
+            self.model_entries.lock().expect("model health registry");
+        let entry = entries
+            .entry((
+                provider.to_string(),
+                credential.to_string(),
+                model.to_string(),
+            ))
+            .or_insert_with(|| ProviderModelHealthEntry {
+                window: WindowCounts::default(),
+                window_started: now,
+                ewma_latency: None,
+                last_failover_class: None,
+                last_status_code: None,
+                last_error: None,
+            });
+        if now.duration_since(entry.window_started) > WINDOW {
+            entry.window = WindowCounts::default();
+            entry.window_started = now;
+        }
+        entry.window.attempts = entry.window.attempts.saturating_add(1);
+        if matches!(
+            outcome,
+            CallOutcome::Success | CallOutcome::SuccessDegraded
+        ) {
+            entry.window.successes = entry.window.successes.saturating_add(1);
+            entry.last_failover_class = None;
+            entry.last_error = None;
+        } else if matches!(outcome, CallOutcome::SemanticError) {
+            entry.last_failover_class = None;
+            entry.last_error = Some(format!("SemanticError:{status_code}"));
+        }
+        entry.ewma_latency =
+            Some(smoothed_latency(entry.ewma_latency, elapsed));
+        entry.last_status_code = Some(status_code);
+    }
+
+    pub fn record_model_failover_class(
+        &self,
+        provider: &InferenceProvider,
+        credential: &ProviderCredentialId,
+        model: &str,
+        class: FailoverClass,
+        status_code: u16,
+    ) {
+        let now = Instant::now();
+        let mut entries =
+            self.model_entries.lock().expect("model health registry");
+        let entry = entries
+            .entry((
+                provider.to_string(),
+                credential.to_string(),
+                model.to_string(),
+            ))
+            .or_insert_with(|| ProviderModelHealthEntry {
+                window: WindowCounts::default(),
+                window_started: now,
+                ewma_latency: None,
+                last_failover_class: None,
+                last_status_code: None,
+                last_error: None,
+            });
+        entry.last_failover_class = Some(class);
+        entry.last_status_code = Some(status_code);
+        entry.last_error = Some(format!("{class:?}:{status_code}"));
+    }
+
     #[must_use]
     pub fn is_circuit_open(
         &self,
@@ -150,6 +240,61 @@ impl CredentialHealthRegistry {
         entries
             .get(&(provider.to_string(), credential.to_string()))
             .map_or(1.0, CredentialHealthEntry::success_rate)
+    }
+
+    #[must_use]
+    pub fn model_success_rate(
+        &self,
+        provider: &InferenceProvider,
+        credential: &ProviderCredentialId,
+        model: &str,
+    ) -> f64 {
+        let entries = self.model_entries.lock().expect("model health registry");
+        entries
+            .get(&(
+                provider.to_string(),
+                credential.to_string(),
+                model.to_string(),
+            ))
+            .map_or_else(
+                || self.success_rate(provider, credential),
+                ProviderModelHealthEntry::success_rate,
+            )
+    }
+
+    #[must_use]
+    pub fn model_latency_ms(
+        &self,
+        provider: &InferenceProvider,
+        credential: &ProviderCredentialId,
+        model: &str,
+    ) -> Option<f64> {
+        let entries = self.model_entries.lock().expect("model health registry");
+        entries
+            .get(&(
+                provider.to_string(),
+                credential.to_string(),
+                model.to_string(),
+            ))
+            .and_then(|entry| entry.ewma_latency)
+            .map(|latency| latency.as_secs_f64() * 1000.0)
+    }
+
+    #[must_use]
+    pub fn model_attempts(
+        &self,
+        provider: &InferenceProvider,
+        credential: &ProviderCredentialId,
+        model: &str,
+    ) -> u32 {
+        let entries = self.model_entries.lock().expect("model health registry");
+        entries
+            .get(&(
+                provider.to_string(),
+                credential.to_string(),
+                model.to_string(),
+            ))
+            .map_or(0, |entry| entry.window.attempts)
     }
 
     #[must_use]
@@ -280,6 +425,23 @@ impl CredentialHealthEntry {
         }
         f64::from(self.window.successes) / f64::from(self.window.attempts)
     }
+}
+
+impl ProviderModelHealthEntry {
+    fn success_rate(&self) -> f64 {
+        if self.window.attempts == 0 {
+            return 1.0;
+        }
+        f64::from(self.window.successes) / f64::from(self.window.attempts)
+    }
+}
+
+fn smoothed_latency(previous: Option<Duration>, elapsed: Duration) -> Duration {
+    previous.map_or(elapsed, |prev| {
+        Duration::from_secs_f64(
+            prev.as_secs_f64().mul_add(0.8, elapsed.as_secs_f64() * 0.2),
+        )
+    })
 }
 
 #[cfg(test)]

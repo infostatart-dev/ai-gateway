@@ -24,10 +24,9 @@ pub async fn run() {
 
     let app_state = AppState::test_default().await;
     let router = empty_router(&app_state);
-    let pool = vec![
-        gemini_model_candidate(&app_state, BLOCKED, MODEL).await,
-        gemini_model_candidate(&app_state, SIBLING, MODEL).await,
-    ];
+    let blocked = gemini_model_candidate(&app_state, BLOCKED, MODEL).await;
+    let sibling = gemini_model_candidate(&app_state, SIBLING, MODEL).await;
+    let pool = vec![blocked.clone(), sibling];
 
     let result = run_planned_failover(
         router,
@@ -45,7 +44,11 @@ pub async fn run() {
         format!("{SIBLING}/{MODEL}")
     );
     assert_eq!(
-        credential_attempts(&app_state, BLOCKED),
+        app_state.credential_health().model_attempts(
+            &blocked.capability.provider,
+            &blocked.credential_id,
+            MODEL,
+        ),
         1,
         "re-admit must not repeat upstream on infeasible scope"
     );

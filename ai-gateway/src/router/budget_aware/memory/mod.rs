@@ -1,5 +1,7 @@
 mod binding;
 mod registry;
 
-pub use binding::RouteBinding;
-pub use registry::WorkUnitRouteMemory;
+pub use binding::{
+    RouteBinding, RouteBindingPreference, RouteMemoryKey, RouteStreamMode,
+};
+pub use registry::GatewayRouteMemory;

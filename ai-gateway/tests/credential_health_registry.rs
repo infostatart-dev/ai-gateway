@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ai_gateway::tests::budget_aware::{
     CallOutcome, CredentialHealthRegistry, InferenceProvider,
@@ -64,7 +64,8 @@ fn window_rollover_resets_counts() {
     let credential = cred("gemini-free-4");
     registry.testing_seed_stale_window(&provider, &credential, 5, 0);
     registry.record_attempt(&provider, &credential, CallOutcome::Success, 200);
-    assert_eq!(registry.success_rate(&provider, &credential), 1.0);
+    let success_rate = registry.success_rate(&provider, &credential);
+    assert!((success_rate - 1.0).abs() < f64::EPSILON);
 }
 
 #[test]
@@ -98,4 +99,42 @@ fn credential_zero_success_dead_requires_ten_failures() {
         &credential,
         Instant::now()
     ));
+}
+
+#[test]
+fn model_health_isolated_within_same_credential() {
+    let registry = CredentialHealthRegistry::new();
+    let provider = InferenceProvider::Named("llm7".into());
+    let credential = cred("llm7-default");
+
+    registry.record_model_attempt(
+        &provider,
+        &credential,
+        "gpt-oss:20b",
+        CallOutcome::ClientError,
+        400,
+        Duration::from_millis(80),
+    );
+    registry.record_model_attempt(
+        &provider,
+        &credential,
+        "fast",
+        CallOutcome::Success,
+        200,
+        Duration::from_millis(40),
+    );
+
+    assert_eq!(
+        registry.model_success_rate(&provider, &credential, "gpt-oss:20b"),
+        0.0
+    );
+    assert_eq!(
+        registry.model_success_rate(&provider, &credential, "fast"),
+        1.0
+    );
+    assert!(
+        registry
+            .model_latency_ms(&provider, &credential, "fast")
+            .is_some()
+    );
 }
