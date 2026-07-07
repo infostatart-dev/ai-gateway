@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 Maintained by [Infostart IT Lab](https://infostart.ru/lab/about/) since 2026-04.
 Fork of [Helicone/ai-gateway](https://github.com/Helicone/ai-gateway).
 
+## [0.7.1] - 2026-07-07
+
+**Declared routing catalog and strict-output accounting** — model admission,
+provider catalogs, pacing, and structured-output telemetry now use the same
+declared gateway bindings and concrete provider/model identities.
+
+### Features
+
+- **GitHub Models catalog expansion:** embedded provider metadata now covers the
+  active GitHub Models chat, reasoning, vision, embedding, Mistral, Meta,
+  Microsoft, DeepSeek, Cohere, and xAI model set with model capabilities and
+  context windows
+- **GitHub Models ladders:** gateway model mappings and provider ladders can use
+  GitHub Models as fast, capacity, stability, and deprioritized fallbacks for
+  declared gateway selectors
+- **Per-model GitHub pacing:** GitHub Models uses model-scoped quota and pacing
+  gates with conservative low, high, embedding, and custom tier limits
+- **Structured-output retry:** invalid non-streaming JSON schema responses can
+  be retried with a schema-aware prompt adjustment before moving to the next
+  candidate or reflector path
+
+### Fixed
+
+- **Autodefault admission:** `/router/autodefault` rejects undeclared, missing,
+  or non-string `model` values before planning or contacting an upstream
+  provider
+- **OpenRouter strict JSON routing:** JSON schema requests mapped to OpenRouter
+  require parameter-compatible providers while preserving existing provider
+  routing options
+- **Structured-output provider stats:** initial invalid JSON schema responses,
+  retry failures, retry semantic errors, and repaired responses are recorded as
+  distinct provider/model outcomes instead of being hidden by a later client
+  success
+- **Terminal retry traces:** a structured-output retry that serves the client is
+  recorded as the terminal route attempt, so route spans point at the executor
+  that actually completed the response
+
+### Quality
+
+- Regression tests cover declared autodefault model admission, OpenRouter
+  strict JSON parameters, GitHub Models mapping and per-model pacing, configured
+  ladder/catalog consistency, and structured-output retry accounting
+- Coverage tasks now run through the repository cargo environment wrapper, so
+  coverage commands use the same native build environment as the other `mise`
+  checks
+
 ## [0.7.0] - 2026-07-07
 
 **Adaptive provider planning and route-class memory** — budget-aware routing now

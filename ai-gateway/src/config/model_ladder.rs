@@ -176,18 +176,24 @@ mod tests {
     }
 
     #[test]
-    fn every_ladder_slug_resolves_in_catalog() {
+    fn every_configured_ladder_slug_resolves_in_catalog() {
         use crate::config::catalog_limit_resolve::catalog_limit_resolve;
 
         let registry = ModelLadderRegistry::default();
         let catalog =
             crate::config::provider_limits::ProviderLimitCatalog::default();
-        let provider = InferenceProvider::GoogleGemini;
-        for slug in registry.ladder_model_slugs(&provider, "free") {
-            catalog_limit_resolve(&catalog, &provider, "free", &slug)
-                .unwrap_or_else(|| {
-                    panic!("ladder slug {slug} must resolve in catalog")
-                });
+        for (provider, tiers) in &registry.providers {
+            for tier in tiers.keys() {
+                for slug in registry.ladder_model_slugs(provider, tier) {
+                    catalog_limit_resolve(&catalog, provider, tier, &slug)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "ladder slug {provider}/{tier}/{slug} must \
+                                 resolve in catalog"
+                            )
+                        });
+                }
+            }
         }
     }
 

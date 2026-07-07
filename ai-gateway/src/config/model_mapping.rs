@@ -147,6 +147,23 @@ gpt-5-mini:
             first_openrouter, "openrouter/free",
             "first openrouter fallback must be the free router slug"
         );
+
+        let github_models: Vec<_> = mappings
+            .iter()
+            .filter(|model| {
+                model.inference_provider()
+                    == Some(InferenceProvider::Named("github-models".into()))
+            })
+            .map(ToString::to_string)
+            .collect();
+        assert!(
+            github_models.contains(&"openai/gpt-5-mini".to_string()),
+            "gpt-5-mini must route to the native GitHub Models gpt-5-mini slug"
+        );
+        assert!(
+            github_models.contains(&"openai/gpt-4.1-mini".to_string()),
+            "gpt-5-mini should keep a GitHub Models capacity fallback"
+        );
     }
 
     #[test]

@@ -2,6 +2,7 @@ use bytes::Bytes;
 use serde_json::{Value, json};
 use web_structured_output::{
     StructuredOutputIssue, check_structured_response, parse_json_schema_spec,
+    retry_suffix_for,
 };
 
 use crate::{
@@ -184,6 +185,45 @@ pub(super) fn build_schema_conformance_reflection_request(
     }
 
     serde_json::to_vec(&request).ok().map(Bytes::from)
+}
+
+pub(super) fn build_structured_output_retry_request(
+    request_body: &Bytes,
+    issue: Option<StructuredOutputIssue>,
+) -> Option<Bytes> {
+    let mut request = serde_json::from_slice::<Value>(request_body).ok()?;
+    let suffix = retry_suffix_for(issue);
+    let messages = request.get_mut("messages")?.as_array_mut()?;
+    let last_user = messages.iter_mut().rev().find(|message| {
+        message.get("role").and_then(Value::as_str) == Some("user")
+    })?;
+    append_retry_suffix(last_user.get_mut("content")?, suffix)?;
+    request["stream"] = Value::Bool(false);
+    if let Some(object) = request.as_object_mut() {
+        object.remove("stream_options");
+    }
+
+    serde_json::to_vec(&request).ok().map(Bytes::from)
+}
+
+fn append_retry_suffix(content: &mut Value, suffix: &str) -> Option<()> {
+    match content {
+        Value::String(text) => {
+            text.push_str(suffix);
+            Some(())
+        }
+        Value::Array(parts) => {
+            let text_part = parts.iter_mut().rev().find(|part| {
+                part.get("type").and_then(Value::as_str) == Some("text")
+                    && part.get("text").is_some()
+            })?;
+            let mut updated = text_part.get("text")?.as_str()?.to_string();
+            updated.push_str(suffix);
+            text_part["text"] = Value::String(updated);
+            Some(())
+        }
+        _ => None,
+    }
 }
 
 fn assistant_content(response_body: &Bytes) -> Option<String> {

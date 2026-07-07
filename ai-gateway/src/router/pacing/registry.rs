@@ -180,6 +180,30 @@ mod tests {
     }
 
     #[test]
+    fn github_models_per_model_registry_isolates_low_from_high_tier() {
+        let registry = PacingRegistry::new(ProviderLimitCatalog::default());
+        let provider = InferenceProvider::Named("github-models".into());
+        let cred = ProviderCredentialId::new("github-models-default");
+        let low = registry
+            .gate_for(
+                &provider,
+                Some(&cred),
+                Some("free"),
+                Some("openai/gpt-4o-mini"),
+            )
+            .expect("low-tier gate");
+        let high = registry
+            .gate_for(
+                &provider,
+                Some(&cred),
+                Some("free"),
+                Some("openai/gpt-4.1"),
+            )
+            .expect("high-tier gate");
+        assert!(!Arc::ptr_eq(&low, &high));
+    }
+
+    #[test]
     #[serial_test::serial]
     fn registry_isolates_gates_by_credential_scope() {
         let path_a = std::env::temp_dir().join("ai-gw-pacing-a.json");

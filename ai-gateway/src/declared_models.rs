@@ -80,6 +80,16 @@ pub fn classify(model: &str) -> Option<DeclaredModelStatus> {
 }
 
 #[must_use]
+pub fn is_declared_gateway_binding(model: &str) -> bool {
+    let requested = model.trim();
+    catalog()
+        .stable
+        .iter()
+        .chain(catalog().unstable.iter())
+        .any(|spec| spec.id == requested)
+}
+
+#[must_use]
 pub fn canonical_mapping_slug(model_name: &str) -> Option<&'static str> {
     match normalized_slug(model_name).as_str() {
         "gpt-5.5-nano" => Some("gpt-5.4-nano"),
@@ -137,6 +147,18 @@ mod tests {
             classify("openai/gpt-5.5"),
             Some(DeclaredModelStatus::UnstableGpt55)
         );
+    }
+
+    #[test]
+    fn admission_uses_declared_catalog_ids_only() {
+        assert!(is_declared_gateway_binding("openai/gpt-5.5-mini"));
+        assert!(is_declared_gateway_binding("openai/gpt-5.5-nano"));
+        assert!(is_declared_gateway_binding("openai/gpt-5.5"));
+
+        assert!(!is_declared_gateway_binding("gpt-5.5-mini"));
+        assert!(!is_declared_gateway_binding("glm-4.5-air:free"));
+        assert!(!is_declared_gateway_binding("openrouter/openrouter/free"));
+        assert!(!is_declared_gateway_binding("gemini/gemini-3.1-pro"));
     }
 
     #[test]

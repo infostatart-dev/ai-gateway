@@ -203,13 +203,25 @@ mod structured_output_failover {
             .0
     }
 
+    fn provider_stats_row(
+        app_state: &AppState,
+        credential: &str,
+    ) -> crate::metrics::provider::runtime::ProviderStatsRow {
+        app_state
+            .provider_stats_snapshot(None, Some(credential))
+            .providers
+            .into_iter()
+            .find(|row| row.credential == credential)
+            .unwrap_or_else(|| panic!("provider stats row for {credential}"))
+    }
+
     #[tokio::test]
     #[serial_test::serial]
-    async fn structured_output_failover_succeeds_on_second_candidate() {
+    async fn structured_output_retry_repairs_before_provider_failover() {
         clear_test_call_responses();
         push_test_call_response(Ok(chat_completion("| broken | markdown |")));
         push_test_call_response(Ok(chat_completion(
-            r#"{"value":"recovered_on_second_provider"}"#,
+            r#"{"value":"recovered_on_retry"}"#,
         )));
 
         let app_state = AppState::test_default().await;
@@ -252,14 +264,14 @@ mod structured_output_failover {
                 .headers()
                 .get(REAL_MODE_MODEL_AND_PROVIDER)
                 .and_then(|value| value.to_str().ok()),
-            Some("mistral-test/magistral-medium-latest")
+            Some("groq-test/llama-4-scout-17b-16e-instruct")
         );
 
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(
             parsed["choices"][0]["message"]["content"],
-            r#"{"value":"recovered_on_second_provider"}"#
+            r#"{"value":"recovered_on_retry"}"#
         );
 
         let groq_credential = ProviderCredentialId::new("groq-test");
@@ -270,7 +282,8 @@ mod structured_output_failover {
                 .get(&groq_credential)
                 .and_then(|state| state.cooldown_until)
                 .is_none(),
-            "invalid structured output must not poison the whole credential"
+            "retry-repaired structured output must not poison the whole \
+             credential"
         );
         assert!(
             states
@@ -289,9 +302,83 @@ mod structured_output_failover {
                     model: "llama-4-scout-17b-16e-instruct".to_string(),
                 })
                 .and_then(|state| state.cooldown_until)
-                .is_some(),
-            "invalid structured output must cool down only the failed model"
+                .is_none(),
+            "retry-repaired structured output must not cool down the model"
         );
+
+        let stats = provider_stats_row(&app_state, "groq-test");
+        assert_eq!(stats.calls.attempts, 2);
+        assert_eq!(stats.calls.semantic_error, 1);
+        assert_eq!(stats.calls.success_degraded, 1);
+        assert_eq!(stats.status_codes.get("200"), Some(&2));
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn structured_output_retry_upstream_failure_records_repair_attempt() {
+        clear_test_call_responses();
+        push_test_call_response(Ok(chat_completion("| broken | markdown |")));
+        push_test_call_response(Ok(overload_503()));
+        push_test_call_response(Ok(chat_completion(
+            r#"{"value":"recovered_after_retry_failure"}"#,
+        )));
+
+        let app_state = AppState::test_default().await;
+        let router = test_router(&app_state);
+        let candidates = vec![
+            candidate(
+                &app_state,
+                groq(),
+                "llama-4-scout-17b-16e-instruct",
+                Some(131_072),
+            )
+            .await,
+            candidate(
+                &app_state,
+                mistral(),
+                "magistral-medium-latest",
+                Some(131_072),
+            )
+            .await,
+        ];
+
+        let response = run_failover_candidates(
+            router,
+            request_parts(),
+            json_schema_request_body(""),
+            candidates,
+            RequestRequirements {
+                json_schema_required: true,
+                reasoning_preferred: true,
+                ..RequestRequirements::default()
+            },
+            None,
+        )
+        .await
+        .expect(
+            "retry upstream failure should fail over to the next candidate",
+        );
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(REAL_MODE_MODEL_AND_PROVIDER)
+                .and_then(|value| value.to_str().ok()),
+            Some("mistral-test/magistral-medium-latest")
+        );
+
+        let groq_stats = provider_stats_row(&app_state, "groq-test");
+        assert_eq!(groq_stats.calls.attempts, 2);
+        assert_eq!(groq_stats.calls.semantic_error, 1);
+        assert_eq!(groq_stats.calls.server_error, 1);
+        assert_eq!(groq_stats.status_codes.get("200"), Some(&1));
+        assert_eq!(groq_stats.status_codes.get("503"), Some(&1));
+
+        let mistral_stats = provider_stats_row(&app_state, "mistral-test");
+        assert_eq!(mistral_stats.calls.attempts, 1);
+        assert_eq!(mistral_stats.calls.success, 1);
+        assert_eq!(mistral_stats.status_codes.get("200"), Some(&1));
     }
 
     #[tokio::test]
@@ -438,6 +525,8 @@ mod structured_output_failover {
         clear_test_call_responses();
         push_test_call_response(Ok(chat_completion("```json\n{broken")));
         push_test_call_response(Ok(chat_completion("")));
+        push_test_call_response(Ok(chat_completion("| still invalid |")));
+        push_test_call_response(Ok(chat_completion("{\"wrong\":\"schema\"}")));
         push_test_call_response(Ok(chat_completion(
             r#"{"value":"ok for order 1111799"}"#,
         )));

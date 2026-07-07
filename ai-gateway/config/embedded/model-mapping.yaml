@@ -32,6 +32,8 @@ gpt-4o:
   - "longcat/LongCat-2.0"
   - "deepseek-web/deepseek-chat"
   - "chatgpt-web/gpt-5.5-instant"
+  - "github-models/openai/gpt-4o"
+  - "github-models/openai/gpt-4o-mini"
   - "anthropic/claude-3-7-sonnet"
   - "gemini/gemini-2.5-pro"
   - "ollama/llama4"
@@ -47,6 +49,7 @@ gpt-4o-mini:
   - "deepseek-web/deepseek-chat"
   - "chatgpt-web/gpt-5.5-instant"
   - "openrouter/google/gemini-2.0-flash-lite-001"
+  - "github-models/openai/gpt-4o-mini"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-2.5-flash"
   - "ollama/llama3.2"
@@ -75,6 +78,10 @@ gpt-5-mini:
   - "opencode/big-pickle"
   - "opencode/deepseek-v4-flash-free"
   - "openrouter/qwen/qwen3-next-80b-a3b-instruct:free"
+  - "github-models/openai/gpt-5-mini"
+  - "github-models/openai/gpt-5-nano"
+  - "github-models/openai/gpt-4.1-mini"
+  - "github-models/openai/gpt-4o-mini"
   - "groq/meta-llama/llama-4-scout-17b-16e-instruct"
   - "cerebras/gpt-oss-120b"
   - "mistral/magistral-medium-latest"
@@ -96,6 +103,10 @@ gpt-5:
   - "chatgpt-web/gpt-5.5-instant"
   - "openrouter/openai/gpt-oss-120b:free"
   - "openrouter/qwen/qwen3-next-80b-a3b-instruct:free"
+  - "github-models/openai/gpt-5"
+  - "github-models/openai/gpt-5-mini"
+  - "github-models/openai/o4-mini"
+  - "github-models/openai/gpt-4.1"
   - "anthropic/claude-opus-4-0"
   - "gemini/gemini-3.1-pro-preview"
   - "ollama/deepseek-r1"
@@ -110,6 +121,8 @@ gpt-4.1:
   - "longcat/LongCat-2.0"
   - "deepseek-web/deepseek-chat"
   - "chatgpt-web/gpt-5.5-instant"
+  - "github-models/openai/gpt-4.1"
+  - "github-models/openai/gpt-4.1-mini"
   - "anthropic/claude-3-7-sonnet"
   - "gemini/gemini-2.5-pro"
   - "ollama/llama4"
@@ -124,6 +137,8 @@ gpt-4.1-mini:
   - "longcat/LongCat-2.0"
   - "deepseek-web/deepseek-chat"
   - "chatgpt-web/gpt-5.5-instant"
+  - "github-models/openai/gpt-4.1-mini"
+  - "github-models/openai/gpt-4o-mini"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-2.0-flash"
   - "ollama/llama3.3"
@@ -138,6 +153,8 @@ gpt-4.1-nano:
   - "longcat/LongCat-2.0"
   - "deepseek-web/deepseek-chat"
   - "chatgpt-web/gpt-5.5-instant"
+  - "github-models/openai/gpt-4.1-nano"
+  - "github-models/openai/gpt-4o-mini"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-1.5-flash-8b"
   - "groq/meta-llama/llama-prompt-guard-2-22m"
@@ -179,6 +196,8 @@ gpt-5.4-nano:
   - opencode/mimo-v2.5-free
   - opencode/deepseek-v4-flash-free
   - openrouter/qwen/qwen3-next-80b-a3b-instruct:free
+  - github-models/openai/gpt-5-nano
+  - github-models/openai/gpt-4.1-nano
   - github-models/openai/gpt-4o-mini
   - groq/llama-3.1-8b-instant
   - cerebras/gpt-oss-120b
@@ -205,6 +224,9 @@ gpt-5.4-mini:
   - opencode/mimo-v2.5-free
   - opencode/deepseek-v4-flash-free
   - openrouter/qwen/qwen3-next-80b-a3b-instruct:free
+  - github-models/openai/gpt-5-mini
+  - github-models/openai/gpt-5-nano
+  - github-models/openai/gpt-4.1-mini
   - github-models/openai/gpt-4o-mini
   - groq/llama-3.1-8b-instant
   - cerebras/gpt-oss-120b
@@ -214,6 +236,9 @@ gpt-5.4-mini:
   - anthropic/claude-3-5-haiku
   - deepseek/deepseek-chat
 o1:
+  - "github-models/openai/o1"
+  - "github-models/openai/o1-preview"
+  - "github-models/openai/o1-mini"
   - "anthropic/claude-sonnet-4-0"
   - "gemini/gemini-2.5-pro"
   - "ollama/deepseek-r1"
@@ -224,6 +249,8 @@ o1:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 o1-mini:
+  - "github-models/openai/o1-mini"
+  - "github-models/openai/o1-preview"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-2.0-flash"
   - "ollama/llama3.3"
@@ -244,6 +271,9 @@ o1-pro:
   - "groq/moonshotai/kimi-k2-instruct"
   - "deepseek/deepseek-chat"
 o3:
+  - "github-models/openai/o3"
+  - "github-models/openai/o4-mini"
+  - "github-models/deepseek/DeepSeek-R1"
   - "anthropic/claude-opus-4-0"
   - "gemini/gemini-2.5-pro"
   - "ollama/deepseek-r1"
@@ -254,6 +284,8 @@ o3:
   - "bedrock/us.anthropic.claude-opus-4-20250514-v1:0"
   - "deepseek/deepseek-chat"
 o3-mini:
+  - "github-models/openai/o3-mini"
+  - "github-models/openai/o4-mini"
   - "anthropic/claude-3-5-haiku"
   - "bedrock/us.anthropic.claude-3-5-haiku-20241022-v1:0"
   - "gemini/gemini-2.0-flash"
@@ -264,6 +296,8 @@ o3-mini:
   - "groq/qwen/qwen3-32b"
   - "deepseek/deepseek-chat"
 o4-mini:
+  - "github-models/openai/o4-mini"
+  - "github-models/openai/o3-mini"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-2.0-flash"
   - "openai/gpt-4.1"
@@ -274,7 +308,81 @@ o4-mini:
   - "groq/qwen/qwen3-32b"
   - "bedrock/us.anthropic.claude-3-5-haiku-20241022-v1:0"
   - "deepseek/deepseek-chat"
+o1-preview:
+  - "github-models/openai/o1-preview"
+  - "github-models/openai/o1-mini"
+  - "github-models/openai/o1"
+gpt-5-nano:
+  - "github-models/openai/gpt-5-nano"
+  - "github-models/openai/gpt-4.1-nano"
+  - "github-models/openai/gpt-4o-mini"
+gpt-5-chat:
+  - "github-models/openai/gpt-5-chat"
+  - "github-models/openai/gpt-5-mini"
+Phi-4-reasoning:
+  - "github-models/microsoft/Phi-4-reasoning"
+  - "github-models/microsoft/Phi-4-mini-reasoning"
+Phi-4-multimodal-instruct:
+  - "github-models/microsoft/Phi-4-multimodal-instruct"
+  - "github-models/microsoft/Phi-4-mini-instruct"
+Phi-4-mini-reasoning:
+  - "github-models/microsoft/Phi-4-mini-reasoning"
+  - "github-models/microsoft/Phi-4-reasoning"
+Phi-4-mini-instruct:
+  - "github-models/microsoft/Phi-4-mini-instruct"
+  - "github-models/microsoft/Phi-4"
+Phi-4:
+  - "github-models/microsoft/Phi-4"
+text-embedding-3-small:
+  - "github-models/openai/text-embedding-3-small"
+text-embedding-3-large:
+  - "github-models/openai/text-embedding-3-large"
+Meta-Llama-3.1-8B-Instruct:
+  - "github-models/meta/Meta-Llama-3.1-8B-Instruct"
+  - "github-models/meta/Llama-3.2-11B-Vision-Instruct"
+Meta-Llama-3.1-405B-Instruct:
+  - "github-models/meta/Meta-Llama-3.1-405B-Instruct"
+  - "github-models/meta/Llama-4-Maverick-17B-128E-Instruct-FP8"
+Llama-3.3-70B-Instruct:
+  - "github-models/meta/Llama-3.3-70B-Instruct"
+  - "github-models/meta/Meta-Llama-3.1-405B-Instruct"
+Llama-3.2-90B-Vision-Instruct:
+  - "github-models/meta/Llama-3.2-90B-Vision-Instruct"
+  - "github-models/meta/Llama-3.2-11B-Vision-Instruct"
+Llama-3.2-11B-Vision-Instruct:
+  - "github-models/meta/Llama-3.2-11B-Vision-Instruct"
+  - "github-models/meta/Meta-Llama-3.1-8B-Instruct"
+Llama-4-Scout-17B-16E-Instruct:
+  - "github-models/meta/Llama-4-Scout-17B-16E-Instruct"
+  - "github-models/meta/Llama-4-Maverick-17B-128E-Instruct-FP8"
+Llama-4-Maverick-17B-128E-Instruct-FP8:
+  - "github-models/meta/Llama-4-Maverick-17B-128E-Instruct-FP8"
+  - "github-models/meta/Llama-4-Scout-17B-16E-Instruct"
+Cohere-command-a:
+  - "github-models/cohere/Cohere-command-a"
+Mistral-Small-3.1:
+  - "github-models/mistral-ai/Mistral-Small-3.1"
+  - "github-models/mistral-ai/Mistral-Medium-3"
+Codestral-25.01:
+  - "github-models/mistral-ai/Codestral-25.01"
+  - "github-models/mistral-ai/Mistral-Small-3.1"
+Mistral-Medium-3:
+  - "github-models/mistral-ai/Mistral-Medium-3"
+  - "github-models/mistral-ai/Mistral-Small-3.1"
+Ministral-3B:
+  - "github-models/mistral-ai/Ministral-3B"
+  - "github-models/mistral-ai/Mistral-Small-3.1"
+DeepSeek-V3-0324:
+  - "github-models/deepseek/DeepSeek-V3-0324"
+  - "github-models/deepseek/DeepSeek-R1"
+DeepSeek-R1-0528:
+  - "github-models/deepseek/DeepSeek-R1-0528"
+  - "github-models/deepseek/DeepSeek-R1"
+DeepSeek-R1:
+  - "github-models/deepseek/DeepSeek-R1"
+  - "github-models/deepseek/DeepSeek-R1-0528"
 codex-mini:
+  - "github-models/mistral-ai/Codestral-25.01"
   - "anthropic/claude-3-7-sonnet"
   - "gemini/gemini-2.0-flash"
   - "ollama/gemma3"
@@ -459,6 +567,7 @@ ministral-8b:
   - "bedrock/us.anthropic.claude-3-5-haiku-20241022-v1:0"
   - "deepseek/deepseek-chat"
 ministral-3b:
+  - "github-models/mistral-ai/Ministral-3B"
   - "openai/gpt-4o-mini"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-1.5-flash-8b"
@@ -469,6 +578,7 @@ ministral-3b:
   - "bedrock/amazon.nova-micro-v1:0"
   - "deepseek/deepseek-chat"
 mistral-small:
+  - "github-models/mistral-ai/Mistral-Small-3.1"
   - "openai/gpt-4o-mini"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-2.0-flash"
@@ -479,6 +589,7 @@ mistral-small:
   - "bedrock/us.anthropic.claude-3-5-haiku-20241022-v1:0"
   - "deepseek/deepseek-chat"
 mistral-medium:
+  - "github-models/mistral-ai/Mistral-Medium-3"
   - "openai/gpt-4o"
   - "anthropic/claude-3-5-sonnet"
   - "gemini/gemini-2.0-flash"
@@ -489,6 +600,7 @@ mistral-medium:
   - "bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0"
   - "deepseek/deepseek-chat"
 mistral-large:
+  - "github-models/mistral-ai/Mistral-Medium-3"
   - "openai/o3"
   - "anthropic/claude-sonnet-4-0"
   - "gemini/gemini-2.5-pro"
@@ -529,6 +641,7 @@ magistral-medium:
   - "bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0"
   - "deepseek/deepseek-chat"
 ministral-small:
+  - "github-models/mistral-ai/Ministral-3B"
   - "openai/gpt-4o-mini"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-2.0-flash"
@@ -549,6 +662,7 @@ devstral-small:
   - "bedrock/us.anthropic.claude-3-5-haiku-20241022-v1:0"
   - "deepseek/deepseek-chat"
 codestral:
+  - "github-models/mistral-ai/Codestral-25.01"
   - "openai/gpt-4o"
   - "anthropic/claude-3-5-sonnet"
   - "gemini/gemini-2.0-flash"
@@ -582,6 +696,8 @@ mistral-ocr:
 
 # Ollama Models
 deepseek-r1:
+  - "github-models/deepseek/DeepSeek-R1"
+  - "github-models/deepseek/DeepSeek-R1-0528"
   - "openai/gpt-4o"
   - "anthropic/claude-3-5-sonnet"
   - "gemini/gemini-2.0-flash"
@@ -592,6 +708,8 @@ deepseek-r1:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 llama4:
+  - "github-models/meta/Llama-4-Scout-17B-16E-Instruct"
+  - "github-models/meta/Llama-4-Maverick-17B-128E-Instruct-FP8"
   - "openai/gpt-4o"
   - "anthropic/claude-3-5-sonnet"
   - "gemini/gemini-2.0-flash"
@@ -603,6 +721,7 @@ llama4:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 llama3.3:
+  - "github-models/meta/Llama-3.3-70B-Instruct"
   - "openai/gpt-4o-mini"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-1.5-flash"
@@ -613,6 +732,8 @@ llama3.3:
   - "bedrock/meta.llama3-8b-instruct-v1:0"
   - "deepseek/deepseek-chat"
 llama3:
+  - "github-models/meta/Meta-Llama-3.1-8B-Instruct"
+  - "github-models/meta/Meta-Llama-3.1-405B-Instruct"
   - "openai/gpt-4o-mini"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-1.5-flash"
@@ -643,6 +764,9 @@ qwen3:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 phi4:
+  - "github-models/microsoft/Phi-4"
+  - "github-models/microsoft/Phi-4-mini-instruct"
+  - "github-models/microsoft/Phi-4-mini-reasoning"
   - "openai/gpt-4o-mini"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-1.5-flash"
@@ -663,6 +787,8 @@ llava:
   - "bedrock/us.deepseek.r1-v1:0"
   - "deepseek/deepseek-chat"
 llama3.2:
+  - "github-models/meta/Llama-3.2-11B-Vision-Instruct"
+  - "github-models/meta/Llama-3.2-90B-Vision-Instruct"
   - "openai/gpt-4o-mini"
   - "anthropic/claude-3-5-haiku"
   - "gemini/gemini-1.5-flash"
@@ -675,6 +801,7 @@ llama3.2:
 
 # Deepseek Models
 deepseek-chat:
+  - "github-models/deepseek/DeepSeek-V3-0324"
   - "openai/gpt-4o"
   - "anthropic/claude-3-7-sonnet"
   - "gemini/gemini-2.5-pro"
@@ -685,6 +812,8 @@ deepseek-chat:
   - "hyperbolic/deepseek-ai/DeepSeek-V3"
   - "bedrock/us.deepseek.r1-v1:0"
 deepseek-reasoner:
+  - "github-models/deepseek/DeepSeek-R1-0528"
+  - "github-models/deepseek/DeepSeek-R1"
   - "openai/o3"
   - "anthropic/claude-opus-4-0"
   - "gemini/gemini-2.5-pro"

@@ -198,7 +198,7 @@ async fn upstream_reconcile_blocks_admission() {
 }
 
 #[tokio::test]
-async fn per_slot_admission_blocks_saturated_gate() {
+async fn github_models_per_model_admission_blocks_only_saturated_model() {
     use ai_gateway::{
         config::credentials::ProviderCredentialId,
         types::provider::InferenceProvider,
@@ -209,26 +209,45 @@ async fn per_slot_admission_blocks_saturated_gate() {
     let credential = ProviderCredentialId::new("github-models-default");
     let pacing = app_state.upstream_pacing();
     let gate = pacing
-        .gate_for(&provider, Some(&credential), Some("free"), None)
-        .expect("per-slot gate");
+        .gate_for(
+            &provider,
+            Some(&credential),
+            Some("free"),
+            Some("openai/gpt-4o-mini"),
+        )
+        .expect("per-model gate");
     gate.apply_upstream_reconcile(Instant::now() + Duration::from_secs(60))
         .await;
     let health = CredentialHealthRegistry::new();
     let limits = &app_state.config().provider_limits;
-    let verdict = evaluate_pacing_admission(PacingAdmissionScope {
+    let blocked = evaluate_pacing_admission(PacingAdmissionScope {
         pacing,
         health: &health,
         limits,
         provider: &provider,
         credential_id: &credential,
         tier: "free",
-        model: None,
+        model: Some("openai/gpt-4o-mini"),
         estimated_tokens: 0,
         now: Instant::now(),
     })
     .await;
-    assert!(!verdict.feasible);
-    assert_eq!(verdict.blocked_reason, BlockedReason::UpstreamReconcile);
+    assert!(!blocked.feasible);
+    assert_eq!(blocked.blocked_reason, BlockedReason::UpstreamReconcile);
+
+    let sibling = evaluate_pacing_admission(PacingAdmissionScope {
+        pacing,
+        health: &health,
+        limits,
+        provider: &provider,
+        credential_id: &credential,
+        tier: "free",
+        model: Some("openai/gpt-4.1"),
+        estimated_tokens: 0,
+        now: Instant::now(),
+    })
+    .await;
+    assert!(sibling.feasible);
 }
 
 #[tokio::test]

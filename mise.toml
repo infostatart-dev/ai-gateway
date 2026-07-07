@@ -33,19 +33,19 @@ run = "./scripts/test-all"
 description = "Workspace lib unit tests — same scope as CI and coverage:gate"
 tools = { "cargo:cargo-llvm-cov" = "latest" }
 env = { CARGO_INCREMENTAL = "0" }
-run = "cargo llvm-cov --workspace --all-features --lib --summary-only"
+run = "./scripts/cargo-env cargo llvm-cov --workspace --all-features --lib --summary-only"
 
 [tasks."coverage:report"]
 description = "LCOV report for IDE / Codecov (lcov.info at repo root)"
 tools = { "cargo:cargo-llvm-cov" = "latest" }
 env = { CARGO_INCREMENTAL = "0" }
-run = "cargo llvm-cov --workspace --all-features --lib --lcov --output-path lcov.info"
+run = "./scripts/cargo-env cargo llvm-cov --workspace --all-features --lib --lcov --output-path lcov.info"
 
 [tasks."coverage:gate"]
 description = "Fail if workspace lib line coverage drops below baseline floor (48%)"
 tools = { "cargo:cargo-llvm-cov" = "latest" }
 env = { CARGO_INCREMENTAL = "0" }
-run = "cargo llvm-cov --workspace --all-features --lib --summary-only --fail-under-lines 48"
+run = "./scripts/cargo-env cargo llvm-cov --workspace --all-features --lib --summary-only --fail-under-lines 48"
 
 [tasks."catalog:verify-gemini"]
 description = "Assert embedded Gemini catalog slugs exist in ListModels fixture"

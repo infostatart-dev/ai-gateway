@@ -171,6 +171,33 @@ mod tests {
     }
 
     #[test]
+    fn github_models_low_and_high_tiers_resolve_separately() {
+        let catalog = ProviderLimitCatalog::default();
+        let provider = InferenceProvider::Named("github-models".into());
+        let low = PacingLimits::resolve_for_model(
+            &catalog,
+            &provider,
+            "free",
+            "openai/gpt-4o-mini",
+        )
+        .expect("low-tier limits");
+        let high = PacingLimits::resolve_for_model(
+            &catalog,
+            &provider,
+            "free",
+            "openai/gpt-4.1",
+        )
+        .expect("high-tier limits");
+
+        assert_eq!(low.rpm, 15);
+        assert_eq!(low.rpd, Some(150));
+        assert_eq!(low.concurrent, 5);
+        assert_eq!(high.rpm, 10);
+        assert_eq!(high.rpd, Some(50));
+        assert_eq!(high.concurrent, 2);
+    }
+
+    #[test]
     fn providers_without_rpm_tier_have_no_gate() {
         let catalog = ProviderLimitCatalog::default();
         let provider = InferenceProvider::OpenAI;

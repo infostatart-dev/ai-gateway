@@ -425,6 +425,7 @@ async fn run_failover_candidates_inner(
                     CandidateSuccessOutcome::Success {
                         response,
                         memory_policy,
+                        terminal_attempt,
                     } => {
                         record_route_memory_success(
                             &this,
@@ -433,10 +434,18 @@ async fn run_failover_candidates_inner(
                             memory_policy,
                         )
                         .await;
+                        let terminal_attempt_span =
+                            terminal_attempt.as_ref().map_or_else(
+                                || attempt_span.clone(),
+                                |attempt| attempt.span.clone(),
+                            );
+                        let terminal_attempt_started = terminal_attempt
+                            .as_ref()
+                            .map_or(attempt_started, |attempt| attempt.started);
                         route_trace.record_terminal_attempt(
                             candidate,
-                            attempt_span.clone(),
-                            attempt_started,
+                            terminal_attempt_span,
+                            terminal_attempt_started,
                             stream,
                             None,
                         );
@@ -814,12 +823,18 @@ enum CandidateSuccessOutcome {
     Success {
         response: Response,
         memory_policy: RouteMemorySuccessPolicy,
+        terminal_attempt: Option<TerminalAttemptTrace>,
     },
     TerminalFailure {
         response: Response,
         status: http::StatusCode,
         failure: Option<trace::FailureTraceFields>,
     },
+}
+
+struct TerminalAttemptTrace {
+    span: tracing::Span,
+    started: std::time::Instant,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -857,6 +872,7 @@ async fn handle_successful_candidate(
     Ok(CandidateSuccessOutcome::Success {
         response: ctx.response,
         memory_policy: RouteMemorySuccessPolicy::Full,
+        terminal_attempt: None,
     })
 }
 
@@ -874,104 +890,219 @@ async fn handle_structured_output_candidate(
     ctx: SuccessCandidateContext<'_>,
     has_next: bool,
 ) -> Result<CandidateSuccessOutcome, ApiError> {
-    let SuccessCandidateContext {
-        this,
-        parts,
-        candidate,
-        index,
-        candidates,
-        requirements,
-        body_bytes,
+    let response = ctx.response;
+    let (response, response_bytes) = normalized_structured_response(
         response,
-        elapsed,
-        failed_credentials,
-        failed_models,
-        route_trace,
-        attempt_ctx,
-        attempt_span,
-        plan_ctx,
-        exclude,
-    } = ctx;
-    let (response, response_bytes) =
-        normalized_structured_response(response, candidate, attempt_span)
-            .await?;
-    let validation = structured_output::validate_structured_output(
-        requirements,
-        &candidate.capability,
-        body_bytes,
+        ctx.candidate,
+        ctx.attempt_span,
+    )
+    .await?;
+    let validation = validate_structured_candidate(
+        ctx.requirements,
+        ctx.candidate,
+        ctx.body_bytes,
         &response_bytes,
     );
     if validation.is_valid_or_skipped() {
         return Ok(finish_structured_output_success(StructuredOutputSuccess {
-            this,
-            candidate,
+            this: ctx.this,
+            candidate: ctx.candidate,
             response,
-            elapsed,
-            request_body: body_bytes,
+            elapsed: ctx.elapsed,
+            request_body: ctx.body_bytes,
             response_body: &response_bytes,
-            attempt_ctx,
-            agent_name: deferred_agent_name(plan_ctx),
+            attempt_ctx: ctx.attempt_ctx,
+            agent_name: deferred_agent_name(ctx.plan_ctx),
             outcome: CallOutcome::Success,
             memory_policy: RouteMemorySuccessPolicy::Full,
+            terminal_attempt: None,
         }));
     }
 
     let validation_issue = validation.issue();
-    tracing::warn!(
-        credential = %candidate.credential_id,
-        provider = %candidate.capability.provider,
-        model = %candidate.capability.model,
-        phase = "initial",
-        validation_issue = ?validation_issue,
-        "JSON validation exception from structured output"
+    record_initial_structured_output_semantic_attempt(
+        &StructuredOutputAttempt {
+            this: ctx.this,
+            candidate: ctx.candidate,
+            attempt: ctx.attempt_ctx,
+            status: response.status(),
+            elapsed: ctx.elapsed,
+            request_body: ctx.body_bytes,
+            response_body: Some(&response_bytes),
+            outcome: CallOutcome::SemanticError,
+            failover_class: None,
+            agent_name: deferred_agent_name(ctx.plan_ctx),
+        },
+        validation_issue.as_ref(),
     );
-    if let Some((reflected_response, reflected_bytes)) =
-        try_schema_conformance_reflector(ReflectorContext {
-            candidate,
-            parts,
-            request_body: body_bytes,
+    if let Some(outcome) =
+        try_structured_output_recovery(StructuredOutputRecoveryContext {
+            this: ctx.this,
+            parts: ctx.parts,
+            candidate: ctx.candidate,
+            requirements: ctx.requirements,
+            request_body: ctx.body_bytes,
             response_body: &response_bytes,
-            requirements,
-            attempt_ctx,
-            route_trace,
+            elapsed: ctx.elapsed,
+            route_trace: ctx.route_trace,
+            attempt_ctx: ctx.attempt_ctx,
+            plan_ctx: ctx.plan_ctx,
+            validation_issue,
         })
         .await?
     {
-        return Ok(finish_structured_output_success(StructuredOutputSuccess {
-            this,
-            candidate,
-            response: reflected_response,
-            elapsed,
-            request_body: body_bytes,
-            response_body: &reflected_bytes,
-            attempt_ctx,
-            agent_name: deferred_agent_name(plan_ctx),
-            outcome: CallOutcome::SuccessDegraded,
-            memory_policy: RouteMemorySuccessPolicy::Degraded,
-        }));
+        return Ok(outcome);
     }
     handle_invalid_structured_output(
         InvalidStructuredOutputContext {
-            this,
-            candidate,
-            index,
-            candidates,
-            elapsed,
-            failed_credentials,
-            failed_models,
-            route_trace,
-            attempt_ctx,
-            attempt_span,
-            plan_ctx,
-            exclude,
-            request_body: body_bytes,
+            this: ctx.this,
+            candidate: ctx.candidate,
+            index: ctx.index,
+            candidates: ctx.candidates,
+            elapsed: ctx.elapsed,
+            failed_credentials: ctx.failed_credentials,
+            failed_models: ctx.failed_models,
+            route_trace: ctx.route_trace,
+            attempt_ctx: ctx.attempt_ctx,
+            attempt_span: ctx.attempt_span,
+            plan_ctx: ctx.plan_ctx,
+            exclude: ctx.exclude,
+            request_body: ctx.body_bytes,
             response_body: &response_bytes,
+            semantic_attempt_recorded: true,
         },
         response,
         validation_issue,
         has_next,
     )
     .await
+}
+
+fn validate_structured_candidate(
+    requirements: &RequestRequirements,
+    candidate: &BudgetCandidate,
+    request_body: &bytes::Bytes,
+    response_body: &bytes::Bytes,
+) -> structured_output::StructuredOutputValidation {
+    structured_output::validate_structured_output(
+        requirements,
+        &candidate.capability,
+        request_body,
+        response_body,
+    )
+}
+
+fn record_initial_structured_output_semantic_attempt(
+    input: &StructuredOutputAttempt<'_>,
+    validation_issue: Option<&web_structured_output::StructuredOutputIssue>,
+) {
+    tracing::warn!(
+        credential = %input.candidate.credential_id,
+        provider = %input.candidate.capability.provider,
+        model = %input.candidate.capability.model,
+        phase = "initial",
+        validation_issue = ?validation_issue,
+        "JSON validation exception from structured output"
+    );
+    record_structured_output_attempt(input);
+}
+
+struct StructuredOutputRecoveryContext<'a> {
+    this: &'a BudgetAwareRouter,
+    parts: &'a Parts,
+    candidate: &'a BudgetCandidate,
+    requirements: &'a RequestRequirements,
+    request_body: &'a bytes::Bytes,
+    response_body: &'a bytes::Bytes,
+    elapsed: std::time::Duration,
+    route_trace: &'a mut trace::RouteTrace,
+    attempt_ctx: &'a crate::types::extensions::UpstreamAttemptContext,
+    plan_ctx: Option<&'a crate::types::extensions::RoutePlanContext>,
+    validation_issue: Option<web_structured_output::StructuredOutputIssue>,
+}
+
+async fn try_structured_output_recovery(
+    ctx: StructuredOutputRecoveryContext<'_>,
+) -> Result<Option<CandidateSuccessOutcome>, ApiError> {
+    let StructuredOutputRecoveryContext {
+        this,
+        parts,
+        candidate,
+        requirements,
+        request_body,
+        response_body,
+        elapsed,
+        route_trace,
+        attempt_ctx,
+        plan_ctx,
+        validation_issue,
+    } = ctx;
+    let agent_name = deferred_agent_name(plan_ctx);
+
+    if let Some(retry_success) =
+        try_structured_output_retry(StructuredOutputRetryContext {
+            this,
+            candidate,
+            parts,
+            request_body,
+            requirements,
+            attempt_ctx,
+            route_trace,
+            plan_ctx,
+            validation_issue,
+        })
+        .await?
+    {
+        return Ok(Some(finish_structured_output_success(
+            StructuredOutputSuccess {
+                this,
+                candidate,
+                response: retry_success.response,
+                elapsed: retry_success.elapsed,
+                request_body,
+                response_body: &retry_success.response_body,
+                attempt_ctx: &retry_success.attempt_ctx,
+                agent_name,
+                outcome: CallOutcome::SuccessDegraded,
+                memory_policy: RouteMemorySuccessPolicy::Degraded,
+                terminal_attempt: Some(TerminalAttemptTrace {
+                    span: retry_success.span,
+                    started: retry_success.started,
+                }),
+            },
+        )));
+    }
+
+    if let Some((reflected_response, reflected_bytes)) =
+        try_schema_conformance_reflector(ReflectorContext {
+            candidate,
+            parts,
+            request_body,
+            response_body,
+            requirements,
+            attempt_ctx,
+            route_trace,
+        })
+        .await?
+    {
+        return Ok(Some(finish_structured_output_success(
+            StructuredOutputSuccess {
+                this,
+                candidate,
+                response: reflected_response,
+                elapsed,
+                request_body,
+                response_body: &reflected_bytes,
+                attempt_ctx,
+                agent_name,
+                outcome: CallOutcome::SuccessDegraded,
+                memory_policy: RouteMemorySuccessPolicy::Degraded,
+                terminal_attempt: None,
+            },
+        )));
+    }
+
+    Ok(None)
 }
 
 async fn normalized_structured_response(
@@ -1003,6 +1134,7 @@ struct StructuredOutputSuccess<'a> {
     agent_name: Option<&'a str>,
     outcome: CallOutcome,
     memory_policy: RouteMemorySuccessPolicy,
+    terminal_attempt: Option<TerminalAttemptTrace>,
 }
 
 fn finish_structured_output_success(
@@ -1019,6 +1151,7 @@ fn finish_structured_output_success(
         agent_name,
         outcome,
         memory_policy,
+        terminal_attempt,
     } = input;
     match outcome {
         CallOutcome::Success => this.record_success(
@@ -1050,10 +1183,24 @@ fn finish_structured_output_success(
     CandidateSuccessOutcome::Success {
         response,
         memory_policy,
+        terminal_attempt,
     }
 }
 
 struct DeferredProviderAttempt<'a> {
+    this: &'a BudgetAwareRouter,
+    candidate: &'a BudgetCandidate,
+    attempt: &'a crate::types::extensions::UpstreamAttemptContext,
+    status: http::StatusCode,
+    elapsed: std::time::Duration,
+    request_body: &'a bytes::Bytes,
+    response_body: Option<&'a bytes::Bytes>,
+    outcome: CallOutcome,
+    failover_class: Option<FailoverClass>,
+    agent_name: Option<&'a str>,
+}
+
+struct StructuredOutputAttempt<'a> {
     this: &'a BudgetAwareRouter,
     candidate: &'a BudgetCandidate,
     attempt: &'a crate::types::extensions::UpstreamAttemptContext,
@@ -1117,6 +1264,33 @@ fn record_deferred_provider_attempt(input: &DeferredProviderAttempt<'_>) {
         .metrics
         .provider
         .record_attempt(&record);
+}
+
+fn record_structured_output_attempt(input: &StructuredOutputAttempt<'_>) {
+    record_deferred_provider_attempt(&DeferredProviderAttempt {
+        this: input.this,
+        candidate: input.candidate,
+        attempt: input.attempt,
+        status: input.status,
+        elapsed: input.elapsed,
+        request_body: input.request_body,
+        response_body: input.response_body,
+        outcome: input.outcome,
+        failover_class: input.failover_class,
+        agent_name: input.agent_name,
+    });
+    input
+        .this
+        .app_state
+        .credential_health()
+        .record_model_attempt(
+            &input.candidate.capability.provider,
+            &input.candidate.credential_id,
+            &input.candidate.capability.model.to_string(),
+            input.outcome,
+            input.status.as_u16(),
+            input.elapsed,
+        );
 }
 
 fn outcome_for_failover(
@@ -1197,6 +1371,7 @@ struct InvalidStructuredOutputContext<'a> {
     exclude: &'a mut std::collections::HashSet<(String, String)>,
     request_body: &'a bytes::Bytes,
     response_body: &'a bytes::Bytes,
+    semantic_attempt_recorded: bool,
 }
 
 async fn handle_invalid_structured_output(
@@ -1267,26 +1442,20 @@ fn record_semantic_model_health(
     status: http::StatusCode,
     model: &str,
 ) {
-    record_deferred_provider_attempt(&DeferredProviderAttempt {
-        this: ctx.this,
-        candidate: ctx.candidate,
-        attempt: ctx.attempt_ctx,
-        status,
-        elapsed: ctx.elapsed,
-        request_body: ctx.request_body,
-        response_body: Some(ctx.response_body),
-        outcome: CallOutcome::SemanticError,
-        failover_class: None,
-        agent_name: deferred_agent_name(ctx.plan_ctx),
-    });
-    ctx.this.app_state.credential_health().record_model_attempt(
-        &ctx.candidate.capability.provider,
-        &ctx.candidate.credential_id,
-        model,
-        CallOutcome::SemanticError,
-        status.as_u16(),
-        ctx.elapsed,
-    );
+    if !ctx.semantic_attempt_recorded {
+        record_structured_output_attempt(&StructuredOutputAttempt {
+            this: ctx.this,
+            candidate: ctx.candidate,
+            attempt: ctx.attempt_ctx,
+            status,
+            elapsed: ctx.elapsed,
+            request_body: ctx.request_body,
+            response_body: Some(ctx.response_body),
+            outcome: CallOutcome::SemanticError,
+            failover_class: None,
+            agent_name: deferred_agent_name(ctx.plan_ctx),
+        });
+    }
     let semantic_cooldown = ctx
         .this
         .app_state
@@ -1418,6 +1587,173 @@ struct ReflectorContext<'a> {
     requirements: &'a RequestRequirements,
     attempt_ctx: &'a crate::types::extensions::UpstreamAttemptContext,
     route_trace: &'a mut trace::RouteTrace,
+}
+
+struct StructuredOutputRetryContext<'a> {
+    this: &'a BudgetAwareRouter,
+    candidate: &'a BudgetCandidate,
+    parts: &'a Parts,
+    request_body: &'a bytes::Bytes,
+    requirements: &'a RequestRequirements,
+    attempt_ctx: &'a crate::types::extensions::UpstreamAttemptContext,
+    route_trace: &'a mut trace::RouteTrace,
+    plan_ctx: Option<&'a crate::types::extensions::RoutePlanContext>,
+    validation_issue: Option<web_structured_output::StructuredOutputIssue>,
+}
+
+struct StructuredOutputRetrySuccess {
+    response: Response,
+    response_body: bytes::Bytes,
+    attempt_ctx: crate::types::extensions::UpstreamAttemptContext,
+    span: tracing::Span,
+    started: std::time::Instant,
+    elapsed: std::time::Duration,
+}
+
+async fn try_structured_output_retry(
+    ctx: StructuredOutputRetryContext<'_>,
+) -> Result<Option<StructuredOutputRetrySuccess>, ApiError> {
+    let Some(retry_body) =
+        structured_output::build_structured_output_retry_request(
+            ctx.request_body,
+            ctx.validation_issue,
+        )
+    else {
+        tracing::warn!(
+            provider = %ctx.candidate.capability.provider,
+            model = %ctx.candidate.capability.model,
+            "structured output retry could not build repair request"
+        );
+        return Ok(None);
+    };
+
+    ctx.route_trace.record_attempt();
+    let attempt_index = ctx.route_trace.attempts().saturating_sub(1);
+    let retry_attempt_ctx = crate::types::extensions::UpstreamAttemptContext {
+        attempt_index,
+        upstream_attempts: ctx.route_trace.attempts(),
+        credential: ctx.candidate.credential_id.to_string(),
+        admit_feasible: ctx.attempt_ctx.admit_feasible,
+    };
+
+    let retry_span = info_span!(
+        parent: ctx.route_trace.route_span(),
+        "gateway.structured_output.retry",
+        provider = %ctx.candidate.capability.provider,
+        credential = %ctx.candidate.credential_id,
+        model = %ctx.candidate.capability.model,
+        attempt_index = retry_attempt_ctx.attempt_index,
+        upstream_attempts = retry_attempt_ctx.upstream_attempts,
+        status_code = tracing::field::Empty,
+        valid = tracing::field::Empty,
+        validation_issue = tracing::field::Empty,
+        structured_output_normalization = tracing::field::Empty,
+    );
+    let instrument_span = retry_span.clone();
+    let retry_started = std::time::Instant::now();
+    execute_structured_output_retry(
+        ctx,
+        retry_body,
+        retry_span,
+        retry_attempt_ctx,
+        retry_started,
+    )
+    .instrument(instrument_span)
+    .await
+}
+
+async fn execute_structured_output_retry(
+    ctx: StructuredOutputRetryContext<'_>,
+    retry_body: bytes::Bytes,
+    retry_span: tracing::Span,
+    retry_attempt_ctx: crate::types::extensions::UpstreamAttemptContext,
+    retry_started: std::time::Instant,
+) -> Result<Option<StructuredOutputRetrySuccess>, ApiError> {
+    tracing::info!("structured output retry started");
+    let mut retry_req =
+        Request::from_parts(ctx.parts.clone(), Body::from(retry_body));
+    retry_req.extensions_mut().insert(retry_attempt_ctx.clone());
+    retry_req
+        .extensions_mut()
+        .insert(crate::types::extensions::DeferredProviderAttemptMetrics);
+
+    let retry_response = call::call_candidate(ctx.candidate, retry_req).await?;
+    let status = retry_response.status();
+    retry_span.record("status_code", u64::from(status.as_u16()));
+    if !status.is_success() {
+        retry_span.record("valid", false);
+        record_structured_output_attempt(&StructuredOutputAttempt {
+            this: ctx.this,
+            candidate: ctx.candidate,
+            attempt: &retry_attempt_ctx,
+            status,
+            elapsed: retry_started.elapsed(),
+            request_body: ctx.request_body,
+            response_body: None,
+            outcome: outcome_for_failover(status, FailoverClass::Transient),
+            failover_class: None,
+            agent_name: deferred_agent_name(ctx.plan_ctx),
+        });
+        tracing::warn!(
+            status = status.as_u16(),
+            "structured output retry upstream call failed"
+        );
+        return Ok(None);
+    }
+
+    let (parts, retry_bytes) = collect_normalized_response_body(
+        retry_response,
+        ctx.candidate,
+        "retry",
+        &retry_span,
+    )
+    .await?;
+    let validation = structured_output::validate_structured_output(
+        ctx.requirements,
+        &ctx.candidate.capability,
+        ctx.request_body,
+        &retry_bytes,
+    );
+    retry_span.record("valid", validation.is_valid_or_skipped());
+    if !validation.is_valid_or_skipped() {
+        let validation_issue = validation.issue();
+        retry_span.record(
+            "validation_issue",
+            tracing::field::display(format!("{validation_issue:?}")),
+        );
+        tracing::warn!(
+            provider = %ctx.candidate.capability.provider,
+            credential = %ctx.candidate.credential_id,
+            model = %ctx.candidate.capability.model,
+            phase = "retry",
+            validation_issue = ?validation_issue,
+            "structured output retry returned invalid structured JSON"
+        );
+        record_structured_output_attempt(&StructuredOutputAttempt {
+            this: ctx.this,
+            candidate: ctx.candidate,
+            attempt: &retry_attempt_ctx,
+            status,
+            elapsed: retry_started.elapsed(),
+            request_body: ctx.request_body,
+            response_body: Some(&retry_bytes),
+            outcome: CallOutcome::SemanticError,
+            failover_class: None,
+            agent_name: deferred_agent_name(ctx.plan_ctx),
+        });
+        return Ok(None);
+    }
+
+    tracing::info!("structured output retry repaired response");
+    let retry_elapsed = retry_started.elapsed();
+    Ok(Some(StructuredOutputRetrySuccess {
+        response: Response::from_parts(parts, Body::from(retry_bytes.clone())),
+        response_body: retry_bytes,
+        attempt_ctx: retry_attempt_ctx,
+        span: retry_span,
+        started: retry_started,
+        elapsed: retry_elapsed,
+    }))
 }
 
 async fn try_schema_conformance_reflector(
